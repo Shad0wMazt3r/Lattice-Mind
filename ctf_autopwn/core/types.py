@@ -44,6 +44,10 @@ class NodeStatus(str, Enum):
     """Result status of a decision node."""
     SUCCESS = "success"
     FAILURE = "failure"
+    FAILED = "failure"  # Alias for compatibility
+    PENDING = "pending"
+    SKIPPED = "skipped"
+    QUEUED = "queued"  # For exploitation plans
     ESCALATE = "escalate"
     ASK_HUMAN = "ask_human"
     TIMEOUT = "timeout"
