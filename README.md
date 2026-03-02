@@ -2,6 +2,10 @@
 
 A deterministic, decision-tree-based framework for autonomous vulnerability detection and exploitation in CTF challenges.
 
+> **Status**: ✅ **LOCAL DEPLOYMENT COMPLETE** - All 6 tests passing, ready for use
+> 
+> **Quick Start**: `python test_deployment.py` to verify installation | `python example_usage.py` to see examples
+
 ## Overview
 
 **ctf-autopwn** is an autonomous CTF solver that:
