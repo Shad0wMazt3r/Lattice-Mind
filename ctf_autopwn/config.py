@@ -5,6 +5,7 @@ from typing import Dict, List
 
 # Flag patterns - can be extended per CTF
 FLAG_PATTERNS: List[str] = [
+    r"picoCTF\{[^}]+\}",
     r"flag\{[^}]+\}",
     r"FLAG\{[^}]+\}",
     r"ctf\{[^}]+\}",
@@ -49,5 +50,10 @@ PROJECT_ROOT = Path(__file__).parent.parent
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 ARTIFACTS_DIR.mkdir(exist_ok=True)
 
-# Logging
-LOG_LEVEL = "INFO"
+# ── Feature Flags ─────────────────────────────────────────────────────────────
+class FeatureFlags:
+    """Simple mutable feature-flag singleton readable by any module."""
+    dir_scan_enabled: bool = False  # off by default (slow); toggle via UI
+
+FEATURE_FLAGS = FeatureFlags()
+

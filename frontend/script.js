@@ -14,8 +14,47 @@ const fmtDur = (a,b) => {
 };
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-//  clock 
-setInterval(()=>{ $('hdr-clock').textContent = new Date().toISOString().replace('T',' ').slice(0,19)+' UTC'; },1000);
+//  dir-scan feature flag toggle ──────────────────────────────────────────────
+let _dirScanEnabled = false;
+
+async function _loadSettings(){
+  try{
+    const r = await fetch('/settings');
+    if(!r.ok) return;
+    const d = await r.json();
+    _dirScanEnabled = !!d.dir_scan_enabled;
+    _renderDirScanBadge();
+  }catch(e){}
+}
+
+function _renderDirScanBadge(){
+  const dot = $('dirscan-dot');
+  const wrap = $('hdr-dirscan-toggle');
+  if(!dot||!wrap) return;
+  if(_dirScanEnabled){
+    dot.className = 'flag-dot flag-dot-on';
+    wrap.title = 'Directory scanning ON — click to disable';
+  } else {
+    dot.className = 'flag-dot flag-dot-off';
+    wrap.title = 'Directory scanning OFF — click to enable';
+  }
+}
+
+async function toggleDirScan(){
+  _dirScanEnabled = !_dirScanEnabled;
+  _renderDirScanBadge();
+  try{
+    await fetch('/settings',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({dir_scan_enabled: _dirScanEnabled})
+    });
+  }catch(e){ /* revert on failure */ _dirScanEnabled=!_dirScanEnabled; _renderDirScanBadge(); }
+}
+
+_loadSettings();
+
+
 
 //  tab switching ─
 function switchTab(name){
@@ -159,9 +198,9 @@ function updateActiveRunUI(run){
   }
 
   // confidence display
-  if(run.confidence){
-     // Could add a side panel for confidence scores
-  }
+  renderConfidence(run.confidence || {});
+  // observations display
+  renderObservations(run.observations || {});
 }
 
 //  tree builder ─
@@ -367,6 +406,7 @@ function renderHistoryTable(rows){
       <td style="color:var(--dim)">${dur}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-sm" onclick="viewRun('${run.run_id}')">VIEW</button>
+        <button class="btn btn-sm" style="margin-left:4px" onclick="openRunModal('${run.run_id}')">DETAILS</button>
         <button class="btn btn-sm" style="margin-left:4px" onclick="rerunChallenge('${run.run_id}')">RERUN</button>
       </td>
     </tr>`;
@@ -554,4 +594,217 @@ function renderCryptoResults(data){
       ${hasFlag?'<div style="color:var(--green);font-size:11px;margin-top:4px;font-weight:700">&#10003; '+esc(res.flag)+'</div>':''}
     </div>`;
   }).join('');
+}
+
+// ── Confidence + Observations renderers ──────────────────────────────────────
+
+function renderConfidence(conf, containerId='confidence-list'){
+  const el = $(containerId);
+  if(!el) return;
+  const entries = Object.entries(conf||{});
+  if(!entries.length){ el.innerHTML='<div class="nd-empty">No scores.</div>'; return; }
+  entries.sort((a,b)=>b[1]-a[1]);
+  el.innerHTML = entries.map(([id,score])=>{
+    const pct = Math.round(score*100);
+    const color = pct>=25?'var(--green)':pct>0?'var(--yellow)':'var(--grey)';
+    const tag = pct>=10
+      ? '<span class="conf-tag conf-ran">RAN</span>'
+      : '<span class="conf-tag conf-skip">SKIP</span>';
+    return `<div class="conf-row">
+      <span class="conf-id">${esc(id)}</span>
+      <div class="conf-bar-wrap"><div class="conf-bar" style="width:${pct}%;background:${color}"></div></div>
+      <span class="conf-pct" style="color:${color}">${pct}%</span>
+      ${tag}
+    </div>`;
+  }).join('');
+}
+
+function renderObservations(obs, containerId='observations-content'){
+  const el = $(containerId);
+  if(!el) return;
+  if(!obs||!Object.keys(obs).length){ el.innerHTML='<div class="nd-empty">No data yet.</div>'; return; }
+  let html = '';
+
+  const tech = obs.tech_stack||[];
+  if(tech.length)
+    html += '<div class="obs-group"><div class="obs-label">TECH STACK</div><div class="chip-row">'
+      +tech.map(t=>`<span class="intel-chip">${esc(t)}</span>`).join('')+'</div></div>';
+
+  const paths = obs.found_paths||(obs.directories||[]).map(d=>d.path||'?');
+  if(paths.length)
+    html += '<div class="obs-group"><div class="obs-label">PATHS ('+paths.length+')</div>'
+      +'<div class="obs-paths">'+paths.slice(0,20).map(p=>`<div class="obs-path">${esc(p)}</div>`).join('')+'</div></div>';
+
+  const vc = obs.vuln_candidates||{};
+  if(Object.keys(vc).length){
+    html += '<div class="obs-group"><div class="obs-label">VULN CANDIDATES</div>';
+    for(const [v,ev] of Object.entries(vc))
+      html += `<div class="obs-vuln"><span class="obs-vuln-name">${esc(v)}</span>`
+        +` <span class="obs-vuln-ev">${esc(JSON.stringify(ev).slice(0,80))}</span></div>`;
+    html += '</div>';
+  }
+
+  const params = obs.params||[];
+  if(params.length)
+    html += '<div class="obs-group"><div class="obs-label">PARAMS</div><div class="chip-row">'
+      +params.map(p=>`<span class="intel-chip">${esc(p)}</span>`).join('')+'</div></div>';
+
+  el.innerHTML = html||'<div class="nd-empty">No observations.</div>';
+}
+
+// ── Run Detail Modal ──────────────────────────────────────────────────────────
+
+async function openRunModal(runId){
+  try{
+    const r = await fetch('/runs/'+runId);
+    if(!r.ok) return;
+    const run = await r.json();
+    $('run-detail-modal').classList.remove('hidden');
+    $('modal-title').textContent = 'RUN '+runId.slice(0,8).toUpperCase();
+
+    // ── OVERVIEW tab ──
+    const ch = run.challenge||{};
+    const dur = fmtDur(run.started_at||run.created_at, run.finished_at);
+    const sc = STATUS_COLOR[run.status]||'#aaa';
+    let ov = `<div style="padding:12px">
+      <div class="nd-row"><span class="nd-key">run id</span><span class="nd-val">${esc(runId)}</span></div>
+      <div class="nd-row"><span class="nd-key">status</span><span class="nd-val" style="color:${sc}">${esc(run.status)}</span></div>
+      <div class="nd-row"><span class="nd-key">type</span><span class="nd-val">${esc(ch.type||'?')}</span></div>
+      <div class="nd-row"><span class="nd-key">target</span><span class="nd-val">${esc(ch.url||ch.file_path||ch.name||'?')}</span></div>
+      <div class="nd-row"><span class="nd-key">duration</span><span class="nd-val">${esc(dur)}</span></div>
+      <div class="nd-row"><span class="nd-key">steps</span><span class="nd-val">${(run.steps||[]).length}</span></div>
+      ${run.flag?`<div class="nd-row"><span class="nd-key">flag</span><span class="nd-val" style="color:var(--green);font-weight:700">${esc(run.flag)}</span></div>`:''}
+      ${run.error?`<div class="nd-row"><span class="nd-key">error</span><span class="nd-val" style="color:var(--red)">${esc(run.error)}</span></div>`:''}
+    </div>`;
+    if(run.confidence && Object.keys(run.confidence).length){
+      ov += '<div style="padding:0 12px 12px"><div class="obs-label" style="margin-bottom:6px">CONFIDENCE SCORES</div>';
+      ov += _buildConfHtml(run.confidence);
+      ov += '</div>';
+    }
+    $('modal-overview-content').innerHTML = ov;
+
+    // ── STEPS tab ──
+    $('modal-steps-content').innerHTML = _buildStepsHtml(run.steps||[]);
+
+    // ── INTEL tab ──
+    let intel = '';
+    if(run.confidence && Object.keys(run.confidence).length){
+      intel += '<div class="obs-group"><div class="obs-label">CONFIDENCE SCORES</div>'+_buildConfHtml(run.confidence)+'</div>';
+    }
+    const obs = run.observations||{};
+    const tech = obs.tech_stack||[];
+    if(tech.length)
+      intel += '<div class="obs-group"><div class="obs-label">TECH STACK</div><div class="chip-row">'+tech.map(t=>`<span class="intel-chip">${esc(t)}</span>`).join('')+'</div></div>';
+    const paths = obs.found_paths||(obs.directories||[]).map(d=>d.path||'?');
+    if(paths.length)
+      intel += '<div class="obs-group"><div class="obs-label">FOUND PATHS ('+paths.length+')</div>'
+        +'<div class="obs-paths">'+paths.slice(0,50).map(p=>`<div class="obs-path">${esc(p)}</div>`).join('')+'</div></div>';
+    const vc = obs.vuln_candidates||{};
+    if(Object.keys(vc).length){
+      intel += '<div class="obs-group"><div class="obs-label">VULN CANDIDATES</div>';
+      for(const [v,ev] of Object.entries(vc))
+        intel += `<div class="obs-vuln"><span class="obs-vuln-name">${esc(v)}</span> <span class="obs-vuln-ev">${esc(JSON.stringify(ev).slice(0,120))}</span></div>`;
+      intel += '</div>';
+    }
+    if(obs.params?.length)
+      intel += '<div class="obs-group"><div class="obs-label">PARAMS</div><div class="chip-row">'+obs.params.map(p=>`<span class="intel-chip">${esc(p)}</span>`).join('')+'</div></div>';
+    $('modal-intel-content').innerHTML = intel||'<div class="nd-empty" style="padding:12px">No intel gathered.</div>';
+
+    switchModalTab('overview');
+  }catch(e){ console.error(e); }
+}
+
+function _buildConfHtml(conf){
+  const entries = Object.entries(conf).sort((a,b)=>b[1]-a[1]);
+  return entries.map(([id,score])=>{
+    const pct = Math.round(score*100);
+    const color = pct>=25?'var(--green)':pct>0?'var(--yellow)':'var(--grey)';
+    return `<div class="conf-row">
+      <span class="conf-id">${esc(id)}</span>
+      <div class="conf-bar-wrap"><div class="conf-bar" style="width:${pct}%;background:${color}"></div></div>
+      <span class="conf-pct" style="color:${color}">${pct}%</span>
+      ${pct>=10?'<span class="conf-tag conf-ran">RAN</span>':'<span class="conf-tag conf-skip">SKIP</span>'}
+    </div>`;
+  }).join('');
+}
+
+function _buildStepsHtml(steps){
+  if(!steps.length) return '<div class="nd-empty" style="padding:12px">No steps recorded.</div>';
+
+  const yamlStarts = steps.filter(s=>s.event==='node_start'&&s.node_id&&s.node_id.includes(':'));
+  const legacyStarts = steps.filter(s=>s.event==='node_start'&&s.node_id&&!s.node_id.includes(':'));
+  let html = '';
+
+  if(yamlStarts.length){
+    const byTree = {};
+    for(const s of yamlStarts){
+      const tid = s.node_id.split(':')[0];
+      (byTree[tid]||(byTree[tid]=[])).push(s);
+    }
+    html += '<div class="obs-label" style="padding:10px 10px 4px">YAML TREES</div>';
+    for(const [tid, treeSteps] of Object.entries(byTree)){
+      html += `<div class="modal-tree-group"><div class="modal-tree-name">${esc(tid)}</div>`;
+      for(const s of treeSteps){
+        const end = steps.find(e=>e.event==='node_end'&&e.node_id===s.node_id&&e.step>s.step);
+        html += _stepRow(s, end, 'y'+s.step);
+      }
+      html += '</div>';
+    }
+  }
+
+  if(legacyStarts.length){
+    html += '<div class="obs-label" style="padding:10px 10px 4px">LEGACY TREES</div>';
+    for(const s of legacyStarts){
+      const end = steps.find(e=>e.event==='node_end'&&e.node_id===s.node_id&&e.step>s.step);
+      html += _stepRow(s, end, 'l'+s.step);
+    }
+  }
+  return html;
+}
+
+function _stepRow(start, end, uid){
+  const status = end?.status||'running';
+  const color = STATUS_COLOR[status]||'#555';
+  const label = start.node_id.includes(':')
+    ? start.node_id.split(':')[1]
+    : (start.node_name||start.node_id);
+  const data = end?.data||{};
+  const hasData = Object.keys(data).length>0;
+  const ts = (start.timestamp||'').slice(11,19);
+  let row = `<div class="modal-step"${hasData?' onclick="toggleStepData(\'sd-'+uid+'\')" style="cursor:pointer"':''}>
+    <span style="color:${color};margin-right:4px">&#9654;</span>
+    <span class="modal-step-name">${esc(label)}</span>
+    <span class="modal-step-status" style="color:${color}">${esc(status)}</span>
+    <span class="modal-step-ts">${esc(ts)}</span>
+    ${hasData?'<span class="modal-step-expand">&#x25BE;</span>':''}
+  </div>`;
+  if(hasData){
+    row += `<div id="sd-${uid}" class="modal-step-data hidden">`;
+    for(const [k,v] of Object.entries(data)){
+      const val = typeof v==='object'?JSON.stringify(v,null,2).slice(0,600):String(v).slice(0,600);
+      row += `<div class="nd-row"><span class="nd-key">${esc(k)}</span><span class="nd-val">${esc(val)}</span></div>`;
+    }
+    row += '</div>';
+  }
+  return row;
+}
+
+function toggleStepData(id){
+  const el = $(id);
+  if(el) el.classList.toggle('hidden');
+}
+
+function closeRunModal(){
+  $('run-detail-modal').classList.add('hidden');
+}
+
+function switchModalTab(name){
+  document.querySelectorAll('.modal-tab-panel').forEach(p=>p.classList.add('hidden'));
+  document.querySelectorAll('.modal-tab').forEach(b=>b.classList.remove('active'));
+  const panel = $('modal-tab-'+name);
+  if(panel) panel.classList.remove('hidden');
+  document.querySelectorAll('.modal-tab').forEach(b=>{
+    if(b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+name+"'"))
+      b.classList.add('active');
+  });
 }

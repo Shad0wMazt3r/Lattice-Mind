@@ -64,29 +64,45 @@ class DecisionTree:
             ConfidenceSeed(s["if"], s["boost"], s["label"])
             for s in raw_data.get("confidence_seeds", [])
         ]
-        
+
+        # Support two YAML schemas:
+        #   Schema A (sqli.yaml style):  detection: {min_confidence, paths: [...]}
+        #   Schema B (ssti.yaml style):  detection_paths: [...]  min_confidence: N  (top-level)
         det = raw_data.get("detection", {})
-        self.min_confidence = det.get("min_confidence", 0.10)
+        self.min_confidence = (
+            raw_data.get("min_confidence",          # schema B top-level
+            det.get("min_confidence", 0.10))        # schema A nested
+        )
+        raw_det_paths = det.get("paths") or raw_data.get("detection_paths", [])
+
         self.detection_paths = []
-        for p in det.get("paths", []):
+        for p in raw_det_paths:
             steps = [
                 DetectionStep(
-                    s["id"], s["action"], s.get("with", {}), 
+                    s["id"], s["action"],
+                    s.get("params") or s.get("with", {}),
                     s.get("signals", []), s.get("on_success"), s.get("on_failure")
                 )
                 for s in p.get("steps", [])
             ]
             self.detection_paths.append(
-                DetectionPath(p["id"], p["name"], p.get("description", ""), steps, p.get("min_confidence", self.min_confidence))
+                DetectionPath(p["id"], p["name"], p.get("description", ""), steps,
+                              p.get("min_confidence", self.min_confidence))
             )
-            
+
         exp = raw_data.get("exploitation", {})
-        self.stop_on_flag = exp.get("stop_on_flag", True)
+        self.stop_on_flag = (
+            raw_data.get("stop_on_flag",            # schema B top-level
+            exp.get("stop_on_flag", True))          # schema A nested
+        )
+        raw_exp_paths = exp.get("paths") or raw_data.get("exploitation_paths", [])
+
         self.exploitation_paths = []
-        for p in exp.get("paths", []):
+        for p in raw_exp_paths:
             steps = [
                 ExploitationStep(
-                    s["id"], s["action"], s.get("with", {}),
+                    s["id"], s["action"],
+                    s.get("params") or s.get("with", {}),
                     s.get("capture", []), s.get("on_success"), s.get("on_failure")
                 )
                 for s in p.get("steps", [])

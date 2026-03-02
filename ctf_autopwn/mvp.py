@@ -114,6 +114,14 @@ class MVPSolver:
                     expanded += ["asp", "aspx"]
                 if "nginx" in t or "apache" in t:
                     expanded.append("apache")
+                if "werkzeug" in t or "flask" in t:
+                    expanded += ["python", "flask", "jinja2"]
+                elif "python" in t:
+                    expanded.append("python")
+                if "django" in t:
+                    expanded += ["python", "django"]
+                if "ruby" in t or "rails" in t:
+                    expanded += ["ruby", "rails"]
             obs["tech_stack"] = list(dict.fromkeys(expanded))  # dedupe, preserve order
         if obs.get("directories") and not obs.get("found_paths"):
             # Normalise to leading-slash format so seeds like "'/admin' in context.found_paths" match.

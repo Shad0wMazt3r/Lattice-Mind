@@ -45,7 +45,8 @@ class TreeExecutor:
     async def execute_tree(self, tree: DecisionTree, context: Dict[str, Any]):
         """Run full tree lifecycle: Seeds -> Detection -> Exploitation."""
         
-        # 1. Seeds
+        # 1. Seeds — always evaluate seeds even if pool was frozen by a prior tree
+        self.confidence_pool.frozen = False
         evaluator = ExpressionEvaluator(context)
         for seed in tree.confidence_seeds:
             try:
@@ -110,8 +111,16 @@ class TreeExecutor:
                             local_ctx = context.copy()
                             local_ctx["response"] = result
                             local_ctx["response_time"] = result.get("response_time", 0)
-                            if evaluate_condition(cond, local_ctx):
-                                matched = True
+                            # Expose comparison responses if present in result
+                            if "true_response" in result:
+                                local_ctx["true_response"] = result["true_response"]
+                            if "false_response" in result:
+                                local_ctx["false_response"] = result["false_response"]
+                            try:
+                                if evaluate_condition(cond, local_ctx):
+                                    matched = True
+                            except Exception:
+                                pass  # Missing variables → condition not met
                     
                     if matched:
                         on_match = sig_def.get("on_match", {})
@@ -155,11 +164,14 @@ class TreeExecutor:
                 flag = self.flag_recognizer.recognize(body)
                 if flag:
                     return flag
+                # Fallback: check capture named "flag_value"
+                if self.captures.get("flag_value"):
+                    return self.captures["flag_value"]
         return None
 
     async def _run_step(self, tree: DecisionTree, step: Any, context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Execute a single step action, possibly with multiple payloads."""
-        from ctf_autopwn.adapters.curl_adapter import CurlAdapter
+        from ctf_autopwn.adapters.curl_adapter import RequestsAdapter
         
         action = step.action
         params = step.params
@@ -167,55 +179,135 @@ class TreeExecutor:
         payloads = params.get("payloads", [])
         if "payload" in params:
             payloads.append(params["payload"])
+        
+        # Handle boolean-comparison pattern: true_payload vs false_payload
+        true_payload = params.get("true_payload")
+        false_payload = params.get("false_payload")
+        if true_payload is not None and false_payload is not None:
+            return await self._run_comparison_step(tree, step, context, true_payload, false_payload)
+        
         if not payloads:
             payloads = [None]
             
         inject_into = params.get("inject_into", "none")
-        url = context.get("challenge", {}).url
+        challenge = context.get("challenge")
+        url = challenge.url if challenge else ""
         
         # Determine target parameters
+        obs = context.get("observations", {})
         target_params = []
         if inject_into == "all_params":
-            target_params = context.get("observations", {}).get("params", ["id", "query", "user"])
+            discovered = obs.get("params") or obs.get("potential_params") or []
+            target_params = discovered if discovered else ["id", "query", "name", "user"]
         elif inject_into == "vulnerable_param":
             v = context.get("vulnerable_param")
             target_params = [v] if v else ["id"]
         else:
             target_params = [None]
 
+        # Determine form submission targets: [(url, method), ...]
+        # Prefer form action+method if available, always also try GET to base URL
+        probe_targets = []
+        forms = obs.get("forms", [])
+        if inject_into != "none" and forms:
+            for f in forms[:2]:  # at most 2 forms
+                probe_targets.append((f.get("action", url), f.get("method", "GET").upper()))
+        # Always include a plain GET to the challenge URL as fallback
+        if not probe_targets or not any(m == "GET" for _, m in probe_targets):
+            probe_targets.append((url, "GET"))
+
         self._emit_progress("node_start", tree.id, step.id)
         
         results = []
-        adapter = CurlAdapter()
+        adapter = RequestsAdapter()
         
         for p in payloads:
             for param in target_params:
-                start_time = time.time()
-                
-                # Build request params
-                req_params = {}
-                if param and p:
-                    # Template replacement in payload if needed
-                    final_p = p
-                    if "{{" in str(p):
-                        # Simple jinja-like replacement
+                for probe_url, http_method in probe_targets:
+                    start_time = time.time()
+                    
+                    if param and p is not None:
+                        final_p = str(p)
                         for k, v in self.captures.items():
                             final_p = final_p.replace("{{ captures." + k + " }}", str(v))
-                    req_params[param] = final_p
-                
-                # Run the probe
-                try:
-                    # Note: CurlAdapter is synchronous in this codebase
-                    resp = adapter.run(url, req_params)
-                    elapsed = (time.time() - start_time) * 1000
-                    resp["response_time"] = elapsed
-                    resp["injected_param"] = param
-                    resp["injected_payload"] = p
-                    results.append(resp)
-                except Exception as e:
-                    logger.error(f"Step execution failed: {e}")
+                        req_args: Dict[str, Any] = {"follow_redirects": True}
+                        if http_method == "POST":
+                            req_args["method"] = "POST"
+                            req_args["data"] = {param: final_p}
+                        else:
+                            req_args["params"] = {param: final_p}
+                    else:
+                        req_args = {"follow_redirects": True}
+                    
+                    try:
+                        resp = adapter.run(probe_url, req_args)
+                        elapsed = (time.time() - start_time) * 1000
+                        resp["response_time"] = elapsed
+                        resp["injected_param"] = param
+                        resp["injected_payload"] = p
+                        results.append(resp)
+                    except Exception as e:
+                        logger.error(f"Step execution failed: {e}")
         
         self._emit_progress("node_end", tree.id, step.id, status="success")
+        return results
+
+    async def _run_comparison_step(self, tree: DecisionTree, step: Any, context: Dict[str, Any],
+                                    true_payload: str, false_payload: str) -> List[Dict[str, Any]]:
+        """Run two requests (true/false payloads) and return a synthetic comparison result."""
+        from ctf_autopwn.adapters.curl_adapter import RequestsAdapter
+        adapter = RequestsAdapter()
+        params = step.params
+        inject_into = params.get("inject_into", "none")
+        challenge = context.get("challenge")
+        url = challenge.url if challenge else ""
+        obs = context.get("observations", {})
+
+        if inject_into == "all_params":
+            discovered = obs.get("params") or obs.get("potential_params") or []
+            target_params = discovered if discovered else ["id"]
+        elif inject_into == "vulnerable_param":
+            v = context.get("vulnerable_param")
+            target_params = [v] if v else ["id"]
+        else:
+            target_params = [None]
+
+        forms = obs.get("forms", [])
+        probe_targets = [(f.get("action", url), f.get("method", "GET").upper()) for f in forms[:2]]
+        if not probe_targets:
+            probe_targets = [(url, "GET")]
+
+        results = []
+        for param in target_params:
+            for probe_url, http_method in probe_targets:
+                try:
+                    def _build_args(payload):
+                        args: Dict[str, Any] = {"follow_redirects": True}
+                        if param:
+                            if http_method == "POST":
+                                args["method"] = "POST"
+                                args["data"] = {param: payload}
+                            else:
+                                args["params"] = {param: payload}
+                        return args
+
+                    true_resp = adapter.run(probe_url, _build_args(true_payload))
+                    false_resp = adapter.run(probe_url, _build_args(false_payload))
+
+                    # Synthetic result carries both for signal condition evaluation
+                    synthetic = {
+                        "body": true_resp.get("body", ""),
+                        "status": true_resp.get("status"),
+                        "response_time": 0,
+                        "injected_param": param,
+                        "injected_payload": f"true={true_payload} / false={false_payload}",
+                        "true_response": true_resp,
+                        "false_response": false_resp,
+                    }
+                    results.append(synthetic)
+                except Exception as e:
+                    logger.error(f"Comparison step failed: {e}")
+
         return results
 
     def _emit_progress(self, event: str, tree_id: str, node_id: str, status: Optional[str] = None):

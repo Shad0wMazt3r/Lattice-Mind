@@ -16,6 +16,9 @@
   <span id="hdr-live"><span class="live-dot"></span>LIVE</span>
   <span id="hdr-hitl-badge" onclick="switchTab('hitl')">HITL</span>
   <span id="hdr-spacer"></span>
+  <span id="hdr-dirscan-toggle" title="Toggle directory scanning" onclick="toggleDirScan()">
+    <span class="flag-dot flag-dot-off" id="dirscan-dot"></span>DIR SCAN
+  </span>
   <span id="hdr-clock"></span>
 </div>
 
@@ -79,6 +82,16 @@
         <div id="right-panel">
           <div id="node-details-panel">
             <div class="nd-empty">Click a node to inspect it.</div>
+          </div>
+          <div id="intel-panel">
+            <div class="intel-section">
+              <div class="intel-section-title">CONFIDENCE SCORES</div>
+              <div id="confidence-list"><div class="nd-empty">No data yet.</div></div>
+            </div>
+            <div class="intel-section">
+              <div class="intel-section-title">INTEL</div>
+              <div id="observations-content"><div class="nd-empty">No data yet.</div></div>
+            </div>
           </div>
           <div id="terminal-out"></div>
         </div>
@@ -181,6 +194,30 @@
 
   </div><!-- /main-content -->
 </div><!-- /layout -->
+
+<!-- RUN DETAIL MODAL -->
+<div id="run-detail-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <span id="modal-title" class="modal-title-text">RUN DETAIL</span>
+      <button class="btn btn-sm" onclick="closeRunModal()">&#x2715; CLOSE</button>
+    </div>
+    <div class="modal-tabs-bar">
+      <button class="modal-tab active" onclick="switchModalTab('overview')">OVERVIEW</button>
+      <button class="modal-tab" onclick="switchModalTab('steps')">STEPS</button>
+      <button class="modal-tab" onclick="switchModalTab('intel')">INTEL</button>
+    </div>
+    <div id="modal-tab-overview" class="modal-tab-panel">
+      <div id="modal-overview-content"></div>
+    </div>
+    <div id="modal-tab-steps" class="modal-tab-panel hidden">
+      <div id="modal-steps-content"></div>
+    </div>
+    <div id="modal-tab-intel" class="modal-tab-panel hidden">
+      <div id="modal-intel-content"></div>
+    </div>
+  </div>
+</div>
 
 <script src="/static/script.js"></script>
 </body>

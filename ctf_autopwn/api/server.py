@@ -100,6 +100,27 @@ def _init_db():
             conn.execute("ALTER TABLE runs ADD COLUMN observations TEXT")
         except Exception:
             pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN confidence TEXT")
+        except Exception:
+            pass
+        # settings table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        # seed default if missing
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('dir_scan_enabled', 'false')")
+
+def _load_settings():
+    """Load persisted settings into FEATURE_FLAGS on startup."""
+    from ctf_autopwn.config import FEATURE_FLAGS
+    with _db() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key='dir_scan_enabled'").fetchone()
+        if row:
+            FEATURE_FLAGS.dir_scan_enabled = row["value"].lower() == "true"
 
 def _db_save(state: RunState):
     """Upsert a RunState to SQLite."""
@@ -107,9 +128,9 @@ def _db_save(state: RunState):
     with _db() as conn:
         conn.execute("""
             INSERT INTO runs
-                (run_id, status, challenge, steps, flag, error, log, observations,
+                (run_id, status, challenge, steps, flag, error, log, observations, confidence,
                  started_at, finished_at, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(run_id) DO UPDATE SET
                 status       = excluded.status,
                 steps        = excluded.steps,
@@ -117,6 +138,7 @@ def _db_save(state: RunState):
                 error        = excluded.error,
                 log          = excluded.log,
                 observations = excluded.observations,
+                confidence   = excluded.confidence,
                 started_at   = excluded.started_at,
                 finished_at  = excluded.finished_at,
                 updated_at   = excluded.updated_at
@@ -127,6 +149,7 @@ def _db_save(state: RunState):
             d["flag"], d["error"],
             json.dumps(d["log"]) if d["log"] else None,
             json.dumps(d["observations"]) if d["observations"] else None,
+            json.dumps(d["confidence"]) if d["confidence"] else None,
             d["started_at"], d["finished_at"],
             d["created_at"], d["updated_at"],
         ))
@@ -150,6 +173,7 @@ def _db_load(run_id: str) -> Optional[Dict[str, Any]]:
     d["steps"]        = json.loads(d["steps"])
     d["log"]          = json.loads(d["log"]) if d["log"] else None
     d["observations"] = json.loads(d["observations"]) if d["observations"] else None
+    d["confidence"]   = json.loads(d["confidence"]) if d.get("confidence") else None
     return d
 
 def _db_list(limit: int = 50) -> List[Dict[str, Any]]:
@@ -172,6 +196,7 @@ app = FastAPI(
 )
 
 _init_db()  # ensure schema exists at import time
+_load_settings()  # restore persisted feature flags
 
 solver = MVPSolver()
 solver_lock = asyncio.Lock()
@@ -280,6 +305,7 @@ def get_run_state(run_id: str) -> Optional[RunState]:
         error=row["error"],
         log=row["log"],
         observations=row["observations"],
+        confidence=row.get("confidence"),
         started_at=row["started_at"],
         finished_at=row["finished_at"],
         created_at=row["created_at"],
@@ -357,7 +383,27 @@ async def reload_rules():
     solver.registry.load_from_directory(str(base_path))
     return {"status": "ok", "count": len(solver.registry.list_trees())}
 
-@app.patch("/rules/{rule_id}")
+@app.get("/settings")
+async def get_settings():
+    """Return current feature flag settings."""
+    from ctf_autopwn.config import FEATURE_FLAGS
+    return {"dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled}
+
+@app.put("/settings")
+async def put_settings(payload: dict):
+    """Update feature flag settings and persist to DB."""
+    from ctf_autopwn.config import FEATURE_FLAGS
+    changed = {}
+    if "dir_scan_enabled" in payload:
+        val = bool(payload["dir_scan_enabled"])
+        FEATURE_FLAGS.dir_scan_enabled = val
+        with _db() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('dir_scan_enabled', ?)",
+                         ("true" if val else "false",))
+        changed["dir_scan_enabled"] = val
+    return {"updated": changed, "settings": {"dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled}}
+
+
 async def patch_rule(rule_id: str, payload: dict):
     """Enable or disable a specific rule."""
     tree = solver.registry.get_tree(rule_id)
