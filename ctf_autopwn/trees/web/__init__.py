@@ -5,6 +5,9 @@ Implements comprehensive web vulnerability detection:
 - Command Injection (output-based, blind/time-based)
 - Local File Inclusion (traversal, filter bypass)
 - Cross-Site Scripting (reflected, stored, filter bypass)
+- IDOR (Insecure Direct Object Reference)
+- File Upload abuse
+- SSRF (Server-Side Request Forgery)
 - Reconnaissance (asset discovery, endpoint mapping)
 """
 
@@ -37,6 +40,15 @@ from .xss import (
     XSSExploitNode,
 )
 
+from .additional import (
+    IDORDetectParameterNode,
+    IDORDetectNeighborNode,
+    UploadDetectFormNode,
+    UploadDetectBypassNode,
+    SSRFDetectURLParamNode,
+    SSRFDetectRequestNode,
+)
+
 __all__ = [
     # SQLi
     "SQLiDetectReflectionNode",
@@ -59,4 +71,13 @@ __all__ = [
     "XSSDetectStoredNode",
     "XSSDetectFilterNode",
     "XSSExploitNode",
+    # IDOR
+    "IDORDetectParameterNode",
+    "IDORDetectNeighborNode",
+    # Upload
+    "UploadDetectFormNode",
+    "UploadDetectBypassNode",
+    # SSRF
+    "SSRFDetectURLParamNode",
+    "SSRFDetectRequestNode",
 ]
