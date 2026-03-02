@@ -69,9 +69,14 @@ class ExpressionEvaluator:
             return True
         
         elif isinstance(node, ast.Attribute):
+            import enum as _enum
             value = self._eval_node(node.value)
             if hasattr(value, node.attr):
-                return getattr(value, node.attr)
+                result = getattr(value, node.attr)
+                # Unwrap enums so YAML conditions like "context.challenge.type == 'web'" work.
+                if isinstance(result, _enum.Enum):
+                    return result.value
+                return result
             elif isinstance(value, dict):
                 return value.get(node.attr)
             raise AttributeError(f"Attribute {node.attr} not found")

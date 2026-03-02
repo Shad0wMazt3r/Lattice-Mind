@@ -94,11 +94,41 @@ class MVPSolver:
 
         # Build context for expression evaluation
         context = self.orchestrator.execution_context
-        # Initialize some common observations
         obs = context["observations"]
+
+        # Translate legacy recon keys to YAML-expected names.
+        # WebReconProbeNode writes "technologies" (dict) and "directories" (list of dicts);
+        # YAML confidence seeds reference tech_stack, found_paths, params.
+        if obs.get("technologies") and not obs.get("tech_stack"):
+            raw_tech = [v.lower() for v in obs["technologies"].values() if v]
+            # Expand server strings to known tech tokens so seeds like
+            # "'jsp' in context.tech_stack" fire correctly.
+            # e.g. "apache-coyote/1.1" → also add "jsp", "java"
+            expanded = list(raw_tech)
+            for t in raw_tech:
+                if "coyote" in t or "tomcat" in t:
+                    expanded += ["jsp", "java"]
+                if "php" in t:
+                    expanded.append("php")
+                if "asp" in t or "iis" in t:
+                    expanded += ["asp", "aspx"]
+                if "nginx" in t or "apache" in t:
+                    expanded.append("apache")
+            obs["tech_stack"] = list(dict.fromkeys(expanded))  # dedupe, preserve order
+        if obs.get("directories") and not obs.get("found_paths"):
+            # Normalise to leading-slash format so seeds like "'/admin' in context.found_paths" match.
+            obs["found_paths"] = ["/" + d["path"].lstrip("/") for d in obs["directories"] if d.get("path")]
+        if obs.get("potential_params") and not obs.get("params"):
+            obs["params"] = obs["potential_params"]
         obs.setdefault("tech_stack", [])
         obs.setdefault("found_paths", [])
         obs.setdefault("params", [])
+
+        # Mirror to top-level context so ExpressionEvaluator can resolve
+        # "context.found_paths" (seeds use top-level keys, not nested observations).
+        context["tech_stack"] = obs["tech_stack"]
+        context["found_paths"] = obs["found_paths"]
+        context["params"] = obs["params"]
         
         # Find applicable trees
         candidate_trees = []
@@ -177,13 +207,16 @@ class MVPSolver:
         """Run web vulnerability detection, then dispatch exploitation trees."""
         try:
             # Phase 1: Recon (probe + dir scan + vuln analysis)
-            root_node = WebReconProbeNode()
-            flag = self.orchestrator.run_tree(root_node)
-            if flag:
-                return flag
+            # Skip if the Step 2 pre-pass already populated observations.
+            observations = self.orchestrator.execution_context.get("observations", {})
+            if not observations.get("directories"):
+                root_node = WebReconProbeNode()
+                flag = self.orchestrator.run_tree(root_node)
+                if flag:
+                    return flag
+                observations = self.orchestrator.execution_context.get("observations", {})
 
             # Phase 2: Read candidates written by WebReconAnalyzeVulnsNode
-            observations = self.orchestrator.execution_context.get("observations", {})
             vuln_candidates = observations.get("vuln_candidates", {})
 
             if not vuln_candidates:
