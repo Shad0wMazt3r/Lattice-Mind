@@ -162,6 +162,9 @@ class MVPSolver:
         ctx = self.orchestrator.execution_context
         logger.info(f"[web] Running {vuln_type} tree (evidence={evidence})")
 
+        # Pin all exploitation trees as branches of the analysis node in the UI tree
+        self.orchestrator.set_branch_parent("web_recon_analyze_vulns")
+
         try:
             if vuln_type == "auth_bypass":
                 return self.orchestrator.run_tree(AuthBypassDetectNode())

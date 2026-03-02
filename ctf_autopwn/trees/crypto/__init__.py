@@ -12,8 +12,6 @@ from .detect import (
     CryptoDetectXORNode,
     CryptoDetectRSANode,
     CryptoDetectStreamNode,
-    CryptoExploitSubstitutionNode,
-    CryptoExploitRSANode,
 )
 
 __all__ = [
@@ -22,6 +20,4 @@ __all__ = [
     "CryptoDetectXORNode",
     "CryptoDetectRSANode",
     "CryptoDetectStreamNode",
-    "CryptoExploitSubstitutionNode",
-    "CryptoExploitRSANode",
 ]

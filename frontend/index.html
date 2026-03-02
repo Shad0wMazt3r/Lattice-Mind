@@ -1,0 +1,164 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CTF Autopwn</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<div id="header">
+  <span id="logo">CTF-AUTOPWN</span>
+  <span id="hdr-version">v0.1.0</span>
+  <span id="hdr-live"><span class="live-dot"></span>LIVE</span>
+  <span id="hdr-hitl-badge" onclick="switchTab('hitl')">HITL</span>
+  <span id="hdr-spacer"></span>
+  <span id="hdr-clock"></span>
+</div>
+
+<div id="layout">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sb-section">
+      <div class="sb-label">New Challenge</div>
+      <div class="field"><label>Name</label><input id="ch-name" type="text" value="Demo Challenge"/></div>
+      <div class="field"><label>Type</label>
+        <select id="ch-type" onchange="onTypeChange()">
+          <option value="web">Web</option>
+          <option value="pwn">Pwn</option>
+          <option value="crypto">Crypto</option>
+          <option value="forensics">Forensics</option>
+          <option value="steganography">Steganography</option>
+          <option value="reverse_engineering">Reverse Engineering</option>
+          <option value="osint">OSINT</option>
+          <option value="network">Network</option>
+          <option value="misc">Misc</option>
+        </select>
+      </div>
+      <div class="field" id="field-url"><label>URL</label><input id="ch-url" type="text" placeholder="http://target:8080"/></div>
+      <div class="field hidden" id="field-filepath"><label>File Path</label><input id="ch-filepath" type="text" placeholder="/path/to/binary"/></div>
+      <div class="field hidden" id="field-upload"><label>Upload File</label><input id="ch-upload" type="file"/></div>
+      <div class="field hidden" id="field-crypto-text"><label>Ciphertext</label><textarea id="ch-crypto-text" placeholder="Paste ciphertext here..."></textarea></div>
+      <div class="field"><label>Flag Format</label><input id="ch-flagfmt" type="text" value="flag{"/></div>
+      <button class="btn btn-full" id="solve-btn" onclick="submitChallenge()">&#9654; SOLVE</button>
+    </div>
+    <div class="sb-section">
+      <div class="sb-label">Recent Runs</div>
+      <div id="recent-runs"></div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div id="main-content">
+    <div id="tabs-bar">
+      <button class="tab-btn active" onclick="switchTab('active')">ACTIVE RUN</button>
+      <button class="tab-btn" onclick="switchTab('history')">HISTORY</button>
+      <button class="tab-btn" id="tab-hitl-btn" onclick="switchTab('hitl')">HITL<span class="tab-badge" id="hitl-count" style="display:none">0</span></button>
+      <button class="tab-btn" onclick="switchTab('crypto')">CRYPTO TOOLS</button>
+    </div>
+
+    <!-- ACTIVE RUN TAB -->
+    <div class="tab-panel active" id="tab-active">
+      <div id="run-statusbar">
+        <span id="run-status-badge" class="status-badge idle">IDLE</span>
+        <span id="run-id-display"></span>
+        <span id="run-target"></span>
+        <span id="flag-banner">&#10003; <span id="flag-banner-text"></span></span>
+      </div>
+      <div id="run-split">
+        <div id="tree-panel">
+          <div id="tree-header">DECISION TREE</div>
+          <div id="tree-svg-wrap">
+            <svg id="tree-svg" width="600" height="400"></svg>
+          </div>
+        </div>
+        <div id="right-panel">
+          <div id="node-details-panel">
+            <div class="nd-empty">Click a node to inspect it.</div>
+          </div>
+          <div id="terminal-out"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY TAB -->
+    <div class="tab-panel" id="tab-history">
+      <div id="history-panel">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="history-search" type="text" placeholder="Search runs..." oninput="filterHistory()"/>
+          <button class="btn btn-sm" onclick="loadHistory()">REFRESH</button>
+        </div>
+        <div id="history-table-wrap">
+          <table id="history-table">
+            <thead><tr>
+              <th>RUN ID</th><th>TYPE</th><th>TARGET</th><th>STATUS</th><th>FLAG</th><th>STARTED</th><th>DURATION</th><th>ACTIONS</th>
+            </tr></thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- HITL TAB -->
+    <div class="tab-panel" id="tab-hitl">
+      <div id="hitl-panel">
+        <div id="hitl-questions"><div class="hitl-empty">No pending questions.</div></div>
+      </div>
+    </div>
+
+    <!-- CRYPTO TOOLS TAB -->
+    <div class="tab-panel" id="tab-crypto">
+      <div id="crypto-panel">
+        <div id="crypto-input-pane">
+          <div class="field">
+            <label>Cipher Type</label>
+            <select id="cr-type" onchange="onCrTypeChange()">
+              <option value="auto">AUTO-DETECT</option>
+              <option value="base64">Base64</option>
+              <option value="hex">Hex</option>
+              <option value="url">URL Encode</option>
+              <option value="caesar">Caesar / ROT</option>
+              <option value="xor">XOR</option>
+              <option value="rsa">RSA</option>
+              <option value="binary">Binary</option>
+              <option value="morse">Morse</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Input</label>
+            <textarea id="cr-input" style="min-height:120px;font-size:11px" placeholder="Paste ciphertext / encoded data..."></textarea>
+          </div>
+          <div id="cr-params-caesar" class="crypto-params hidden">
+            <div class="field" style="margin:0"><label>Shift (blank = try all)</label><input id="cr-shift" type="text" placeholder="13"/></div>
+          </div>
+          <div id="cr-params-xor" class="crypto-params hidden">
+            <div class="field" style="margin:0"><label>Key (blank = brute force)</label><input id="cr-xor-key" type="text" placeholder="0x1f or mykey"/></div>
+          </div>
+          <div id="cr-params-rsa" class="crypto-params hidden">
+            <div class="rsa-fields">
+              <div class="field"><label>n</label><input id="cr-n" type="text"/></div>
+              <div class="field"><label>e</label><input id="cr-e" type="text" value="65537"/></div>
+              <div class="field"><label>c</label><input id="cr-c" type="text"/></div>
+              <div class="field"><label>d (opt)</label><input id="cr-d" type="text"/></div>
+              <div class="field"><label>p (opt)</label><input id="cr-p" type="text"/></div>
+              <div class="field"><label>q (opt)</label><input id="cr-q" type="text"/></div>
+            </div>
+          </div>
+          <button class="btn btn-full" onclick="cryptoSolve()">SOLVE</button>
+        </div>
+        <div id="crypto-results-pane">
+          <div id="cr-flag-top" style="display:none" class="crypto-flag-found"></div>
+          <div id="cr-results-list"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /layout -->
+
+<script src="/static/script.js"></script>
+</body>
+</html>

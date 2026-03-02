@@ -21,6 +21,9 @@ class Orchestrator:
         self.flag_recognizer = get_flag_recognizer()
         self.knowledge_base = get_knowledge_base()
         self._progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+        # Tree parent tracking — used to build the tree in the UI
+        self._last_node_id: Optional[str] = None
+        self._branch_parent: Optional[str] = None
 
     def set_challenge(self, challenge: ChallengeDescriptor):
         """Set the challenge to solve.
@@ -37,6 +40,8 @@ class Orchestrator:
         self.flag_recognizer.clear()
         self.knowledge_base.clear()
         self.tree_history.clear()
+        self._last_node_id = None
+        self._branch_parent = None
 
     def set_progress_callback(self, callback: Optional[Callable[[Dict[str, Any]], None]]):
         """Register a callback that receives progress events during execution."""
@@ -45,6 +50,10 @@ class Orchestrator:
     def clear_progress_callback(self):
         """Remove any registered progress callback."""
         self._progress_callback = None
+
+    def set_branch_parent(self, parent_node_id: str):
+        """Mark that the next run_tree() root should appear as a child of this node in the UI."""
+        self._branch_parent = parent_node_id
 
     def run_tree(self, root_node: DecisionNode) -> Optional[str]:
         """Execute a decision tree starting from the given node.
@@ -59,15 +68,33 @@ class Orchestrator:
             raise ValueError("Challenge not set. Call set_challenge() first.")
 
         current_node = root_node
+        is_root_node = True
 
         while current_node:
             logger.info(f"Executing node: {current_node}")
             self.tree_history.append(current_node.node_id)
-            self._emit_progress("node_start", current_node)
+
+            # Determine parent: explicit branch_parent for first node of a new tree,
+            # otherwise the last completed node (linear chain).
+            if is_root_node:
+                parent_id = self._branch_parent or self._last_node_id
+                self._branch_parent = None  # consume once
+                is_root_node = False
+            else:
+                parent_id = self._last_node_id
+
+            self._emit_progress("node_start", current_node, parent_node_id=parent_id)
 
             # Run the node
             result = current_node.run(self.execution_context)
-            self._emit_progress("node_end", current_node, result)
+            self._last_node_id = current_node.node_id
+            
+            # Determine next node BEFORE emitting node_end so we can include it
+            next_node = current_node.next_node(result) if hasattr(current_node, "next_node") else None
+            if next_node:
+                result.next_node = getattr(next_node, "node_id", next_node.__class__.__name__)
+            
+            self._emit_progress("node_end", current_node, result, parent_node_id=parent_id)
 
             # Check for flags in the result
             if result.data:
@@ -77,11 +104,10 @@ class Orchestrator:
                         if flag:
                             logger.info(f"Flag found: {flag}")
                             self.execution_context["flag_found"] = flag
-                            self._emit_progress("flag_found", current_node, result)
+                            self._emit_progress("flag_found", current_node, result, parent_node_id=parent_id)
                             return flag
 
-            # Check terminal conditions — only FAILURE/TIMEOUT halt the tree;
-            # SUCCESS continues to next_node (which returns None at leaf nodes).
+            # Check terminal conditions
             if result.status in [NodeStatus.FAILURE, NodeStatus.TIMEOUT]:
                 logger.info(f"Node halted with status: {result.status}")
                 break
@@ -90,8 +116,8 @@ class Orchestrator:
                 logger.warning(f"Node requires human input: {result}")
                 break
 
-            # Move to next node (returns None at leaf → loop exits naturally)
-            current_node = current_node.next_node(result) if hasattr(current_node, "next_node") else None
+            # Move to next node
+            current_node = next_node
 
         return self.execution_context.get("flag_found")
 
@@ -108,7 +134,7 @@ class Orchestrator:
             "flag_found": self.execution_context.get("flag_found"),
         }
 
-    def _emit_progress(self, event: str, node: DecisionNode, result: Optional[NodeResult] = None):
+    def _emit_progress(self, event: str, node: DecisionNode, result: Optional[NodeResult] = None, parent_node_id: Optional[str] = None):
         """Emit structured progress events to registered observers."""
         if not self._progress_callback:
             return
@@ -118,12 +144,15 @@ class Orchestrator:
             "node_id": getattr(node, "node_id", node.__class__.__name__),
             "node_name": getattr(node, "name", node.__class__.__name__),
             "timestamp": datetime.utcnow().isoformat() + "Z",
+            "parent_node_id": parent_node_id,
         }
 
         if result:
             payload["status"] = getattr(result.status, "value", str(result.status))
             if result.error:
                 payload["error"] = result.error
+            if result.next_node:
+                payload["next_node"] = result.next_node
             if result.data:
                 payload["data_keys"] = list(result.data.keys())
                 # Include actual values, truncated to keep events lean

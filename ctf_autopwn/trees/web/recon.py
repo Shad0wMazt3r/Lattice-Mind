@@ -54,8 +54,17 @@ class WebReconProbeNode(DecisionNode):
                 "potential_params": self._extract_potential_params(result),
             }
             
+            # Crawl the page for internal links + forms to enrich params/endpoints
+            crawled = self._crawl_links(challenge.url, result.get("body", ""))
+            observations["crawled_endpoints"] = crawled["endpoints"]
+            observations["potential_params"] = list(set(
+                observations["potential_params"] + crawled["params"]
+            ))
+
             context["observations"]["http_response"] = result
             context["observations"]["technologies"] = observations["technologies"]
+            context["observations"]["crawled_endpoints"] = crawled["endpoints"]
+            context["observations"]["potential_params"] = observations["potential_params"]
             
             logger.info(
                 f"[web-recon] Identified technologies: {observations['technologies']}"
@@ -74,7 +83,44 @@ class WebReconProbeNode(DecisionNode):
                 error=str(e)
             )
     
-    def _identify_technologies(self, http_result: Dict[str, Any]) -> Dict[str, str]:
+    def _crawl_links(self, base_url: str, body: str) -> dict:
+        """Extract internal links and form params from an HTML page."""
+        import re
+        from urllib.parse import urljoin, urlparse
+
+        base = urlparse(base_url)
+        endpoints = []
+        params = []
+
+        # Extract href and form action links
+        for pattern in [r'href=["\']([^"\'#?]+)["\']', r'action=["\']([^"\']+)["\']']:
+            for match in re.findall(pattern, body, re.IGNORECASE):
+                if not match or match.startswith(('javascript:', 'mailto:', '#')):
+                    continue
+                full = urljoin(base_url, match)
+                p = urlparse(full)
+                if p.netloc == base.netloc or not p.netloc:
+                    endpoints.append(full.rstrip('/'))
+
+        # Extract form input names as potential params
+        for name in re.findall(r'<input[^>]+name=["\']([^"\']+)["\']', body, re.IGNORECASE):
+            params.append(name)
+        for name in re.findall(r'<select[^>]+name=["\']([^"\']+)["\']', body, re.IGNORECASE):
+            params.append(name)
+
+        # Extract query params already present in links
+        for href in re.findall(r'href=["\'][^"\']*\?([^"\']+)["\']', body, re.IGNORECASE):
+            for part in href.split('&'):
+                key = part.split('=')[0]
+                if key:
+                    params.append(key)
+
+        return {
+            "endpoints": list(dict.fromkeys(endpoints))[:30],  # dedup, cap at 30
+            "params": list(dict.fromkeys(params))[:20],
+        }
+
+    def _identify_technologies(self, http_result: dict) -> dict:
         """Extract technology hints from HTTP response."""
         import re
         techs = {}
