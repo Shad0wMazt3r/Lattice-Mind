@@ -147,12 +147,15 @@ class TreeExecutor:
             results = await self._run_step(tree, step, context)
             
             for result in results:
+                body = result.get("body", "")
+                payload = result.get("injected_payload", "")
+                logger.debug(f"[exploit] param={result.get('injected_param')} payload={str(payload)[:80]} status={result.get('status')} body={body[:300]!r}")
+
                 # Handle captures
                 for cap_def in step.capture:
                     pattern = cap_def.get("pattern")
                     as_key = cap_def.get("as")
                     if pattern and as_key:
-                        body = result.get("body", "")
                         m = re.search(pattern, body)
                         if m:
                             val = m.group(1) if m.groups() else m.group(0)
@@ -160,13 +163,15 @@ class TreeExecutor:
                             context.setdefault("captures", {})[as_key] = val
                 
                 # Check for flag in body
-                body = result.get("body", "")
                 flag = self.flag_recognizer.recognize(body)
                 if flag:
+                    logger.info(f"[exploit] FLAG FOUND: {flag}")
                     return flag
                 # Fallback: check capture named "flag_value"
                 if self.captures.get("flag_value"):
-                    return self.captures["flag_value"]
+                    flag = self.captures["flag_value"]
+                    logger.info(f"[exploit] FLAG via capture: {flag}")
+                    return flag
         return None
 
     async def _run_step(self, tree: DecisionTree, step: Any, context: Dict[str, Any]) -> List[Dict[str, Any]]:
