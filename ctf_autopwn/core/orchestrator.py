@@ -126,6 +126,21 @@ class Orchestrator:
                 payload["error"] = result.error
             if result.data:
                 payload["data_keys"] = list(result.data.keys())
+                # Include actual values, truncated to keep events lean
+                safe = {}
+                for k, v in result.data.items():
+                    if isinstance(v, (str, int, float, bool)) or v is None:
+                        safe[k] = str(v)[:300] if isinstance(v, str) else v
+                    elif isinstance(v, (list, dict)):
+                        try:
+                            import json as _json
+                            s = _json.dumps(v, default=str)
+                            safe[k] = _json.loads(s[:1000]) if len(s) > 1000 else v
+                        except Exception:
+                            safe[k] = str(v)[:300]
+                    else:
+                        safe[k] = str(v)[:300]
+                payload["data"] = safe
 
         try:
             self._progress_callback(payload)
