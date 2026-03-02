@@ -7,3 +7,23 @@ Implements forensics/stego vulnerability detection:
 - Memory dump analysis
 - PCAP analysis
 """
+
+from .detect import (
+    ForensicsDetectArtifactNode,
+    ForensicsImageStegoNode,
+    ForensicsEmbeddedDataNode,
+    ForensicsMetadataNode,
+    ForensicsPCAPNode,
+    ForensicsMemoryNode,
+    ForensicsDiskImageNode,
+)
+
+__all__ = [
+    "ForensicsDetectArtifactNode",
+    "ForensicsImageStegoNode",
+    "ForensicsEmbeddedDataNode",
+    "ForensicsMetadataNode",
+    "ForensicsPCAPNode",
+    "ForensicsMemoryNode",
+    "ForensicsDiskImageNode",
+]
