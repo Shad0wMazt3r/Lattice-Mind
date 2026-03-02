@@ -29,6 +29,8 @@ class FFUFAdapter(CommandToolAdapter):
     }
     """
     
+    OUTPUT_FILE = "/tmp/ffuf_output.json"
+
     DEFAULT_WORDLIST = "/usr/share/dirb/wordlists/common.txt"
 
     def __init__(self, timeout: float = 300.0):
@@ -98,51 +100,50 @@ class FFUFAdapter(CommandToolAdapter):
         
         return cmd
     
-    def normalize_output(self, raw_output: str) -> Dict[str, Any]:
-        """Parse ffuf JSON output.
-        
-        Args:
-            raw_output: ffuf output (usually reads from file)
-        
-        Returns:
-            Normalized output dict
-        """
-        result = {
-            "target": "",
-            "wordlist": "",
-            "results": [],
-            "error": None,
-        }
-        
+    def run(self, target: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute ffuf and parse from the JSON output file."""
+        import os
+        # Remove stale output file so we never read a previous run's data
         try:
-            # Try to parse JSON from the output
-            # ffuf outputs JSON to file and a summary to stdout
-            data = json.loads(raw_output)
-            
-            # Extract results
-            if "results" in data:
-                for item in data["results"]:
-                    result_item = {
-                        "path": item.get("input", {}).get("FUZZ", ""),
-                        "status": item.get("status", 0),
-                        "length": item.get("length", 0),
-                        "lines": item.get("lines", 0),
-                        "words": item.get("words", 0),
-                        "redirects": item.get("redirects", ""),
-                    }
-                    result["results"].append(result_item)
-            
-            logger.debug(f"[ffuf] Found {len(result['results'])} results")
-            return result
-        
-        except json.JSONDecodeError:
-            # If JSON parsing fails, try to parse from text output
-            logger.warning("[ffuf] JSON parse failed, attempting text parsing")
-            return self._parse_text_output(raw_output, result)
-        except Exception as e:
-            logger.error(f"[ffuf] Error parsing output: {str(e)}")
-            result["error"] = str(e)
-            return result
+            os.remove(self.OUTPUT_FILE)
+        except FileNotFoundError:
+            pass
+
+        cmd = self.build_command(target, args)
+        try:
+            self.execute_command(cmd)
+        except RuntimeError as e:
+            return {"target": target, "wordlist": "", "results": [], "error": str(e)}
+
+        # Read JSON results file written by ffuf -of json
+        try:
+            with open(self.OUTPUT_FILE, "r") as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logger.warning(f"[ffuf] Output file unreadable ({e}), falling back to text parse")
+            return self._parse_text_output(self.last_output or "", {
+                "target": target, "wordlist": "", "results": [], "error": None
+            })
+
+        results = []
+        for item in data.get("results", []):
+            results.append({
+                "path":   item.get("input", {}).get("FUZZ", ""),
+                "url":    item.get("url", ""),
+                "status": item.get("status", 0),
+                "length": item.get("length", 0),
+                "lines":  item.get("lines", 0),
+                "words":  item.get("words", 0),
+            })
+
+        logger.info(f"[ffuf] Found {len(results)} results for {target}")
+        result = {"target": target, "wordlist": "", "results": results, "error": None}
+        self.last_result = result
+        return result
+
+    def normalize_output(self, raw_output: str) -> Dict[str, Any]:
+        """Not used — run() reads directly from the output file."""
+        return {"raw": raw_output}
     
     def _parse_text_output(self, output: str, result: Dict) -> Dict[str, Any]:
         """Fallback: parse ffuf text output (summary only).

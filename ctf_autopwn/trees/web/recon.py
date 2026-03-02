@@ -123,67 +123,88 @@ class WebReconProbeNode(DecisionNode):
 
 class WebReconDirectoryScanNode(DecisionNode):
     """Scan for common directories and files."""
-    
+
+    # Tech → extra wordlist (bundled with dirb/wordlistslist)
+    _TECH_WORDLISTS = {
+        "tomcat":  "/usr/share/dirb/wordlists/common.txt",
+        "apache":  "/usr/share/dirb/wordlists/common.txt",
+        "nginx":   "/usr/share/dirb/wordlists/common.txt",
+        "iis":     "/usr/share/dirb/wordlists/common.txt",
+        "default": "/usr/share/dirb/wordlists/common.txt",
+    }
+    # Tech → file extensions to append
+    _TECH_EXTENSIONS = {
+        "php":     ".php,.html,.txt,.bak",
+        "asp":     ".asp,.aspx,.html,.txt,.bak",
+        "jsp":     ".jsp,.jspx,.html,.do,.action,.txt",
+        "python":  ".py,.html,.txt",
+        "ruby":    ".rb,.html,.txt",
+        "default": ".php,.html,.asp,.aspx,.jsp,.txt",
+    }
+
     def __init__(self):
         super().__init__("web_recon_dir_scan", "Web Directory Scan")
         self.ffuf = FFUFAdapter()
-    
+
+    def _detect_tech(self, context: Dict[str, Any]) -> str:
+        """Infer server tech from observations to pick the right extensions."""
+        obs   = context.get("observations", {})
+        techs = obs.get("technologies", {})
+        server = (techs.get("server") or "").lower()
+        framework = (techs.get("framework") or "").lower()
+        cookies = str(obs.get("http_response", {}).get("headers", {})).lower()
+
+        if "coyote" in server or "tomcat" in server or "jsessionid" in cookies:
+            return "jsp"
+        if "php" in server or "php" in framework:
+            return "php"
+        if "iis" in server or "asp" in framework:
+            return "asp"
+        if "python" in server or "flask" in framework or "django" in framework:
+            return "python"
+        if "ruby" in server or "rails" in framework:
+            return "ruby"
+        return "default"
+
     def run(self, context: Dict[str, Any]) -> NodeResult:
-        """Scan for directories."""
+        """Scan for directories, adapting extensions to detected tech."""
         challenge = context.get("challenge")
         if not challenge or not challenge.url:
-            return NodeResult(
-                status=NodeStatus.FAILURE,
-                error="No URL provided"
-            )
-        
-        logger.info(f"[web-recon] Scanning directories on {challenge.url}")
-        
+            return NodeResult(status=NodeStatus.FAILURE, error="No URL provided")
+
+        tech = self._detect_tech(context)
+        extensions = self._TECH_EXTENSIONS.get(tech, self._TECH_EXTENSIONS["default"])
+        logger.info(f"[web-recon] Scanning {challenge.url} (tech={tech}, ext={extensions})")
+
         try:
             target_url = f"{challenge.url}/FUZZ"
-            
             result = self.ffuf.run(target_url, {
-                "match_status": "200,204,301,302",
-                "extensions": ".php,.html,.asp,.aspx,.jsp",
-                "threads": 20,
+                "match_status": "200,204,301,302,403",
+                "extensions": extensions,
             })
-            
+
             if result.get("error"):
                 logger.warning(f"[web-recon] Directory scan failed: {result['error']}")
-                return NodeResult(
-                    status=NodeStatus.SUCCESS,
-                    data={"directories": []}
-                )
-            
-            directories = []
-            for item in result.get("results", []):
-                path = item.get("path", "")
-                status = item.get("status", 0)
-                if status in [200, 204, 301, 302]:
-                    directories.append({
-                        "path": path,
-                        "status": status,
-                    })
-            
+                return NodeResult(status=NodeStatus.SUCCESS, data={"directories": [], "tech": tech})
+
+            directories = [
+                {"path": item["path"], "url": item.get("url", ""), "status": item["status"]}
+                for item in result.get("results", [])
+                if item.get("status") in [200, 204, 301, 302, 403]
+            ]
+
             context["observations"]["directories"] = directories
-            
             logger.info(f"[web-recon] Found {len(directories)} accessible paths")
-            
+
             return NodeResult(
                 status=NodeStatus.SUCCESS,
-                data={
-                    "directories": directories,
-                    "count": len(directories)
-                },
+                data={"directories": directories, "count": len(directories), "tech": tech},
                 next_node="web_recon_analyze_vulns"
             )
-        
+
         except Exception as e:
             logger.warning(f"[web-recon] Directory scan exception: {str(e)}")
-            return NodeResult(
-                status=NodeStatus.SUCCESS,
-                data={"directories": []}
-            )
+            return NodeResult(status=NodeStatus.SUCCESS, data={"directories": [], "tech": tech})
     
     def next_node(self, result: NodeResult) -> Optional[DecisionNode]:
         """Route to vulnerability analysis."""
@@ -228,6 +249,9 @@ class WebReconAnalyzeVulnsNode(DecisionNode):
                 candidates["lfi"].append(path)
         
         candidates = {k: v for k, v in candidates.items() if v}
+        
+        # Store in observations so mvp.py can read them after tree completes
+        context["observations"]["vuln_candidates"] = candidates
         
         logger.info(f"[web-recon] Vulnerability candidates: {list(candidates.keys())}")
         

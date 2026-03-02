@@ -13,6 +13,11 @@ from ctf_autopwn.core.flag_recognizer import get_flag_recognizer
 # Import all detection tree entry points
 from ctf_autopwn.trees.asset.classify import AssetClassifyNetworkNode
 from ctf_autopwn.trees.web.recon import WebReconProbeNode
+from ctf_autopwn.trees.web.sqli import SQLiDetectReflectionNode
+from ctf_autopwn.trees.web.lfi import LFIDetectTraversalNode
+from ctf_autopwn.trees.web.xss import XSSDetectReflectedNode
+from ctf_autopwn.trees.web.cmd import CMDDetectOutputNode
+from ctf_autopwn.trees.web.additional import AuthBypassDetectNode
 from ctf_autopwn.trees.pwn.detect import PwnDetectMetadataNode
 from ctf_autopwn.trees.crypto.detect import CryptoDetectEncodingNode
 from ctf_autopwn.trees.forensics.detect import ForensicsDetectArtifactNode
@@ -120,17 +125,99 @@ class MVPSolver:
             return None
     
     def _detect_web_vulns(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run web vulnerability detection (W-Recon as entry point)."""
+        """Run web vulnerability detection, then dispatch exploitation trees."""
         try:
-            # Use WebReconProbeNode as entry point to web detection tree
+            # Phase 1: Recon (probe + dir scan + vuln analysis)
             root_node = WebReconProbeNode()
             flag = self.orchestrator.run_tree(root_node)
-            
-            return flag or self.orchestrator.execution_context.get("flag_found")
-        
+            if flag:
+                return flag
+
+            # Phase 2: Read candidates written by WebReconAnalyzeVulnsNode
+            observations = self.orchestrator.execution_context.get("observations", {})
+            vuln_candidates = observations.get("vuln_candidates", {})
+
+            if not vuln_candidates:
+                logger.warning("[web] No vulnerability candidates identified — stopping")
+                return self.orchestrator.execution_context.get("flag_found")
+
+            logger.info(f"[web] Phase 2 — dispatching trees for: {list(vuln_candidates.keys())}")
+
+            # Phase 3: Dispatch exploitation trees per candidate
+            for vuln_type, evidence in vuln_candidates.items():
+                flag = self._dispatch_web_exploit(vuln_type, evidence, challenge)
+                if flag:
+                    return flag
+
+            return self.orchestrator.execution_context.get("flag_found")
+
         except Exception as e:
             logger.error(f"[web] Detection failed: {str(e)}")
             return None
+
+    def _dispatch_web_exploit(
+        self, vuln_type: str, evidence: list, challenge: ChallengeDescriptor
+    ) -> Optional[str]:
+        """Run the exploitation tree for a single vuln type."""
+        ctx = self.orchestrator.execution_context
+        logger.info(f"[web] Running {vuln_type} tree (evidence={evidence})")
+
+        try:
+            if vuln_type == "auth_bypass":
+                return self.orchestrator.run_tree(AuthBypassDetectNode())
+
+            if vuln_type == "sql_injection":
+                # evidence entries are either "parameter" (generic) or param names
+                params = [e for e in evidence if e != "parameter"] or ["id", "page", "query"]
+                for param in params[:3]:
+                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
+                    flag = self.orchestrator.run_tree(SQLiDetectReflectionNode())
+                    if flag:
+                        return flag
+                return None
+
+            if vuln_type == "lfi":
+                for entry in evidence[:3]:
+                    if entry == "parameter":
+                        test_params = ["file", "path", "include", "page"]
+                    else:
+                        # entry is a directory path containing upload/file
+                        test_params = ["file"]
+                        challenge_url_orig = challenge.url
+                        challenge.url = f"{challenge.url.rstrip('/')}/{entry}"
+                    for param in test_params:
+                        ctx["target_param"] = {"name": param, "endpoint": challenge.url}
+                        flag = self.orchestrator.run_tree(LFIDetectTraversalNode())
+                        if flag:
+                            return flag
+                    if entry != "parameter":
+                        challenge.url = challenge_url_orig
+                return None
+
+            if vuln_type == "xss":
+                obs = ctx.get("observations", {})
+                params = list(obs.get("potential_params", [])) or ["search", "q", "query", "name"]
+                for param in params[:3]:
+                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
+                    flag = self.orchestrator.run_tree(XSSDetectReflectedNode())
+                    if flag:
+                        return flag
+                return None
+
+            if vuln_type == "command_injection":
+                for param in evidence[:3]:
+                    if param == "parameter":
+                        continue
+                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
+                    flag = self.orchestrator.run_tree(CMDDetectOutputNode())
+                    if flag:
+                        return flag
+                return None
+
+        except Exception as e:
+            logger.error(f"[web] {vuln_type} dispatch error: {str(e)}")
+
+        return None
     
     def _detect_binary_vulns(self, challenge: ChallengeDescriptor) -> Optional[str]:
         """Run binary exploitation detection (P-Detect)."""
