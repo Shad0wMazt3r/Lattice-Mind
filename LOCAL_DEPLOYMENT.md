@@ -92,6 +92,26 @@ ctf-autopwn solve --challenge challenge.json
 ctf-autopwn detect --type web --target http://target.com
 ```
 
+### 5. Launch the Web Dashboard
+
+```bash
+pip install -e .
+uvicorn ctf_autopwn.api.server:app --host 0.0.0.0 --port 8000
+# or use the shortcut
+ctf-autopwn-api
+```
+
+Open <http://localhost:8000> in a browser to submit challenges, view solver status, and inspect execution logs without leaving the UI.
+
+### 6. Run Everything via Docker
+
+```bash
+docker compose up --build
+# Web UI + API available at http://localhost:8000
+```
+
+The container bundles the FastAPI server, UI, and Python package so teammates can test locally with a single command.
+
 ---
 
 ## Available Components
@@ -117,6 +137,11 @@ ctf-autopwn detect --type web --target http://target.com
 - ✅ Binwalk (embedded file extraction)
 - ✅ Exiftool (metadata extraction)
 - ⚠ Others available when installed on system (nmap, ffuf, etc.)
+
+### API & Frontend
+- ✅ FastAPI server (`ctf_autopwn.api.server:app`) with `/health`, `/challenge-types`, `/solve`
+- ✅ Embedded single-page dashboard reachable at `http://localhost:8000`
+- ✅ Dockerfile + `docker-compose.yml` for turnkey local deployments
 
 ---
 
@@ -149,17 +174,19 @@ ctf-autopwn/
 
 ## Dependencies
 
-**Core** (no external dependencies required):
-- Standard library only
+**Core Python packages** (installed via `pip install -e .`):
+- `fastapi`
+- `uvicorn[standard]`
+- `requests`
 
-**Optional** (for full functionality):
-- `requests` - For HTTP requests (via curl adapter)
-- `pycryptodome` - For crypto functions
-- `sympy` - For RSA factorization
+**Optional tooling** (enhanced detections/exploitation):
+- `pycryptodome` - Crypto routines
+- `sympy` - RSA factoring helpers
+- Scanner utilities: `nmap`, `ffuf`, `binwalk`, `exiftool`, etc.
 
-Install optional dependencies:
+Install optional Python helpers when needed:
 ```bash
-pip install requests pycryptodome sympy
+pip install pycryptodome sympy
 ```
 
 ---

@@ -2,10 +2,6 @@
 
 A deterministic, decision-tree-based framework for autonomous vulnerability detection and exploitation in CTF challenges.
 
-> **Status**: ✅ **LOCAL DEPLOYMENT COMPLETE** - All 6 tests passing, ready for use
-> 
-> **Quick Start**: `python test_deployment.py` to verify installation | `python example_usage.py` to see examples
-
 ## Overview
 
 **ctf-autopwn** is an autonomous CTF solver that:
@@ -90,44 +86,55 @@ Enables:
 - Override flags (skip certain trees)
 - Storing domain-specific knowledge
 
+## Web Dashboard & API
+
+- **FastAPI service** (`ctf_autopwn.api.server:app`) exposes `/health`, `/challenge-types`, and `/solve`.
+- **One-file dashboard** (served from `/`) lets you submit challenge metadata, trigger the solver, and view execution logs/flags without using the CLI.
+- **Thread-safe orchestration** ensures only one solver run executes at a time while still supporting concurrent HTTP requests.
+- **Docker & Compose** provide a turnkey way to launch the API/UI (`docker compose up --build` binds to `localhost:8000`).
+
+Use the API programmatically:
+
+```bash
+curl -X POST http://localhost:8000/solve ^
+     -H "Content-Type: application/json" ^
+     -d "{\"name\": \"demo\", \"challenge_type\": \"web\", \"url\": \"http://target\"}"
+```
+
+The response contains the flag (if any), node history, and observations captured by the orchestrator.
+
 ## Quick Start
 
 ```bash
-# Install
-python setup.py install
+# Install (includes FastAPI + UI deps)
+pip install -e .
 
-# Run a test
+# Launch the FastAPI backend + web dashboard
+uvicorn ctf_autopwn.api.server:app --host 0.0.0.0 --port 8000
+# or simply run: ctf-autopwn-api
+# open http://localhost:8000 to access the UI
+
+# Prefer containers? bring everything up with Docker
+docker compose up --build
+```
+
+The legacy CLI entry point is still available for scripted usage:
+
+```bash
+# Smoke test adapters + solver
 ctf-autopwn test
 
-# Solve a web challenge
+# Kick off a web or pwn analysis directly from the terminal
 ctf-autopwn solve web http://example.com:8080
-
-# Solve a binary exploitation challenge
 ctf-autopwn solve pwn /path/to/binary
 ```
 
 ## Project Status
 
-**Phase 1 (Foundation)** - ✅ Complete
-- Core types and data structures
-- Base classes for nodes, engines, adapters
-- Orchestrator framework
-- CLI skeleton
-- Flag recognizer
-- Knowledge base
-- Human-in-the-loop manager
-
-**Phase 2** - Next
-- Tool adapters (nmap, curl, binwalk, etc.)
-- Web vulnerability detection trees
-- Binary exploitation trees
-- Crypto attack trees
-
-**Phase 3** - Future
-- Full decision tree implementations per category
-- Exploit template library
-- Performance optimizations
-- Comprehensive test suite
+- **Phase 1–5** – ✅ Complete (core framework, adapters, 50 detection nodes, MVP integration, exploitation trees)
+- **Phase 6** – 🔄 Integrating exploitation planners into MVPSolver routing
+- **Phase 7** – ✅ FastAPI service + embedded dashboard + automated tests
+- **Phase 8** – 🚧 Containerization & multi-environment deployment (initial Dockerfile/Compose shipped)
 
 ## Research & Papers
 
@@ -141,12 +148,14 @@ See `Research Paper - CTF Toolkit.md` for detailed analysis and references.
 ## Requirements
 
 - Python 3.11+
-- Linux environment with standard tools:
+- Python packages (installed automatically via `pip install -e .`):
+  - `fastapi`, `uvicorn[standard]`, `requests`
+- Optional command-line tools for deeper analysis:
   - `nmap`, `curl`, `ffuf`/`dirsearch`
   - `binwalk`, `zsteg`, `exiftool`
   - `tshark`, `volatility`
   - `gdb`, `objdump`, `strings`
-  - Crypto libraries (cryptography, pycryptodome, etc.)
+  - Crypto helpers (`pycryptodome`, `sympy`, etc.)
 
 ## License
 

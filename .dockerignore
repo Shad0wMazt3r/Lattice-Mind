@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.git/
+.gitignore
+artifacts/
+ctf_autopwn.egg-info/
+build/
+dist/
+*.egg-info/

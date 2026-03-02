@@ -9,8 +9,9 @@ setup(
     packages=find_packages(),
     python_requires=">=3.11",
     install_requires=[
-        # Core dependencies
-        # Add tool-specific dependencies as modules are implemented
+        "fastapi>=0.110.0",
+        "uvicorn[standard]>=0.27.0",
+        "requests>=2.31.0",
     ],
     extras_require={
         "dev": [
@@ -23,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "ctf-autopwn=ctf_autopwn.cli:main",
+            "ctf-autopwn-api=ctf_autopwn.api.server:main",
         ],
     },
     classifiers=[

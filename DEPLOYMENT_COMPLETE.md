@@ -57,6 +57,21 @@ challenge = ChallengeDescriptor(type=ChallengeType.WEB, url="http://target/")
 flag = solver.solve(challenge)
 ```
 
+### 4️⃣ Launch the FastAPI + Web Dashboard
+```bash
+pip install -e .
+uvicorn ctf_autopwn.api.server:app --host 0.0.0.0 --port 8000
+# or use the shortcut console script
+ctf-autopwn-api
+```
+Navigate to <http://localhost:8000> to submit challenges, stream solver progress, and inspect node history.
+
+### 5️⃣ Docker One-Liner
+```bash
+docker compose up --build
+```
+Brings up the API + UI stack (listening on `localhost:8000`) without needing a local Python environment.
+
 ---
 
 ## Test Results
@@ -120,6 +135,12 @@ Total: 6/6 PASS ✓
 - **ExiftoolAdapter** - Metadata extraction
 - **FileTypeAdapter** - Magic bytes detection
 
+### API & Frontend
+
+- **FastAPI service** at `ctf_autopwn.api.server:app` (endpoints: `/health`, `/challenge-types`, `/solve`)
+- **Single-page dashboard** served from `/` to run challenges and visualize outputs
+- **Dockerfile + docker-compose** for single-command local deployments
+
 ---
 
 ## Files
@@ -159,9 +180,9 @@ C:\Users\er123\OneDrive\Desktop\Projects\copilot\
 4. Create custom detection nodes for your use cases
 
 ### Medium-term (This Month)
-1. Build REST API (FastAPI)
-2. Create web dashboard (React)
-3. Add Docker containerization
+1. Harden REST API (auth, rate-limits) + expand endpoints
+2. Enrich the embedded dashboard (historical runs, multi-challenge queue)
+3. Extend Docker deployment to Kubernetes/Helm for team labs
 4. Deploy to cloud (AWS/Azure/GCP)
 
 ### Long-term

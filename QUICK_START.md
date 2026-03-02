@@ -6,6 +6,22 @@ Your CTF Autopwn framework is **fully deployed and tested locally**.
 
 ---
 
+## 0. Launch the Web Dashboard (New!)
+
+```bash
+pip install -e .
+uvicorn ctf_autopwn.api.server:app --host 0.0.0.0 --port 8000
+# or run the shortcut
+ctf-autopwn-api
+
+# Docker option
+docker compose up --build
+```
+
+Visit <http://localhost:8000> to submit challenge descriptors, stream solver status, and view execution logs/flags directly in your browser.
+
+---
+
 ## 1. Verify Installation (30 seconds)
 
 ```bash
@@ -189,10 +205,10 @@ flag = recognizer.recognize(text)  # Returns "flag{test_12345}"
 
 1. ✅ Run `python test_deployment.py` - Verify installation
 2. ✅ Run `python example_usage.py` - See usage patterns
-3. 🚀 Test against real vulnerabilities (DVWA, WebGoat)
-4. 🚀 Push to GitHub (create private repo)
-5. 🚀 Build API & Web Dashboard (FastAPI + React)
-6. 🚀 Docker containerization
+3. ✅ Launch FastAPI + dashboard (`ctf-autopwn-api` or `docker compose up`)
+4. 🚀 Test against real vulnerabilities (DVWA, WebGoat)
+5. 🚀 Push to GitHub (create private repo)
+6. 🚀 Extend Docker/Kubernetes deployment for team usage
 
 ---
 
