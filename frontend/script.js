@@ -3,6 +3,7 @@
 let currentRunId = null;
 let ws = null;
 let _allHistoryRows = [];
+let _allRules = [];
 
 //  utils 
 const $= id => document.getElementById(id);
@@ -27,6 +28,7 @@ function switchTab(name){
       b.classList.add('active');
   });
   if(name==='history') loadHistory();
+  if(name==='rules') loadRules();
 }
 
 //  type change 
@@ -154,6 +156,11 @@ function updateActiveRunUI(run){
       return '<div class="term-line '+cls+'">'+esc(ts)+' '+esc(msg)+'</div>';
     }).join('');
     $('terminal-out').scrollTop = $('terminal-out').scrollHeight;
+  }
+
+  // confidence display
+  if(run.confidence){
+     // Could add a side panel for confidence scores
   }
 }
 
@@ -386,6 +393,65 @@ async function rerunChallenge(runId){
     connectWebSocket(currentRunId);
     loadRecentRuns();
   }catch(e){ alert('Rerun error: '+e.message); }
+}
+
+//  rules tab ─
+async function loadRules(){
+  try{
+    const r = await fetch('/rules');
+    _allRules = await r.json();
+    renderRulesTable(_allRules);
+  }catch(e){}
+}
+
+function renderRulesTable(rules){
+  const tbody = $('rules-tbody');
+  if(!rules.length){ tbody.innerHTML='<tr><td colspan="8" style="color:var(--dim);padding:16px">No rules found.</td></tr>'; return; }
+  tbody.innerHTML = rules.map(t=>`<tr>
+    <td style="color:#aaa;font-size:10px">${esc(t.id)}</td>
+    <td>${esc(t.name)}</td>
+    <td>${esc(t.category)}</td>
+    <td>${esc(t.version)}</td>
+    <td>${t.detection_paths}</td>
+    <td>${t.exploitation_paths}</td>
+    <td><span style="color:${t.enabled?'var(--green)':'var(--red)'}">${t.enabled?'ENABLED':'DISABLED'}</span></td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-sm" onclick="viewRule('${esc(t.id)}')">VIEW</button>
+      <button class="btn btn-sm" style="margin-left:4px" onclick="toggleRule('${esc(t.id)}', ${!t.enabled})">${t.enabled?'DISABLE':'ENABLE'}</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function toggleRule(id, enabled){
+  try{
+    await fetch('/rules/'+id, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+    loadRules();
+  }catch(e){}
+}
+
+async function viewRule(id){
+  try{
+    const r = await fetch('/rules/'+id);
+    const data = await r.json();
+    $('rule-detail-view').classList.remove('hidden');
+    $('rd-name').textContent = data.name;
+    // Pretty print simplified YAML-like view
+    $('rd-yaml').textContent = JSON.stringify(data, null, 2);
+  }catch(e){}
+}
+
+async function reloadRules(){
+  try{
+    await fetch('/rules/reload', {method:'POST'});
+    loadRules();
+  }catch(e){}
+}
+
+function filterRules(){
+  const q = $('rules-search').value.toLowerCase();
+  if(!q){ renderRulesTable(_allRules); return; }
+  const filtered = _allRules.filter(t=>(t.id+t.name+t.category+t.description).toLowerCase().includes(q));
+  renderRulesTable(filtered);
 }
 
 //  HITL polling 

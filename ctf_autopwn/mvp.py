@@ -10,7 +10,12 @@ from ctf_autopwn.core.types import ChallengeDescriptor, ChallengeType
 from ctf_autopwn.core.orchestrator import Orchestrator
 from ctf_autopwn.core.flag_recognizer import get_flag_recognizer
 
-# Import all detection tree entry points
+from ctf_autopwn.core.tree_loader import get_tree_registry
+from ctf_autopwn.core.confidence import ConfidencePool
+from ctf_autopwn.core.executor import TreeExecutor
+
+# ... (imports)
+
 from ctf_autopwn.trees.asset.classify import AssetClassifyNetworkNode
 from ctf_autopwn.trees.web.recon import WebReconProbeNode
 from ctf_autopwn.trees.web.sqli import SQLiDetectReflectionNode
@@ -24,35 +29,37 @@ from ctf_autopwn.trees.forensics.detect import ForensicsDetectArtifactNode
 
 logger = logging.getLogger(__name__)
 
-
 class MVPSolver:
     """MVP solver that chains asset classification to specialized detection trees."""
     
     def __init__(self):
         self.orchestrator = Orchestrator()
         self.flag_recognizer = get_flag_recognizer()
-    
+        self.registry = get_tree_registry()
+        # Load trees from default locations
+        import pathlib
+        base_path = pathlib.Path(__file__).parent / "trees" / "yaml"
+        self.registry.load_from_directory(str(base_path))
+        
+        self.confidence_pool = ConfidencePool()
+        self.executor = TreeExecutor(self.confidence_pool)
+
     def solve(self, challenge: ChallengeDescriptor) -> Optional[str]:
         """Solve a challenge autonomously.
         
         Steps:
         1. Classify asset type (web, binary, crypto, forensics)
-        2. Route to appropriate detection tree
-        3. Run detection nodes to identify vulnerabilities
+        2. Evaluate and run declarative YAML trees
+        3. Fallback to legacy Python trees if needed
         4. Monitor for flag detection throughout
-        
-        Args:
-            challenge: ChallengeDescriptor with challenge metadata
-        
-        Returns:
-            Flag if found, None otherwise
         """
         logger.info(f"\n{'='*70}")
         logger.info(f"[MVP] Starting autonomous challenge solve")
         logger.info(f"{'='*70}")
         
-        # Set challenge in orchestrator
+        # Set challenge in orchestrator and executor
         self.orchestrator.set_challenge(challenge)
+        self.confidence_pool.clear()
         
         # Step 1: Asset classification
         logger.info("\n[Step 1] Classifying asset type...")
@@ -60,26 +67,68 @@ class MVPSolver:
         
         if not asset_type:
             logger.error("[MVP] Asset classification failed")
-            return None
+            # Continue anyway with generic web if URL present
+            if challenge.url:
+                asset_type = ChallengeType.WEB
+            else:
+                return None
         
         logger.info(f"[Step 1] Classified as: {asset_type}")
         
-        # Check if flag found during classification
-        flag = self.orchestrator.execution_context.get("flag_found")
-        if flag:
-            logger.info(f"[MVP] Flag found during classification: {flag}")
-            return flag
+        # Step 2: Run Declarative Trees
+        logger.info("\n[Step 2] Executing declarative decision trees...")
+
+        # Run initial recon first so observations are populated before YAML
+        # confidence seeds are evaluated. Without this all seeds return 0 and
+        # every YAML tree is skipped.
+        if asset_type == ChallengeType.WEB:
+            try:
+                self.orchestrator.run_tree(WebReconProbeNode())
+            except Exception as e:
+                logger.warning(f"[MVP] Web recon pre-pass failed: {e}")
+
         
-        # Step 2: Route to appropriate detection tree
-        logger.info(f"\n[Step 2] Running detection tree for {asset_type}...")
+        # Set up progress callback for executor to match orchestrator flow
+        if self.orchestrator._progress_callback:
+            self.executor.set_progress_callback(self.orchestrator._progress_callback)
+
+        # Build context for expression evaluation
+        context = self.orchestrator.execution_context
+        # Initialize some common observations
+        obs = context["observations"]
+        obs.setdefault("tech_stack", [])
+        obs.setdefault("found_paths", [])
+        obs.setdefault("params", [])
+        
+        # Find applicable trees
+        candidate_trees = []
+        for tree in self.registry.list_trees():
+            if not tree.enabled: continue
+            
+            # Check applies_when
+            from ctf_autopwn.core.expressions import ExpressionEvaluator
+            evaluator = ExpressionEvaluator(context)
+            if all(evaluator.evaluate(cond) for cond in tree.applies_when):
+                candidate_trees.append(tree)
+        
+        logger.info(f"[MVP] Found {len(candidate_trees)} applicable declarative trees")
+        
+        # Execute each tree (this could be parallelized)
+        import asyncio
+        for tree in candidate_trees:
+            # We need to bridge sync solve() with async executor
+            flag = asyncio.run(self.executor.execute_tree(tree, context))
+            if flag:
+                return flag
+
+        # Step 3: Fallback to Legacy Trees
+        logger.info("\n[Step 3] Running legacy detection trees...")
         flag = self._run_detection_tree(asset_type, challenge)
         
         if flag:
-            logger.info(f"[MVP] Flag found: {flag}")
             return flag
         
-        logger.warning("[MVP] No flag found after detection trees")
-        return None
+        return self.orchestrator.execution_context.get("flag_found")
     
     def _classify_asset(self, challenge: ChallengeDescriptor) -> Optional[ChallengeType]:
         """Run asset classification tree (D-0)."""

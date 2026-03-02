@@ -191,6 +191,7 @@ class RunState:
     error: Optional[str] = None
     log: Optional[Dict[str, Any]] = None
     observations: Optional[Dict[str, Any]] = None
+    confidence: Optional[Dict[str, float]] = None
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     created_at: str = field(default_factory=_now)
@@ -207,6 +208,7 @@ class RunState:
                 "error": self.error,
                 "log": self.log,
                 "observations": self.observations,
+                "confidence": self.confidence,
                 "challenge": self.challenge,
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
@@ -316,9 +318,54 @@ class RunStatusResponse(BaseModel):
     error: Optional[str] = None
     log: Optional[Dict[str, Any]] = None
     observations: Optional[Dict[str, Any]] = None
+    confidence: Optional[Dict[str, float]] = None
     challenge: Dict[str, Any]
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
+
+
+@app.get("/rules")
+async def list_rules():
+    """List all loaded YAML decision trees."""
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "category": t.category,
+            "version": t.version,
+            "enabled": t.enabled,
+            "description": t.description,
+            "detection_paths": len(t.detection_paths),
+            "exploitation_paths": len(t.exploitation_paths)
+        }
+        for t in solver.registry.list_trees()
+    ]
+
+@app.get("/rules/{rule_id}")
+async def get_rule(rule_id: str):
+    """Get full definition of a specific rule."""
+    tree = solver.registry.get_tree(rule_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return tree
+
+@app.post("/rules/reload")
+async def reload_rules():
+    """Rescan the YAML trees directory and hot-reload rules."""
+    import pathlib
+    base_path = pathlib.Path(solver.__file__).parent / "trees" / "yaml"
+    solver.registry.load_from_directory(str(base_path))
+    return {"status": "ok", "count": len(solver.registry.list_trees())}
+
+@app.patch("/rules/{rule_id}")
+async def patch_rule(rule_id: str, payload: dict):
+    """Enable or disable a specific rule."""
+    tree = solver.registry.get_tree(rule_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    if "enabled" in payload:
+        tree.enabled = bool(payload["enabled"])
+    return {"id": tree.id, "enabled": tree.enabled}
 
 
 from fastapi.responses import FileResponse
@@ -422,10 +469,12 @@ async def _run_solver(run_id: str, descriptor: ChallengeDescriptor):
         observations = jsonable_encoder(
             solver.orchestrator.execution_context.get("observations", {})
         )
+        confidence = solver.confidence_pool.get_scores()
         state.update(
             flag=flag,
             log=serialized_log,
             observations=observations,
+            confidence=confidence,
             status="success" if flag else "completed",
             finished_at=_now(),
         )

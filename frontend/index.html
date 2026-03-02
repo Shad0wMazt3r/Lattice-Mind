@@ -57,6 +57,7 @@
       <button class="tab-btn active" onclick="switchTab('active')">ACTIVE RUN</button>
       <button class="tab-btn" onclick="switchTab('history')">HISTORY</button>
       <button class="tab-btn" id="tab-hitl-btn" onclick="switchTab('hitl')">HITL<span class="tab-badge" id="hitl-count" style="display:none">0</span></button>
+      <button class="tab-btn" onclick="switchTab('rules')">RULES</button>
       <button class="tab-btn" onclick="switchTab('crypto')">CRYPTO TOOLS</button>
     </div>
 
@@ -106,6 +107,28 @@
     <div class="tab-panel" id="tab-hitl">
       <div id="hitl-panel">
         <div id="hitl-questions"><div class="hitl-empty">No pending questions.</div></div>
+      </div>
+    </div>
+
+    <!-- RULES TAB -->
+    <div class="tab-panel" id="tab-rules">
+      <div id="history-panel">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="rules-search" type="text" placeholder="Search rules..." oninput="filterRules()"/>
+          <button class="btn btn-sm" onclick="reloadRules()">RELOAD RULES</button>
+        </div>
+        <div id="history-table-wrap">
+          <table id="rules-table">
+            <thead><tr>
+              <th>RULE ID</th><th>NAME</th><th>CATEGORY</th><th>VER</th><th>DET. PATHS</th><th>EXP. PATHS</th><th>STATUS</th><th>ACTIONS</th>
+            </tr></thead>
+            <tbody id="rules-tbody"></tbody>
+          </table>
+        </div>
+        <div id="rule-detail-view" class="hidden" style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+           <h4 id="rd-name" style="color:var(--green)"></h4>
+           <pre id="rd-yaml" style="font-size:11px;background:#050505;padding:12px;margin-top:8px;max-height:400px;overflow:auto"></pre>
+        </div>
       </div>
     </div>
 

