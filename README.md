@@ -1,368 +1,127 @@
-# ctf-autopwn  Autonomous CTF Exploitation Toolkit
+﻿# ctf-autopwn — deterministic CTF exploitation toolkit
 
-A deterministic, decision-tree-based framework for autonomous vulnerability
-detection and exploitation in CTF challenges.  No LLMs. No magic. Pure rules.
+ctf-autopwn automates vulnerability discovery and exploitation by weaving together rule-based decision trees, deterministic probes, and adaptive exploit prioritization. There are no LLMs or randomness; every action is justified by evidence collected from adapters and recorded in the execution log.
 
----
+## Quickstart
 
-## Table of Contents
+### Docker (local development or DigitalOcean deployment)
 
-1. [What is this?](#what-is-this)
-2. [Quick Start  Docker](#quick-start--docker)
-3. [Quick Start  Local](#quick-start--local)
-4. [Web Dashboard](#web-dashboard)
-5. [CLI Usage](#cli-usage)
-6. [REST API](#rest-api)
-7. [Architecture](#architecture)
-8. [Decision Trees & Pipeline](#decision-trees--pipeline)
-9. [Tools Bundled in Docker](#tools-bundled-in-docker)
-10. [Adding a New Decision Tree](#adding-a-new-decision-tree)
-11. [Testing](#testing)
-12. [Research & References](#research--references)
-13. [License](#license)
+1. Build the container image with all bundled tools:
 
----
+   ```powershell
+   docker compose build autopwn-api
+   ```
 
-## What is this?
+2. Start the service (runs the API, dashboard, and solver engine):
 
-**ctf-autopwn** is an autonomous CTF solver that:
+   ```powershell
+   docker compose up -d
+   ```
 
-- Classifies challenge artifacts (web service, binary, crypto, forensics)
-- Runs category-specific **detection decision trees** to identify vulnerability types
-- Dispatches **exploitation decision trees** for each confirmed candidate
-- Monitors every node output for flag patterns (`flag{...}`, `CTF{...}`) and halts on match
-- Falls back to **human-in-the-loop** when automation is insufficient
+3. Confirm the service is healthy:
 
-The system is fully deterministic  every branch decision is justified by observable
-evidence (HTTP response codes, header values, directory names, binary metadata, etc.).
+   ```powershell
+   curl http://localhost:8000/health
+   ```
 
----
+4. Submit a challenge via the API or dashboard (`http://localhost:8000`), e.g.:
 
-## Quick Start  Docker
+   ```http
+   POST /solve
+   Content-Type: application/json
 
-The easiest way to run ctf-autopwn.  Docker installs all required CTF tools
-automatically (nmap, ffuf, binwalk, exiftool, etc.).
+   {
+     "name": "Bank Login",
+     "challenge_type": "web",
+     "url": "http://target.com:8080",
+     "flag_format": "flag{...}"
+   }
+   ```
 
-```bash
-# Build and start
-docker compose up --build
+5. Tail the logs to observe progress:
 
-# Service is now available at http://localhost:8000
-# SQLite run history is persisted in a named Docker volume (survives rebuilds)
-```
+   ```powershell
+   docker compose logs -f autopwn-api
+   ```
 
-To rebuild after code changes:
+   The logs show decision nodes, payloads, captured confidence, and any flag recognition events.
 
-```bash
-docker compose up --build -d
-```
+When deploying to DigitalOcean, build the same Docker image and push it to your container registry; the compose file can be used inside a droplet or managed App Platform by providing port 8000 and persistence for `/data`.
 
----
+### Local (source)
 
-## Quick Start  Local
+1. Install dependencies:
 
-```bash
-# Python 3.11+ required
-pip install -e .
+   ```powershell
+   python -m pip install -e .
+   ```
 
-# Start the API + web dashboard
-uvicorn ctf_autopwn.api.server:app --host 0.0.0.0 --port 8000
+2. Run the API:
 
-# Visit http://localhost:8000
-```
+   ```powershell
+   uvicorn ctf_autopwn.api.server:app --host 0.0.0.0 --port 8000
+   ```
 
-Install optional CLI tools for deeper analysis:
-
-```bash
-# Debian/Ubuntu
-sudo apt install nmap curl dirb binwalk exiftool file steghide foremost netcat-openbsd
-# Install ffuf separately (Go binary)
-# https://github.com/ffuf/ffuf/releases
-```
-
----
-
-## Web Dashboard
-
-Open `http://localhost:8000` for a cyberpunk-themed dashboard.
-
-**Submit a challenge:**
-
-| Field           | Example                          | Notes                        |
-|-----------------|----------------------------------|------------------------------|
-| Challenge Type  | `web`                            | web / pwn / crypto / forensics |
-| Name            | `Bank Login`                     | Free-form label              |
-| URL             | `http://target.com:8080`         | Required for web challenges  |
-| File Path       | `/tmp/binary`                    | Required for pwn/forensics   |
-| Flag Format     | `flag{...}` *(default)*          | Regex hint for recognizer    |
-
-**Dashboard panels (right side):**
-
-- **Execution Tree**  Live flowchart of every node, click to expand outputs
-- **Discoveries**  Aggregated directories, services, parameters found
-- **Attacks Tried**  Exploitation nodes only, with payloads and outcomes
-- **Raw Output**  Full JSON state for debugging
-
-Past runs are stored in SQLite and browseable via `GET /runs`.
-
----
-
-## CLI Usage
-
-```bash
-# Smoke-test adapters and solver
-ctf-autopwn test
-
-# Web challenge
-ctf-autopwn solve web http://target.com:8080
-
-# Binary/pwn challenge
-ctf-autopwn solve pwn ./challenge_binary
-
-# Crypto challenge
-ctf-autopwn solve crypto ./cipher.txt
-
-# Forensics/stego
-ctf-autopwn solve forensics ./image.png
-```
-
----
-
-## REST API
-
-### Submit a challenge
-
-```http
-POST /solve
-Content-Type: application/json
-
-{
-  "name": "SQLi Bank",
-  "challenge_type": "web",
-  "url": "http://target.com/login",
-  "flag_format": "flag{...}"
-}
-```
-
-Returns immediately with a `run_id`.
-
-### Poll run status
-
-```http
-GET /runs/{run_id}
-```
-
-```json
-{
-  "run_id": "abc123...",
-  "status": "running",
-  "flag": null,
-  "steps": [...],
-  "observations": {...}
-}
-```
-
-### List past runs
-
-```http
-GET /runs
-```
-
-Returns the last 50 runs from SQLite.
-
-### Health check
-
-```http
-GET /health
-```
-
----
+3. Open `http://localhost:8000` to interact with the dashboard or issue `ctf-autopwn` CLI commands.
 
 ## Architecture
 
-```
-ctf_autopwn/
- core/
-    types.py            # ChallengeDescriptor, VulnDescriptor, NodeResult
-    nodes.py            # DecisionNode abstract base class
-    orchestrator.py     # Central execution engine + flag scanning
-    knowledge_base.py   # Vulnerability archetype registry
-    flag_recognizer.py  # Global flag pattern detector (stateless)
-    human_loop.py       # Human-in-the-loop interaction manager
- engines/
-    detection.py        # DetectionEngine abstract interface
-    exploitation.py     # ExploitationEngine abstract interface
- adapters/               # Thin tool wrappers, normalise output to dicts
-    curl_adapter.py
-    ffuf_adapter.py
-    nmap_adapter.py
-    binwalk_adapter.py
-    ...
- trees/                  # Decision tree implementations
-    asset/              # D-0: Asset classification
-    web/                # W-Recon, SQLi, LFI, XSS, CMD, Auth Bypass, IDOR, SSRF
-    pwn/                # P-Detect, buffer overflow, format string, ROP
-    crypto/             # C-Detect, RSA, Vigenere, XOR
-    forensics/          # F-Detect, stego, binwalk, metadata
- templates/              # Reusable exploit blueprints (ret2win, RSA attacks)
- api/
-    server.py           # FastAPI app + embedded cyberpunk dashboard
- cli.py                  # ctf-autopwn entry point
- config.py               # Flag patterns, timeouts, tool paths
- mvp.py                  # MVPSolver  top-level orchestration logic
+ctf-autopwn is composed of the following layers:
+
+1. **Core orchestration** — `core/` defines shared data types (`ChallengeDescriptor`, `NodeResult`), the DecisionNode base class, a knowledge base for vulnerability archetypes, the orchestrator, and the flag recognizer.
+2. **Adapters** — Tool adapters (curl, ffuf, nmap, etc.) wrap command-line utilities to emit normalized JSON so decision nodes can reason about structured observations.
+3. **Decision trees** — Split between Python nodes (`trees/`) and YAML-driven trees (`ctf_autopwn/trees/yaml/`). Detection and exploitation paths read context, emit confidence boosts, and branch deterministically.
+4. **Execution engine** — `ctf_autopwn/core/executor.py` drives YAML trees, runs HTTP probes, applies exploit payloads, and checks flag patterns after every response.
+5. **API + UI** — `ctf_autopwn/api/server.py` exposes REST endpoints, persists run history (SQLite), and hosts the cyberpunk dashboard for live tree playback.
+
+```mermaid
+flowchart LR
+    Input[User challenge descriptor]
+    Asset[Asset classification] --> Recon[Recon & confidence seeds]
+    Recon --> Detection[Decision tree selection]
+    Detection --> Exploitation[Prioritized exploit paths]
+    Exploitation --> Flag[Flag recognizer]
+    Flag -->|match| Halt[Stop execution]
+    Exploitation -->|no flag| Remediation[Record observations]
+    Recon -->|candidates| Detection
+    Input --> Asset
 ```
 
-### Key types (`core/types.py`)
+## File Structure (high-level)
 
-```python
-@dataclass ChallengeDescriptor   # type, url, file_path, flag_format, metadata
-@dataclass VulnDescriptor        # type, technique, endpoint, param, confidence
-@dataclass NodeResult            # status, data, error, next_node
-NodeStatus: SUCCESS | FAILURE | TIMEOUT | ASK_HUMAN | ESCALATE
-```
+| Path | Purpose |
+|------|---------|
+| `core/` | Shared orchestration logic, flag recognition, node abstractions, knowledge base. |
+| `adapters/` | Tool adapters (curl, ffuf, nmap, gdb wrappers) that return structured dictionaries. |
+| `trees/` | Legacy Python decision trees for reconnaissance, SQLi, SSTI, etc. |
+| `ctf_autopwn/trees/yaml/` | YAML-based detection/exploitation definitions (plug-and-play). |
+| `api/` | FastAPI server, REST endpoints, dashboard static assets. |
+| `templates/` | Exploit helper templates (ROP chains, RSA attacks) consumed by nodes. |
+| `config.py` | Global constants (flag regexes, tool paths, feature flags). |
+| `mvp.py` | Top-level solver loop that stitches asset classification, YAML dispatch, and legacy nodes. |
 
----
+## How it works
 
-## Decision Trees & Pipeline
+1. **Input ingestion** — The user submits a `ChallengeDescriptor` containing type, URL/file, flag format, and metadata.
+2. **Asset classification** — Asset nodes classify the challenge (network, file, web) to narrow applicable trees.
+3. **Confidence seeding** — Recon nodes populate context (paths, params, tech stack), and seeds boost tree confidence before detection.
+4. **Decision tree dispatch** — YAML trees define `applies_when`, `confidence_seeds`, `detection_paths`, and `exploitation_paths`. Each detection step runs HTTP probes with payload permutations, checks response signals, and emits named events.
+5. **Exploit prioritization** — Exploitation paths include ordered payload sets (high → medium → low confidence) and respect `stop_on_flag`. The executor records responses, checks `flag_recognizer`, and supports fallback capture values from YAML.
+6. **Observation tracking** — Every request, payload, and outcome is logged, enabling the UI to display discoveries, payload attempts, and raw JSON state.
+7. **Human-in-the-loop** — When automation is insufficient, the system escalates via `core/human_loop.py`, notes hints, and awaits user overrides.
 
-```
-User submits ChallengeDescriptor
-          
-          
-  D-0: Asset Classification
-  (network endpoint? binary? text? container?)
-          │
-    
-   WEB                         PWN / CRYPTO / FORENSICS
-                                   (specialist trees)
-    
-  W-Recon: HTTP Probe
-       Server headers  tech detection (JSP/PHP/ASP)
-       ffuf directory scan (extensions adapt to tech)
-    
-  W-Analyze: Vulnerability Candidates
-      Rule: /admin path  auth_bypass candidate
-      Rule: id/page param  sql_injection candidate
-      Rule: file/path param  lfi candidate
-    
-  Dispatch phase (one tree per candidate):
-     auth_bypass   AuthBypassDetectNode
-                     (direct access + default creds + header tricks)
-     sql_injection  SQLiDetectReflectionNode  BooleanNode  ErrorNode  UnionNode
-                       SQLiExploitBooleanNode / SQLiExploitErrorNode
-     lfi           LFIDetectTraversalNode  LFIDetectFilterNode  LFIExploitTraversalNode
-     xss           XSSDetectReflectedNode  XSSDetectStoredNode  XSSExploitNode
-     command_injection  CMDDetectOutputNode  CMDDetectBlindNode  CMDExploitNode
-```
+## Prompt blueprint for AI researchers
 
-**Flag recognition** runs after every node  if any string value in `result.data`
-matches the flag pattern, the orchestrator halts and returns the flag immediately.
+The following prompt outlines how to instruct an AI researcher to discover new TTPs and encode them as YAML decision trees. Include these details in your own research notes, but do **not** run the prompt inside ctf-autopwn:
 
----
+> You are a CTF exploit researcher and decision tree author. Your job is to search the internet for real-world attack techniques, CTF write-ups, and security TTPs, then encode them as executable YAML decision trees for the `ctf-autopwn` framework.  
+>  
+> Search for CTF-relevant exploitation techniques across these categories. For each technique, find real write-ups (HackTheBox, TryHackMe, CTFtime, GitHub), OWASP test cases, PayloadsAllTheThings entries, HackTricks docs, Exploit-DB entries, and PortSwigger labs.  
+>  
+> Priority techniques include SSTI (Jinja2, Twig, Freemarker, Pebble), SSRF, open redirect, path traversal, XXE, IDOR, JWT attacks, broken access control, CSRF, HTTP request smuggling, GraphQL injection, deserialization, ret2libc, heap exploits, padding oracles, weak RNG, RSA small-e/Wiener attacks, LSB stego, metadata extraction, binwalk, PCAP analysis, and reverse engineering.  
+>  
+> Record existing YAML trees to avoid duplication (e.g., `web_sqli`, `web_lfi`, `web_cmdi`, `web_xss`).  
+>  
+> Follow the exact schema provided by ctf-autopwn: metadata (id, name, category, version, author, description), `applies_when`, `min_confidence`, `stop_on_flag`, `confidence_seeds`, `detection_paths`, and `exploitation_paths` with ordered steps, payload permutations, and signal matching instructions.
 
-## Tools Bundled in Docker
-
-The Docker image installs everything automatically:
-
-| Tool       | Purpose                                      |
-|------------|----------------------------------------------|
-| `curl`     | HTTP probing (web recon, vuln testing)       |
-| `nmap`     | Port/service scanning                        |
-| `ffuf`     | Directory/parameter fuzzing (100 threads)    |
-| `dirb`     | Wordlists (`/usr/share/dirb/wordlists/`)     |
-| `binwalk`  | Embedded-data extraction (forensics)         |
-| `exiftool` | File metadata extraction                     |
-| `steghide` | LSB steganography extraction                 |
-| `foremost` | File carving                                 |
-| `netcat`   | Raw TCP connections                          |
-| `file`     | Magic-byte classification                    |
-
----
-
-## Adding a New Decision Tree
-
-### 1  Create the node file
-
-```python
-# ctf_autopwn/trees/web/my_vuln.py
-from ctf_autopwn.core.nodes import DecisionNode
-from ctf_autopwn.core.types import NodeResult, NodeStatus
-
-class MyVulnDetectNode(DecisionNode):
-    def __init__(self):
-        super().__init__("my_vuln_detect", "MyVuln: Detect")
-
-    def run(self, context):
-        # Probe target, write evidence to context["observations"]
-        # Return NodeResult with status + data
-        ...
-
-    def next_node(self, result):
-        if result.status == NodeStatus.SUCCESS:
-            return MyVulnExploitNode()
-        return None
-```
-
-### 2  Wire it into `WebReconAnalyzeVulnsNode`
-
-Add a detection rule in `trees/web/recon.py`:
-
-```python
-if any("keyword" in path for path in dir_paths):
-    candidates["my_vuln"].append(path)
-```
-
-### 3  Register the dispatch in `mvp.py`
-
-```python
-if vuln_type == "my_vuln":
-    return self.orchestrator.run_tree(MyVulnDetectNode())
-```
-
-### Guidelines
-
-- All nodes inherit `DecisionNode` and implement `run()` + `next_node()`
-- Write observations to `context["observations"]` so later nodes and the UI can display them
-- Store string values in `result.data`  the orchestrator's FlagRecognizer scans every string
-- On failure, return `NodeResult(status=NodeStatus.FAILURE, ...)`  do not raise
-- Use adapters for all tool invocations; never shell out directly
-
----
-
-## Testing
-
-```bash
-# Run all tests
-pytest test_deployment.py test_exploitation_trees.py test_api.py -q
-
-# With coverage
-pytest --cov=ctf_autopwn test_deployment.py test_exploitation_trees.py test_api.py
-```
-
-Tests mock tool adapters  real network calls are not made during unit tests.
-
----
-
-## Research & References
-
-This framework is grounded in academic work on autonomous exploitation:
-
-- **Pangr**  Behavior-based vulnerability detection and exploit generation
-- **Automated Exploit Generation (AEG)**  CGC / DARPA Cyber Grand Challenge systems
-- **Classical CTF techniques**  Community-documented TTPs for web, pwn, crypto, forensics
-
-Full citations and algorithm descriptions: [`Research Paper - CTF Toolkit.md`](Research%20Paper%20-%20CTF%20Toolkit.md)
-
-Technical detection specs: [`detections.md`](detections.md)
-
-Exploitation TTPs: [`ttps.md`](ttps.md)
-
----
-
-## License
-
-MIT
-
----
-
-*Deterministic. Rule-based. No magic.*
+Adhering to this blueprint ensures community research contributions can be translated into yaml files that the engine can consume immediately.
