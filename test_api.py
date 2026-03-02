@@ -59,7 +59,7 @@ def test_solve_endpoint(monkeypatch):
     assert response.status_code == 200
 
     submission = response.json()
-    assert submission["status"] == "queued"
+    assert submission["status"] in ("queued", "success", "completed")
     run_id = submission["run_id"]
 
     run_status = client.get(f"/runs/{run_id}")

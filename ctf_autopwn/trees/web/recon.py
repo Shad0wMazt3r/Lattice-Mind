@@ -143,7 +143,6 @@ class WebReconDirectoryScanNode(DecisionNode):
             target_url = f"{challenge.url}/FUZZ"
             
             result = self.ffuf.run(target_url, {
-                "wordlist": "common.txt",
                 "match_status": "200,204,301,302",
                 "extensions": ".php,.html,.asp,.aspx,.jsp",
                 "threads": 20,

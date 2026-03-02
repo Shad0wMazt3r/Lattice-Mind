@@ -80,16 +80,17 @@ class Orchestrator:
                             self._emit_progress("flag_found", current_node, result)
                             return flag
 
-            # Check terminal conditions
-            if result.status in [NodeStatus.SUCCESS, NodeStatus.FAILURE, NodeStatus.TIMEOUT]:
-                logger.info(f"Node completed with status: {result.status}")
+            # Check terminal conditions — only FAILURE/TIMEOUT halt the tree;
+            # SUCCESS continues to next_node (which returns None at leaf nodes).
+            if result.status in [NodeStatus.FAILURE, NodeStatus.TIMEOUT]:
+                logger.info(f"Node halted with status: {result.status}")
                 break
 
             if result.status == NodeStatus.ASK_HUMAN:
                 logger.warning(f"Node requires human input: {result}")
                 break
 
-            # Move to next node
+            # Move to next node (returns None at leaf → loop exits naturally)
             current_node = current_node.next_node(result) if hasattr(current_node, "next_node") else None
 
         return self.execution_context.get("flag_found")

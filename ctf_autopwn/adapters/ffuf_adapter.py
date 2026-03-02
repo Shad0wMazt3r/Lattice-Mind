@@ -29,7 +29,9 @@ class FFUFAdapter(CommandToolAdapter):
     }
     """
     
-    def __init__(self, timeout: float = 120.0):
+    DEFAULT_WORDLIST = "/usr/share/dirb/wordlists/common.txt"
+
+    def __init__(self, timeout: float = 300.0):
         super().__init__("ffuf", timeout=timeout)
     
     def build_command(self, target: str, args: Dict[str, Any]) -> List[str]:
@@ -51,10 +53,15 @@ class FFUFAdapter(CommandToolAdapter):
         Returns:
             ffuf command as list
         """
-        cmd = ["ffuf", "-o", "/tmp/ffuf_output.json", "-of", "json"]
+        cmd = ["ffuf",
+               "-o", "/tmp/ffuf_output.json", "-of", "json",
+               "-noninteractive",   # never prompt — critical for subprocess
+               "-ac",               # auto-calibrate: filter uniform responses
+               "-ic",               # ignore wordlist comments
+               ]
         
         # Wordlist
-        wordlist = args.get("wordlist", "common.txt")
+        wordlist = args.get("wordlist", self.DEFAULT_WORDLIST)
         cmd.extend(["-w", wordlist])
         
         # Extensions
@@ -73,12 +80,12 @@ class FFUFAdapter(CommandToolAdapter):
         if "filter_size" in args:
             cmd.extend(["-fs", str(args["filter_size"])])
         
-        # Threads
-        threads = args.get("threads", 40)
+        # Threads — default 100 for fast local/CTF targets
+        threads = args.get("threads", 100)
         cmd.extend(["-t", str(threads)])
         
-        # Timeout
-        timeout = args.get("timeout", 10)
+        # Per-request timeout — 5s is plenty for CTF targets
+        timeout = args.get("timeout", 5)
         cmd.extend(["-timeout", str(timeout)])
         
         # Custom headers

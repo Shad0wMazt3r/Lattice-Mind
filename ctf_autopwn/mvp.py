@@ -60,7 +60,7 @@ class MVPSolver:
         logger.info(f"[Step 1] Classified as: {asset_type}")
         
         # Check if flag found during classification
-        flag = self.flag_recognizer.get_flag()
+        flag = self.orchestrator.execution_context.get("flag_found")
         if flag:
             logger.info(f"[MVP] Flag found during classification: {flag}")
             return flag
@@ -126,7 +126,7 @@ class MVPSolver:
             root_node = WebReconProbeNode()
             flag = self.orchestrator.run_tree(root_node)
             
-            return flag or self.flag_recognizer.get_flag()
+            return flag or self.orchestrator.execution_context.get("flag_found")
         
         except Exception as e:
             logger.error(f"[web] Detection failed: {str(e)}")
@@ -139,7 +139,7 @@ class MVPSolver:
             root_node = PwnDetectMetadataNode()
             flag = self.orchestrator.run_tree(root_node)
             
-            return flag or self.flag_recognizer.get_flag()
+            return flag or self.orchestrator.execution_context.get("flag_found")
         
         except Exception as e:
             logger.error(f"[pwn] Detection failed: {str(e)}")
@@ -152,7 +152,7 @@ class MVPSolver:
             root_node = CryptoDetectEncodingNode()
             flag = self.orchestrator.run_tree(root_node)
             
-            return flag or self.flag_recognizer.get_flag()
+            return flag or self.orchestrator.execution_context.get("flag_found")
         
         except Exception as e:
             logger.error(f"[crypto] Detection failed: {str(e)}")
@@ -165,7 +165,7 @@ class MVPSolver:
             root_node = ForensicsDetectArtifactNode()
             flag = self.orchestrator.run_tree(root_node)
             
-            return flag or self.flag_recognizer.get_flag()
+            return flag or self.orchestrator.execution_context.get("flag_found")
         
         except Exception as e:
             logger.error(f"[forensics] Detection failed: {str(e)}")
