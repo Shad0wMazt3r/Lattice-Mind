@@ -149,7 +149,7 @@ class TreeExecutor:
             for result in results:
                 body = result.get("body", "")
                 payload = result.get("injected_payload", "")
-                logger.debug(f"[exploit] param={result.get('injected_param')} payload={str(payload)[:80]} status={result.get('status')} body={body[:300]!r}")
+                logger.info(f"[exploit] param={result.get('injected_param')} payload={str(payload)[:80]} status={result.get('status')} body_len={len(body)} body={body[:300]!r}")
 
                 # Handle captures
                 for cap_def in step.capture:
@@ -161,17 +161,44 @@ class TreeExecutor:
                             val = m.group(1) if m.groups() else m.group(0)
                             self.captures[as_key] = val
                             context.setdefault("captures", {})[as_key] = val
-                
+                self._emit_progress(
+                    "exploit_result",
+                    tree.id,
+                    step.id,
+                    status=result.get("status"),
+                    data={
+                        "param": result.get("injected_param"),
+                        "payload_preview": str(payload)[:120],
+                        "body_preview": body[:400],
+                        "captures": context.get("captures", {}),
+                        "status": result.get("status"),
+                    },
+                )
+
                 # Check for flag in body
                 flag = self.flag_recognizer.recognize(body)
                 if flag:
                     logger.info(f"[exploit] FLAG FOUND: {flag}")
+                    self.captures["flag_value"] = flag
+                    context.setdefault("captures", {})["flag_value"] = flag
+                    context["flag_found"] = flag
+                    self._emit_progress(
+                        "flag_found",
+                        tree.id,
+                        step.id,
+                        status=result.get("status"),
+                        data={"flag": flag, "param": result.get("injected_param")},
+                    )
                     return flag
-                # Fallback: check capture named "flag_value"
-                if self.captures.get("flag_value"):
-                    flag = self.captures["flag_value"]
-                    logger.info(f"[exploit] FLAG via capture: {flag}")
-                    return flag
+                # Fallback: check capture named "flag_value", but only if it
+                # also passes the flag_recognizer (avoids false positives from
+                # overly-broad patterns like [A-Z0-9_]{20,}).
+                captured = self.captures.get("flag_value", "")
+                if captured and self.flag_recognizer.recognize(captured):
+                    logger.info(f"[exploit] FLAG via capture: {captured}")
+                    context.setdefault("captures", {})["flag_value"] = captured
+                    context["flag_found"] = captured
+                    return captured
         return None
 
     async def _run_step(self, tree: DecisionTree, step: Any, context: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -315,12 +342,30 @@ class TreeExecutor:
 
         return results
 
-    def _emit_progress(self, event: str, tree_id: str, node_id: str, status: Optional[str] = None):
+    def _emit_progress(self, event: str, tree_id: str, node_id: str, status: Optional[str] = None,
+                       data: Optional[Dict[str, Any]] = None):
         if self._progress_callback:
-            self._progress_callback({
+            payload = {
                 "event": event,
                 "node_id": f"{tree_id}:{node_id}",
                 "node_name": node_id,
                 "status": status,
                 "timestamp": datetime.utcnow().isoformat() + "Z"
-            })
+            }
+            if data:
+                payload["data"] = self._sanitize_data(data)
+            self._progress_callback(payload)
+
+    @staticmethod
+    def _sanitize_data(data: Dict[str, Any]) -> Dict[str, Any]:
+        sanitized: Dict[str, Any] = {}
+        for key, value in data.items():
+            if isinstance(value, str):
+                sanitized[key] = value[:400]
+            elif isinstance(value, dict):
+                sanitized[key] = {k: str(v)[:200] for k, v in value.items()}
+            elif isinstance(value, list):
+                sanitized[key] = [str(v)[:200] for v in value]
+            else:
+                sanitized[key] = value
+        return sanitized
