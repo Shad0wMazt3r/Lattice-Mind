@@ -147,17 +147,48 @@ class MVPSolver:
             from ctf_autopwn.core.expressions import ExpressionEvaluator
             evaluator = ExpressionEvaluator(context)
             if all(evaluator.evaluate(cond) for cond in tree.applies_when):
+                # Evaluate seeds to get initial confidence
+                self.executor.evaluate_seeds(tree, context)
                 candidate_trees.append(tree)
         
+        # Sort candidate trees by initial confidence score (highest first)
+        candidate_trees.sort(
+            key=lambda t: self.confidence_pool.get_tree_confidence(t.id).score, 
+            reverse=True
+        )
+
         logger.info(f"[MVP] Found {len(candidate_trees)} applicable declarative trees")
+        for t in candidate_trees:
+            score = self.confidence_pool.get_tree_confidence(t.id).score
+            logger.info(f"  - {t.id} (initial confidence: {score:.2f})")
         
-        # Execute each tree (this could be parallelized)
+        # Execute each tree
         import asyncio
+        COMMITMENT_THRESHOLD = 0.8
         for tree in candidate_trees:
+            current_score = self.confidence_pool.get_tree_confidence(tree.id).score
+            logger.info(f"\n[MVP] Executing tree: {tree.id} (confidence: {current_score:.2f})")
+            
             # We need to bridge sync solve() with async executor
             flag = asyncio.run(self.executor.execute_tree(tree, context))
             if flag:
                 return flag
+            
+            # Commitment logic: if another tree already reached high confidence
+            # during its detection phase, we might want to prioritize it or
+            # re-evaluate. For now, if any tree has score > threshold, we
+            # can be "decisive".
+            max_other_score = max([self.confidence_pool.get_tree_confidence(t.id).score 
+                                  for t in candidate_trees if t.id != tree.id] + [0])
+            
+            if max_other_score >= COMMITMENT_THRESHOLD:
+                logger.info(f"[MVP] High confidence ({max_other_score:.2f}) reached for another tree, prioritizing...")
+                # We could re-sort here, but for now we'll just continue and the 
+                # next iteration will pick the highest one anyway because we 
+                # should re-sort or just pick the max.
+                
+            # If we just finished a tree and it failed, but another tree is now 
+            # very likely, we'll continue. 
 
         # Step 3: Fallback to Legacy Trees
         logger.info("\n[Step 3] Running legacy detection trees...")
@@ -231,10 +262,23 @@ class MVPSolver:
                 logger.warning("[web] No vulnerability candidates identified — stopping")
                 return self.orchestrator.execution_context.get("flag_found")
 
-            logger.info(f"[web] Phase 2 — dispatching trees for: {list(vuln_candidates.keys())}")
+            # Apply initial confidence boosts to the pool for legacy types
+            for vuln_type in vuln_candidates:
+                # Map legacy names to potential YAML tree IDs if they exist, 
+                # or just use them to track confidence in the pool.
+                self.confidence_pool.apply_boost(vuln_type, 0.4, "recon_analysis", phase="legacy_detection")
+
+            # Sort legacy candidates by their current confidence in the pool
+            sorted_candidates = sorted(
+                vuln_candidates.items(),
+                key=lambda x: self.confidence_pool.get_tree_confidence(x[0]).score,
+                reverse=True
+            )
+
+            logger.info(f"[web] Phase 2 — dispatching sorted trees: {[c[0] for c in sorted_candidates]}")
 
             # Phase 3: Dispatch exploitation trees per candidate
-            for vuln_type, evidence in vuln_candidates.items():
+            for vuln_type, evidence in sorted_candidates:
                 flag = self._dispatch_web_exploit(vuln_type, evidence, challenge)
                 if flag:
                     return flag

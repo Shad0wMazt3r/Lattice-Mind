@@ -42,10 +42,8 @@ class TreeExecutor:
     def set_progress_callback(self, callback):
         self._progress_callback = callback
 
-    async def execute_tree(self, tree: DecisionTree, context: Dict[str, Any]):
-        """Run full tree lifecycle: Seeds -> Detection -> Exploitation."""
-        
-        # 1. Seeds — always evaluate seeds even if pool was frozen by a prior tree
+    def evaluate_seeds(self, tree: DecisionTree, context: Dict[str, Any]):
+        """Evaluate confidence seeds for a tree to set initial confidence."""
         self.confidence_pool.frozen = False
         evaluator = ExpressionEvaluator(context)
         for seed in tree.confidence_seeds:
@@ -54,6 +52,12 @@ class TreeExecutor:
                     self.confidence_pool.apply_boost(tree.id, seed.boost, seed.label, phase="seed")
             except Exception as e:
                 logger.error(f"Error evaluating seed in {tree.id}: {e}")
+
+    async def execute_tree(self, tree: DecisionTree, context: Dict[str, Any]):
+        """Run full tree lifecycle: Seeds -> Detection -> Exploitation."""
+        
+        # 1. Seeds — always evaluate seeds even if pool was frozen by a prior tree
+        self.evaluate_seeds(tree, context)
 
         # 2. Detection Phase
         current_conf = self.confidence_pool.get_tree_confidence(tree.id).score
@@ -91,9 +95,11 @@ class TreeExecutor:
         logger.info(f"Running detection path: {tree.id}/{path.id}")
         
         for step in path.steps:
+            self._emit_progress("node_start", tree.id, step.id)
             results = await self._run_step(tree, step, context)
             
             # results is a list of response dicts (one per payload)
+            any_matched = False
             for result in results:
                 # Process signals
                 for sig_def in step.signals:
@@ -123,6 +129,7 @@ class TreeExecutor:
                                 pass  # Missing variables → condition not met
                     
                     if matched:
+                        any_matched = True
                         on_match = sig_def.get("on_match", {})
                         boost = on_match.get("confidence_boost", 0.0)
                         if boost:
@@ -136,15 +143,19 @@ class TreeExecutor:
                                 context["vulnerable_param"] = result["injected_param"]
 
             # Handle step flow (success/failure)
-            # Simplified: always continue for now
-            pass
+            status = "success" if any_matched else "failure"
+            self._emit_progress("node_end", tree.id, step.id, status=status)
 
     async def _run_exploitation_path(self, tree: DecisionTree, path: ExploitationPath, context: Dict[str, Any]):
         """Run steps in an exploitation path sequentially."""
         logger.info(f"Running exploitation path: {tree.id}/{path.id}")
         
         for step in path.steps:
+            self._emit_progress("node_start", tree.id, step.id)
             results = await self._run_step(tree, step, context)
+            
+            step_success = False
+            found_flag = None
             
             for result in results:
                 body = result.get("body", "")
@@ -161,6 +172,8 @@ class TreeExecutor:
                             val = m.group(1) if m.groups() else m.group(0)
                             self.captures[as_key] = val
                             context.setdefault("captures", {})[as_key] = val
+                            step_success = True
+
                 self._emit_progress(
                     "exploit_result",
                     tree.id,
@@ -182,23 +195,34 @@ class TreeExecutor:
                     self.captures["flag_value"] = flag
                     context.setdefault("captures", {})["flag_value"] = flag
                     context["flag_found"] = flag
-                    self._emit_progress(
-                        "flag_found",
-                        tree.id,
-                        step.id,
-                        status=result.get("status"),
-                        data={"flag": flag, "param": result.get("injected_param")},
-                    )
-                    return flag
-                # Fallback: check capture named "flag_value", but only if it
-                # also passes the flag_recognizer (avoids false positives from
-                # overly-broad patterns like [A-Z0-9_]{20,}).
+                    found_flag = flag
+                    step_success = True
+                    break
+                
+                # Fallback: check capture named "flag_value"
                 captured = self.captures.get("flag_value", "")
                 if captured and self.flag_recognizer.recognize(captured):
                     logger.info(f"[exploit] FLAG via capture: {captured}")
                     context.setdefault("captures", {})["flag_value"] = captured
                     context["flag_found"] = captured
-                    return captured
+                    found_flag = captured
+                    step_success = True
+                    break
+            
+            status = "success" if step_success else "failure"
+            if found_flag:
+                self._emit_progress(
+                    "flag_found",
+                    tree.id,
+                    step.id,
+                    status=status,
+                    data={"flag": found_flag, "param": results[0].get("injected_param") if results else None},
+                )
+                self._emit_progress("node_end", tree.id, step.id, status=status)
+                return found_flag
+            
+            self._emit_progress("node_end", tree.id, step.id, status=status)
+            
         return None
 
     async def _run_step(self, tree: DecisionTree, step: Any, context: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -238,7 +262,6 @@ class TreeExecutor:
             target_params = [None]
 
         # Determine form submission targets: [(url, method), ...]
-        # Prefer form action+method if available, always also try GET to base URL
         probe_targets = []
         forms = obs.get("forms", [])
         if inject_into != "none" and forms:
@@ -248,8 +271,6 @@ class TreeExecutor:
         if not probe_targets or not any(m == "GET" for _, m in probe_targets):
             probe_targets.append((url, "GET"))
 
-        self._emit_progress("node_start", tree.id, step.id)
-        
         results = []
         adapter = RequestsAdapter()
         
@@ -281,7 +302,6 @@ class TreeExecutor:
                     except Exception as e:
                         logger.error(f"Step execution failed: {e}")
         
-        self._emit_progress("node_end", tree.id, step.id, status="success")
         return results
 
     async def _run_comparison_step(self, tree: DecisionTree, step: Any, context: Dict[str, Any],

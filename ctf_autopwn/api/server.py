@@ -506,11 +506,15 @@ async def _run_solver(run_id: str, descriptor: ChallengeDescriptor):
     def progress_callback(event: Dict[str, Any]):
         state.add_step(event)
 
-    solver.orchestrator.set_progress_callback(progress_callback)
-
     try:
         async with solver_lock:
-            flag, log = await asyncio.to_thread(_execute_solver, descriptor)
+            # Set callback inside the lock so concurrent queued runs can't
+            # overwrite each other's callback before execution starts.
+            solver.orchestrator.set_progress_callback(progress_callback)
+            try:
+                flag, log = await asyncio.to_thread(_execute_solver, descriptor)
+            finally:
+                solver.orchestrator.clear_progress_callback()
         serialized_log = _serialize_log(log)
         observations = jsonable_encoder(
             solver.orchestrator.execution_context.get("observations", {})
@@ -528,7 +532,6 @@ async def _run_solver(run_id: str, descriptor: ChallengeDescriptor):
         logger.exception("Solver execution failed")
         state.update(status="error", error=str(exc), finished_at=_now())
     finally:
-        solver.orchestrator.clear_progress_callback()
         _tasks.pop(run_id, None)
 
 
