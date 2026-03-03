@@ -110,6 +110,16 @@ flowchart LR
 6. **Observation tracking** — Every request, payload, and outcome is logged, enabling the UI to display discoveries, payload attempts, and raw JSON state.
 7. **Human-in-the-loop** — When automation is insufficient, the system escalates via `core/human_loop.py`, notes hints, and awaits user overrides.
 
+## Testing
+
+All Python test scripts now live under `tests/`. Run the suite with:
+
+```powershell
+pytest tests/
+```
+
+The directory contains deployment, API, and exploitation-tree verifiers that import the core modules and adapters without external network dependencies.
+
 ## Prompt blueprint for AI researchers
 
 The following prompt outlines how to instruct an AI researcher to discover new TTPs and encode them as YAML decision trees. Include these details in your own research notes, but do **not** run the prompt inside ctf-autopwn:
