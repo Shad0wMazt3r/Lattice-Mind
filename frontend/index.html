@@ -6,7 +6,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Lattice Mind</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/static/style.css"/>
 </head>
 <body>
@@ -53,6 +54,7 @@
       <div id="recent-runs"></div>
     </div>
   </div>
+  <div id="sidebar-resizer" class="resizer resizer-h" title="Drag to resize sidebar"></div>
 
   <!-- MAIN CONTENT -->
   <div id="main-content">
@@ -79,10 +81,12 @@
             <svg id="tree-svg" width="600" height="400"></svg>
           </div>
         </div>
+        <div id="tree-resizer" class="resizer resizer-h" title="Drag to resize panels"></div>
         <div id="right-panel">
           <div id="node-details-panel">
             <div class="nd-empty">Click a node to inspect it.</div>
           </div>
+          <div id="intel-resizer" class="resizer resizer-v" title="Drag to resize intel panel"></div>
           <div id="intel-panel">
             <div class="intel-section">
               <div class="intel-section-title">CONFIDENCE SCORES</div>
