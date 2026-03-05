@@ -1,0 +1,85 @@
+id: web_robots_txt
+name: Robots.txt Information Disclosure
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects hidden paths and flags in robots.txt, common in picoCTF web challenges.
+  Checks for disallowed paths, admin panels, and flag files.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+confidence_seeds:
+  - if: "'/robots.txt' in context.found_paths or context.challenge.name.lower().contains('robot')"
+    boost: 0.50
+    label: "robots.txt accessible or challenge name suggests robots"
+  - if: "any(p in context.found_paths for p in ['/admin', '/flag', '/secret'])"
+    boost: 0.30
+    label: "Sensitive paths found"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: robots_txt_check
+      name: "Robots.txt Discovery"
+      steps:
+        - id: fetch_robots
+          action: http_probe
+          with:
+            payloads: ["/robots.txt"]
+            inject_into: path
+          signals:
+            - match: "Disallow:|User-agent:|flag|admin|secret|hidden"
+              on_match:
+                confidence_boost: 0.70
+                emit: robots_txt_found
+
+    - id: parse_disallowed_paths
+      name: "Extract Disallowed Paths"
+      steps:
+        - id: extract_paths
+          action: http_probe
+          with:
+            payloads: []
+            inject_into: none
+          signals:
+            - match: "Disallow:\\s*(/[^\\s]+)"
+              on_match:
+                confidence_boost: 0.40
+                emit: disallowed_paths_found
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: visit_disallowed_paths
+      name: "Visit Disallowed Paths"
+      requires_signal: disallowed_paths_found
+      technique: path_enumeration
+      steps:
+        - id: check_disallowed
+          action: http_probe
+          with:
+            payload: "{extracted_path}"
+            inject_into: path
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: common_flag_paths
+      name: "Check Common Flag Locations"
+      requires_signal: robots_txt_found
+      technique: direct_access
+      steps:
+        - id: flag_paths
+          action: http_probe
+          with:
+            payloads: ["/flag.txt", "/flag", "/secret/flag.txt", "/admin/flag.txt", "/hidden/flag.txt", "/.flag", "/flags/flag.txt"]
+            inject_into: path
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value

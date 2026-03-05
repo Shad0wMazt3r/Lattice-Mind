@@ -1,0 +1,136 @@
+id: reverse_strings_grep
+name: Strings and Grep Pattern Extraction
+category: reverse
+version: "1.0"
+author: system
+description: >
+  Extracts flags directly from binaries using strings and grep. Targets
+  hardcoded flags, base64 encoded strings, and obfuscated patterns.
+
+applies_when:
+  - "context.challenge.type == 'reverse'"
+
+confidence_seeds:
+  - if: "any(ext in context.file_extensions for ext in ['.exe', '.elf', '.bin', '.out', ''])"
+    boost: 0.50
+    label: "Executable binary detected"
+  - if: "'reverse' in context.challenge.name.lower() or 'binary' in context.challenge.name.lower()"
+    boost: 0.30
+    label: "Challenge name suggests reverse engineering"
+  - if: "context.file_size < 5242880"
+    boost: 0.20
+    label: "File size suitable for strings analysis"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: direct_strings_search
+      name: "Direct Strings Search"
+      steps:
+        - id: grep_flag_pattern
+          action: exec_command
+          with:
+            commands:
+              - "strings {file_path} | grep -E 'picoCTF\\{'"
+              - "strings {file_path} | grep -E 'flag\\{'"
+              - "strings {file_path} | grep -E 'CTF\\{'"
+              - "strings -a {file_path} | grep -i flag"
+          signals:
+            - match: "picoCTF\\{[^}]+\\}"
+              on_match:
+                confidence_boost: 0.95
+                emit: flag_found_directly
+
+    - id: base64_encoded_search
+      name: "Base64 Encoded Strings"
+      steps:
+        - id: decode_base64
+          action: exec_command
+          with:
+            command: "strings {file_path} | grep -E '^[A-Za-z0-9+/=]{20,}$' | while read line; do echo $line | base64 -d 2>/dev/null; done | grep -E 'picoCTF\\{|flag\\{'"
+          signals:
+            - match: "picoCTF\\{[^}]+\\}"
+              on_match:
+                confidence_boost: 0.90
+                emit: base64_flag_found
+
+    - id: hex_encoded_search
+      name: "Hex Encoded Strings"
+      steps:
+        - id: decode_hex
+          action: exec_command
+          with:
+            command: "strings {file_path} | grep -E '^[0-9a-fA-F]{40,}$' | xxd -r -p | grep -E 'picoCTF\\{|flag\\{'"
+          signals:
+            - match: "picoCTF\\{[^}]+\\}"
+              on_match:
+                confidence_boost: 0.85
+                emit: hex_flag_found
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: extract_direct_flag
+      name: "Extract Direct Flag"
+      requires_signal: flag_found_directly
+      technique: strings_extraction
+      steps:
+        - id: output_flag
+          action: exec_command
+          with:
+            command: "strings {file_path} | grep -oE 'picoCTF\\{[^}]+\\}'"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: extract_obfuscated_flag
+      name: "Extract Obfuscated Flag"
+      requires_signal: base64_flag_found
+      technique: decode_and_extract
+      steps:
+        - id: decode_all_base64
+          action: exec_command
+          with:
+            commands:
+              - "strings {file_path} | grep -E '^[A-Za-z0-9+/=]{20,}$' | base64 -d 2>/dev/null"
+              - "strings {file_path} | tr -d '\\n' | grep -oE '[A-Za-z0-9+/=]{40,}' | base64 -d 2>/dev/null"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: rot13_decode
+      name: "ROT13 Decode"
+      requires_signal: flag_found_directly
+      technique: rot13_decode
+      steps:
+        - id: apply_rot13
+          action: exec_command
+          with:
+            command: "strings {file_path} | tr 'A-Za-z' 'N-ZA-Mn-za-m' | grep -E 'picoCTF\\{|flag\\{'"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: xor_single_byte
+      name: "Single Byte XOR Bruteforce"
+      requires_signal: hex_flag_found
+      technique: xor_bruteforce
+      steps:
+        - id: xor_decode
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              import sys
+              data = open('{file_path}', 'rb').read()
+              for key in range(256):
+                  decoded = bytes([b ^ key for b in data])
+                  if b'picoCTF{' in decoded or b'flag{' in decoded:
+                      print(decoded.decode('latin-1'))
+                      break
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value

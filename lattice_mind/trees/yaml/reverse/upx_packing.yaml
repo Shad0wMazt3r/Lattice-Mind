@@ -1,0 +1,195 @@
+id: reverse_upx_packing
+name: UPX Packing Detection and Unpacking
+category: reverse
+version: "1.0"
+author: system
+description: >
+  Detects UPX packed binaries and performs automated unpacking. Also handles
+  modified UPX headers and anti-unpacking techniques common in picoCTF.
+
+applies_when:
+  - "context.challenge.type == 'reverse'"
+
+confidence_seeds:
+  - if: "any(ext in context.file_extensions for ext in ['.exe', '.elf', '.bin', ''])"
+    boost: 0.40
+    label: "Executable binary detected"
+  - if: "'packed' in context.challenge.name.lower() or 'upx' in context.challenge.name.lower()"
+    boost: 0.50
+    label: "Challenge name suggests packing"
+  - if: "context.file_size < 2097152"
+    boost: 0.20
+    label: "File size typical for packed binary"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: upx_signature_check
+      name: "UPX Signature Detection"
+      steps:
+        - id: check_upx_magic
+          action: exec_command
+          with:
+            commands:
+              - "strings {file_path} | grep -i 'UPX!'"
+              - "xxd {file_path} | grep -i '55505821'"
+              - "file {file_path}"
+          signals:
+            - match: "UPX|packed|compressed"
+              on_match:
+                confidence_boost: 0.85
+                emit: upx_detected
+
+    - id: entropy_analysis
+      name: "High Entropy Detection"
+      steps:
+        - id: check_entropy
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              import math
+              from collections import Counter
+              
+              data = open('{file_path}', 'rb').read()
+              entropy = -sum(count/len(data) * math.log2(count/len(data)) for count in Counter(data).values())
+              
+              if entropy > 7.0:
+                  print(f'HIGH_ENTROPY_{entropy:.2f}')
+              "
+          signals:
+            - match: "HIGH_ENTROPY"
+              on_match:
+                confidence_boost: 0.60
+                emit: high_entropy_detected
+
+    - id: section_analysis
+      name: "Packed Section Analysis"
+      steps:
+        - id: check_sections
+          action: exec_command
+          with:
+            commands:
+              - "readelf -S {file_path} | grep -E 'UPX[0-9]'"
+              - "objdump -h {file_path} | grep -i upx"
+          signals:
+            - match: "UPX0|UPX1|UPX2"
+              on_match:
+                confidence_boost: 0.90
+                emit: upx_sections_found
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: standard_upx_unpack
+      name: "Standard UPX Unpacking"
+      requires_signal: upx_detected
+      technique: upx_decompression
+      steps:
+        - id: unpack_upx
+          action: exec_command
+          with:
+            commands:
+              - "upx -d {file_path} -o {file_path}.unpacked"
+              - "upx -d {file_path}"
+          signals:
+            - match: "Unpacked|successfully"
+              on_match:
+                confidence_boost: 0.95
+                emit: unpacked_successfully
+
+        - id: search_unpacked
+          action: exec_command
+          with:
+            commands:
+              - "strings {file_path}.unpacked | grep -E 'picoCTF\\{|flag\\{'"
+              - "strings {file_path} | grep -E 'picoCTF\\{|flag\\{'"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: modified_upx_header
+      name: "Modified UPX Header Fix"
+      requires_signal: upx_sections_found
+      technique: header_repair
+      steps:
+        - id: fix_header
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              data = bytearray(open('{file_path}', 'rb').read())
+              
+              # Search for modified UPX magic
+              patterns = [b'UPX!', b'upx!', b'UPX\\x00', b'\\x55\\x50\\x58\\x21']
+              
+              for i in range(len(data) - 4):
+                  if data[i:i+3] in [b'UPX', b'upx']:
+                      # Restore standard UPX! magic
+                      data[i:i+4] = b'UPX!'
+                      print(f'Fixed UPX header at offset {i}')
+              
+              with open('{file_path}.fixed', 'wb') as f:
+                  f.write(data)
+              print('HEADER_FIXED')
+              "
+          signals:
+            - match: "HEADER_FIXED"
+              on_match:
+                confidence_boost: 0.80
+                emit: header_fixed
+
+        - id: unpack_fixed
+          action: exec_command
+          with:
+            command: "upx -d {file_path}.fixed -o {file_path}.unpacked && strings {file_path}.unpacked | grep -E 'picoCTF\\{|flag\\{'"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: manual_upx_unpack
+      name: "Manual UPX Unpacking"
+      requires_signal: high_entropy_detected
+      technique: manual_decompression
+      steps:
+        - id: extract_compressed_data
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              import lzma
+              import zlib
+              
+              data = open('{file_path}', 'rb').read()
+              
+              # Try to find and decompress UPX compressed sections
+              for offset in range(0, len(data) - 100, 16):
+                  for decomp in [lzma.decompress, zlib.decompress]:
+                      try:
+                          result = decomp(data[offset:])
+                          if b'picoCTF{' in result or b'flag{' in result:
+                              print(result.decode('latin-1', errors='ignore'))
+                              exit(0)
+                      except:
+                          pass
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: dynamic_analysis
+      name: "Dynamic Unpacking via Execution"
+      requires_signal: upx_detected
+      technique: runtime_dumping
+      steps:
+        - id: dump_memory
+          action: exec_command
+          with:
+            commands:
+              - "gdb -batch -ex 'break main' -ex 'run' -ex 'dump memory {file_path}.dump 0x400000 0x600000' {file_path}"
+              - "strings {file_path}.dump | grep -E 'picoCTF\\{|flag\\{'"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value

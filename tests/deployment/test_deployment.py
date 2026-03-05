@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Local deployment test script for CTF Autopwn MVP.
+"""Local deployment test script for Lattice Mind MVP.
 
 Tests all major components:
 - Framework initialization
@@ -29,40 +29,40 @@ def test_imports():
     logger.info("="*70)
     
     try:
-        from ctf_autopwn.core.types import ChallengeDescriptor, ChallengeType, NodeStatus
+        from lattice_mind.core.types import ChallengeDescriptor, ChallengeType, NodeStatus
         logger.info("✓ Core types imported")
         
-        from ctf_autopwn.core.nodes import DecisionNode, SimpleNode
+        from lattice_mind.core.nodes import DecisionNode, SimpleNode
         logger.info("✓ Decision nodes imported")
         
-        from ctf_autopwn.core.orchestrator import Orchestrator
+        from lattice_mind.core.orchestrator import Orchestrator
         logger.info("✓ Orchestrator imported")
         
-        from ctf_autopwn.core.flag_recognizer import get_flag_recognizer
+        from lattice_mind.core.flag_recognizer import get_flag_recognizer
         logger.info("✓ Flag recognizer imported")
         
-        from ctf_autopwn.adapters.curl_adapter import CurlAdapter
+        from lattice_mind.adapters.curl_adapter import CurlAdapter
         logger.info("✓ Curl adapter imported")
         
-        from ctf_autopwn.adapters.file_adapter import FileTypeAdapter, BinwalkAdapter, ExiftoolAdapter
+        from lattice_mind.adapters.file_adapter import FileTypeAdapter, BinwalkAdapter, ExiftoolAdapter
         logger.info("✓ File adapters imported")
         
-        from ctf_autopwn.trees.asset.classify import AssetClassifyNetworkNode
+        from lattice_mind.trees.asset.classify import AssetClassifyNetworkNode
         logger.info("✓ Asset classification tree imported")
         
-        from ctf_autopwn.trees.web.sqli import SQLiDetectReflectionNode
+        from lattice_mind.trees.web.sqli import SQLiDetectReflectionNode
         logger.info("✓ Web SQLi tree imported")
         
-        from ctf_autopwn.trees.pwn.detect import PwnDetectMetadataNode
+        from lattice_mind.trees.pwn.detect import PwnDetectMetadataNode
         logger.info("✓ Binary exploitation tree imported")
         
-        from ctf_autopwn.trees.crypto.detect import CryptoDetectEncodingNode
+        from lattice_mind.trees.crypto.detect import CryptoDetectEncodingNode
         logger.info("✓ Crypto tree imported")
         
-        from ctf_autopwn.trees.forensics.detect import ForensicsDetectArtifactNode
+        from lattice_mind.trees.forensics.detect import ForensicsDetectArtifactNode
         logger.info("✓ Forensics tree imported")
         
-        from ctf_autopwn.mvp import MVPSolver
+        from lattice_mind.mvp import MVPSolver
         logger.info("✓ MVP solver imported")
         
         logger.info("\n✅ All imports successful!")
@@ -79,9 +79,9 @@ def test_framework():
     logger.info("="*70)
     
     try:
-        from ctf_autopwn.core.orchestrator import Orchestrator
-        from ctf_autopwn.core.types import ChallengeDescriptor, ChallengeType
-        from ctf_autopwn.core.flag_recognizer import get_flag_recognizer
+        from lattice_mind.core.orchestrator import Orchestrator
+        from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
+        from lattice_mind.core.flag_recognizer import get_flag_recognizer
         
         # Create orchestrator
         orchestrator = Orchestrator()
@@ -127,7 +127,7 @@ def test_adapters():
     logger.info("="*70)
     
     try:
-        from ctf_autopwn.adapters.base import MockToolAdapter
+        from lattice_mind.adapters.base import MockToolAdapter
         
         # Test mock adapter (works without actual tools)
         adapter = MockToolAdapter("test_tool", {"test": "response"})
@@ -138,7 +138,7 @@ def test_adapters():
         
         # Try curl adapter
         try:
-            from ctf_autopwn.adapters.curl_adapter import CurlAdapter
+            from lattice_mind.adapters.curl_adapter import CurlAdapter
             curl = CurlAdapter()
             logger.info("✓ Curl adapter available")
         except Exception as e:
@@ -146,7 +146,7 @@ def test_adapters():
         
         # Try file type adapter
         try:
-            from ctf_autopwn.adapters.file_adapter import FileTypeAdapter
+            from lattice_mind.adapters.file_adapter import FileTypeAdapter
             file_adapter = FileTypeAdapter()
             logger.info("✓ File type adapter available")
         except Exception as e:
@@ -168,8 +168,8 @@ def test_decision_nodes():
     logger.info("="*70)
     
     try:
-        from ctf_autopwn.core.nodes import SimpleNode
-        from ctf_autopwn.core.types import NodeStatus, NodeResult
+        from lattice_mind.core.nodes import SimpleNode
+        from lattice_mind.core.types import NodeStatus, NodeResult
         
         # Create a simple node
         node = SimpleNode("test_node", "Test Node")
@@ -206,8 +206,8 @@ def test_mvp_solver():
     logger.info("="*70)
     
     try:
-        from ctf_autopwn.mvp import MVPSolver
-        from ctf_autopwn.core.types import ChallengeDescriptor, ChallengeType
+        from lattice_mind.mvp import MVPSolver
+        from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
         
         # Create solver
         solver = MVPSolver()
@@ -242,14 +242,14 @@ def test_tree_nodes():
     logger.info("="*70)
     
     tests = [
-        ("Asset Classification", "ctf_autopwn.trees.asset.classify", "AssetClassifyNetworkNode"),
-        ("Web SQLi Detection", "ctf_autopwn.trees.web.sqli", "SQLiDetectReflectionNode"),
-        ("Web CMD Detection", "ctf_autopwn.trees.web.cmd", "CMDDetectOutputNode"),
-        ("Web LFI Detection", "ctf_autopwn.trees.web.lfi", "LFIDetectTraversalNode"),
-        ("Web XSS Detection", "ctf_autopwn.trees.web.xss", "XSSDetectReflectedNode"),
-        ("Binary Exploitation", "ctf_autopwn.trees.pwn.detect", "PwnDetectMetadataNode"),
-        ("Cryptography", "ctf_autopwn.trees.crypto.detect", "CryptoDetectEncodingNode"),
-        ("Forensics", "ctf_autopwn.trees.forensics.detect", "ForensicsDetectArtifactNode"),
+        ("Asset Classification", "lattice_mind.trees.asset.classify", "AssetClassifyNetworkNode"),
+        ("Web SQLi Detection", "lattice_mind.trees.web.sqli", "SQLiDetectReflectionNode"),
+        ("Web CMD Detection", "lattice_mind.trees.web.cmd", "CMDDetectOutputNode"),
+        ("Web LFI Detection", "lattice_mind.trees.web.lfi", "LFIDetectTraversalNode"),
+        ("Web XSS Detection", "lattice_mind.trees.web.xss", "XSSDetectReflectedNode"),
+        ("Binary Exploitation", "lattice_mind.trees.pwn.detect", "PwnDetectMetadataNode"),
+        ("Cryptography", "lattice_mind.trees.crypto.detect", "CryptoDetectEncodingNode"),
+        ("Forensics", "lattice_mind.trees.forensics.detect", "ForensicsDetectArtifactNode"),
     ]
     
     success = 0
@@ -269,7 +269,7 @@ def test_tree_nodes():
 def main():
     """Run all deployment tests."""
     logger.info("\n" + "="*70)
-    logger.info("CTF AUTOPWN - LOCAL DEPLOYMENT TEST")
+    logger.info("LATTICE MIND - LOCAL DEPLOYMENT TEST")
     logger.info("="*70)
     
     results = []

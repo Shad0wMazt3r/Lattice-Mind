@@ -1,0 +1,180 @@
+id: crypto_xor_keylength
+name: XOR Key Length Identification and Decryption
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Identifies XOR key length using Hamming distance and Index of Coincidence,
+  then performs frequency analysis to decrypt. Common in picoCTF crypto challenges.
+
+applies_when:
+  - "context.challenge.type == 'crypto'"
+
+confidence_seeds:
+  - if: "'xor' in context.challenge.name.lower() or 'cipher' in context.challenge.name.lower()"
+    boost: 0.45
+    label: "Challenge name suggests XOR cipher"
+  - if: "any(ext in context.file_extensions for ext in ['.enc', '.bin', '.dat', '.txt'])"
+    boost: 0.30
+    label: "Encrypted file detected"
+  - if: "context.file_size > 100 and context.file_size < 1048576"
+    boost: 0.25
+    label: "File size suitable for XOR analysis"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: hamming_distance_analysis
+      name: "Hamming Distance Key Length Detection"
+      steps:
+        - id: compute_hamming
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              def hamming(b1, b2):
+                  return bin(int.from_bytes(b1, 'big') ^ int.from_bytes(b2, 'big')).count('1')
+              
+              data = open('{file_path}', 'rb').read()
+              scores = {}
+              for keysize in range(2, 41):
+                  chunks = [data[i:i+keysize] for i in range(0, len(data), keysize)][:4]
+                  if len(chunks) < 4 or any(len(c) != keysize for c in chunks):
+                      continue
+                  distances = []
+                  for i in range(len(chunks)-1):
+                      distances.append(hamming(chunks[i], chunks[i+1]) / keysize)
+                  scores[keysize] = sum(distances) / len(distances)
+              
+              best = sorted(scores.items(), key=lambda x: x[1])[:3]
+              print('LIKELY_KEYSIZES:', [k for k,v in best])
+              "
+          signals:
+            - match: "LIKELY_KEYSIZES"
+              on_match:
+                confidence_boost: 0.70
+                emit: keysize_candidates_found
+
+    - id: index_of_coincidence
+      name: "Index of Coincidence Analysis"
+      steps:
+        - id: compute_ioc
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from collections import Counter
+              data = open('{file_path}', 'rb').read()
+              
+              def ioc(text):
+                  N = len(text)
+                  if N <= 1:
+                      return 0
+                  freqs = Counter(text)
+                  return sum(f*(f-1) for f in freqs.values()) / (N*(N-1))
+              
+              for keysize in range(2, 21):
+                  blocks = [data[i::keysize] for i in range(keysize)]
+                  avg_ioc = sum(ioc(block) for block in blocks) / keysize
+                  if avg_ioc > 0.06:
+                      print(f'KEYSIZE_{keysize}_IOC_{avg_ioc:.4f}')
+              "
+          signals:
+            - match: "KEYSIZE_[0-9]+_IOC"
+              on_match:
+                confidence_boost: 0.65
+                emit: ioc_keysize_found
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: frequency_analysis_decrypt
+      name: "Frequency Analysis Decryption"
+      requires_signal: keysize_candidates_found
+      technique: xor_frequency_analysis
+      steps:
+        - id: decrypt_xor
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from collections import Counter
+              data = open('{file_path}', 'rb').read()
+              
+              def score_text(text):
+                  freq = 'ETAOIN SHRDLU'
+                  return sum(text.count(c.encode()) for c in freq)
+              
+              def break_single_xor(cipher):
+                  best_score = 0
+                  best_key = 0
+                  for key in range(256):
+                      plain = bytes([b ^ key for b in cipher])
+                      score = score_text(plain)
+                      if score > best_score:
+                          best_score = score
+                          best_key = key
+                  return best_key
+              
+              for keysize in {detected_keysizes}:
+                  blocks = [data[i::keysize] for i in range(keysize)]
+                  key = bytes([break_single_xor(block) for block in blocks])
+                  plain = bytes([data[i] ^ key[i % len(key)] for i in range(len(data))])
+                  if b'picoCTF{' in plain or b'flag{' in plain:
+                      print(plain.decode('latin-1'))
+                      break
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: known_plaintext_attack
+      name: "Known Plaintext Attack"
+      requires_signal: keysize_candidates_found
+      technique: xor_known_plaintext
+      steps:
+        - id: known_plaintext
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              data = open('{file_path}', 'rb').read()
+              known = b'picoCTF{'
+              
+              for offset in range(min(100, len(data) - len(known))):
+                  key_fragment = bytes([data[offset+i] ^ known[i] for i in range(len(known))])
+                  # Try to extend key
+                  for keysize in range(len(known), 50):
+                      if keysize % len(key_fragment) == 0:
+                          key = key_fragment * (keysize // len(key_fragment))
+                          plain = bytes([data[i] ^ key[i % len(key)] for i in range(len(data))])
+                          if b'picoCTF{' in plain and plain.count(b'}') > 0:
+                              print(plain.decode('latin-1'))
+                              exit(0)
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: single_byte_xor
+      name: "Single Byte XOR Bruteforce"
+      requires_signal: ioc_keysize_found
+      technique: single_byte_xor
+      steps:
+        - id: bruteforce_single
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              data = open('{file_path}', 'rb').read()
+              for key in range(256):
+                  plain = bytes([b ^ key for b in data])
+                  if b'picoCTF{' in plain or b'flag{' in plain:
+                      print(plain.decode('latin-1'))
+                      break
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value

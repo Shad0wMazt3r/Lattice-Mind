@@ -1,0 +1,97 @@
+id: forensics_exiftool
+name: Exiftool Metadata Extraction
+category: forensics
+version: "1.0"
+author: system
+description: >
+  Extracts hidden flags from image metadata using exiftool. Targets License,
+  Comment, Artist, Copyright, and custom XMP fields common in picoCTF.
+
+applies_when:
+  - "context.challenge.type == 'forensics'"
+
+confidence_seeds:
+  - if: "any(ext in context.file_extensions for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'])"
+    boost: 0.60
+    label: "Image file detected"
+  - if: "'metadata' in context.challenge.name.lower() or 'exif' in context.challenge.name.lower()"
+    boost: 0.40
+    label: "Challenge name suggests metadata"
+  - if: "context.file_size < 10485760"
+    boost: 0.20
+    label: "File size suitable for metadata analysis"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: exiftool_scan
+      name: "Exiftool Metadata Scan"
+      steps:
+        - id: extract_metadata
+          action: exec_command
+          with:
+            command: "exiftool {file_path}"
+          signals:
+            - match: "picoCTF\\{|flag\\{|CTF\\{|License.*:|Comment.*:|Artist.*:|Copyright.*:"
+              on_match:
+                confidence_boost: 0.85
+                emit: metadata_found
+
+    - id: specific_fields_check
+      name: "Check Specific Metadata Fields"
+      steps:
+        - id: license_field
+          action: exec_command
+          with:
+            command: "exiftool -License {file_path}"
+          signals:
+            - match: "picoCTF\\{[^}]+\\}"
+              on_match:
+                confidence_boost: 0.90
+                emit: flag_in_license
+
+        - id: comment_field
+          action: exec_command
+          with:
+            command: "exiftool -Comment {file_path}"
+          signals:
+            - match: "picoCTF\\{[^}]+\\}"
+              on_match:
+                confidence_boost: 0.90
+                emit: flag_in_comment
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: extract_all_fields
+      name: "Extract All Metadata Fields"
+      requires_signal: metadata_found
+      technique: exiftool_extraction
+      steps:
+        - id: full_extraction
+          action: exec_command
+          with:
+            commands:
+              - "exiftool -a -G1 {file_path}"
+              - "exiftool -License -Comment -Artist -Copyright -Description -ImageDescription -UserComment {file_path}"
+              - "exiftool -XMP:All {file_path}"
+              - "exiftool -EXIF:All {file_path}"
+              - "strings {file_path} | grep -E 'picoCTF\\{|flag\\{'"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: base64_decode_metadata
+      name: "Base64 Decode Metadata"
+      requires_signal: metadata_found
+      technique: metadata_decode
+      steps:
+        - id: decode_fields
+          action: exec_command
+          with:
+            command: "exiftool -a {file_path} | grep -E '^[A-Za-z0-9+/=]{20,}$' | base64 -d"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value

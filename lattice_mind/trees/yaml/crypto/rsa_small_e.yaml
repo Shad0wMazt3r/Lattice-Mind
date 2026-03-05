@@ -1,0 +1,134 @@
+id: crypto_rsa_small_e
+name: RSA Small Public Exponent Attack
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Detects RSA with small public exponent (e=3, e=5, e=17) and performs cube root
+  or low exponent attacks. Common in picoCTF RSA challenges.
+
+applies_when:
+  - "context.challenge.type == 'crypto'"
+
+confidence_seeds:
+  - if: "'rsa' in context.challenge.name.lower() or 'public' in context.challenge.name.lower()"
+    boost: 0.40
+    label: "Challenge name suggests RSA"
+  - if: "any(ext in context.file_extensions for ext in ['.pem', '.pub', '.key'])"
+    boost: 0.35
+    label: "RSA key file detected"
+  - if: "any(param in context.params for param in ['n', 'e', 'c', 'ciphertext', 'modulus'])"
+    boost: 0.30
+    label: "RSA parameters found"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: extract_rsa_params
+      name: "Extract RSA Parameters"
+      steps:
+        - id: parse_key_file
+          action: exec_command
+          with:
+            commands:
+              - "openssl rsa -pubin -in {file_path} -text -noout"
+              - "grep -E 'Exponent:|Modulus:' {file_path}"
+              - "strings {file_path} | grep -E '^[0-9]+$'"
+          signals:
+            - match: "Exponent: 3|Exponent: 5|Exponent: 17|Exponent: 65537"
+              on_match:
+                confidence_boost: 0.70
+                emit: rsa_params_found
+
+    - id: small_exponent_check
+      name: "Small Exponent Detection"
+      steps:
+        - id: check_e_value
+          action: exec_command
+          with:
+            command: "python3 -c \"import re; data=open('{file_path}').read(); e=int(re.search(r'e[\\s:=]+([0-9]+)', data).group(1)); print('SMALL_E' if e < 100 else 'LARGE_E')\""
+          signals:
+            - match: "SMALL_E"
+              on_match:
+                confidence_boost: 0.85
+                emit: small_e_confirmed
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: cube_root_attack
+      name: "Cube Root Attack (e=3)"
+      requires_signal: small_e_confirmed
+      technique: rsa_cube_root
+      steps:
+        - id: compute_cube_root
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              import gmpy2
+              from Crypto.Util.number import long_to_bytes
+              c = {ciphertext}
+              m = gmpy2.iroot(c, 3)[0]
+              flag = long_to_bytes(int(m))
+              print(flag.decode())
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: low_exponent_broadcast
+      name: "Low Exponent Broadcast Attack"
+      requires_signal: small_e_confirmed
+      technique: hastad_broadcast
+      steps:
+        - id: hastad_attack
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from Crypto.Util.number import long_to_bytes
+              import gmpy2
+              # Assuming multiple ciphertexts with same message
+              c1, n1 = {c1}, {n1}
+              c2, n2 = {c2}, {n2}
+              c3, n3 = {c3}, {n3}
+              # Chinese Remainder Theorem
+              N = n1 * n2 * n3
+              N1, N2, N3 = N//n1, N//n2, N//n3
+              y1 = pow(N1, -1, n1)
+              y2 = pow(N2, -1, n2)
+              y3 = pow(N3, -1, n3)
+              c = (c1*N1*y1 + c2*N2*y2 + c3*N3*y3) % N
+              m = gmpy2.iroot(c, 3)[0]
+              print(long_to_bytes(int(m)).decode())
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: wiener_attack
+      name: "Wiener's Attack (Small d)"
+      requires_signal: rsa_params_found
+      technique: wiener_continued_fractions
+      steps:
+        - id: wiener_exploit
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from Crypto.Util.number import long_to_bytes
+              import owiener
+              e = {e}
+              n = {n}
+              c = {c}
+              d = owiener.attack(e, n)
+              if d:
+                  m = pow(c, d, n)
+                  print(long_to_bytes(m).decode())
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value

@@ -1,0 +1,202 @@
+id: forensics_lsb_stego
+name: LSB Steganography Detection and Extraction
+category: forensics
+version: "1.0"
+author: system
+description: >
+  Detects and extracts data hidden in Least Significant Bits of image pixels.
+  Supports RGB channels, alpha channel, and bit plane analysis.
+
+applies_when:
+  - "context.challenge.type == 'forensics'"
+
+confidence_seeds:
+  - if: "any(ext in context.file_extensions for ext in ['.png', '.bmp', '.tiff'])"
+    boost: 0.55
+    label: "Lossless image format detected"
+  - if: "'steg' in context.challenge.name.lower() or 'hidden' in context.challenge.name.lower()"
+    boost: 0.40
+    label: "Challenge name suggests steganography"
+  - if: "context.file_size > 51200"
+    boost: 0.25
+    label: "File size suitable for LSB data"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: lsb_pattern_detection
+      name: "LSB Pattern Detection"
+      steps:
+        - id: check_lsb_entropy
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from PIL import Image
+              import numpy as np
+              
+              img = Image.open('{file_path}')
+              pixels = np.array(img)
+              
+              # Extract LSB plane
+              lsb = pixels & 1
+              unique_ratio = len(np.unique(lsb)) / lsb.size
+              
+              # Check for non-random patterns
+              if unique_ratio > 0.4:
+                  print('LSB_PATTERN_DETECTED')
+              "
+          signals:
+            - match: "LSB_PATTERN_DETECTED"
+              on_match:
+                confidence_boost: 0.75
+                emit: lsb_pattern_found
+
+    - id: chi_square_test
+      name: "Chi-Square Steganalysis"
+      steps:
+        - id: chi_square_analysis
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from PIL import Image
+              import numpy as np
+              
+              img = Image.open('{file_path}')
+              pixels = np.array(img).flatten()
+              
+              # Chi-square test for LSB embedding
+              pairs = [(pixels[i], pixels[i+1]) for i in range(0, len(pixels)-1, 2)]
+              expected = len(pairs) / 256
+              
+              chi_sq = sum((count - expected)**2 / expected for count in [pairs.count(p) for p in set(pairs)])
+              
+              if chi_sq > 1000:
+                  print('CHI_SQUARE_ANOMALY')
+              "
+          signals:
+            - match: "CHI_SQUARE_ANOMALY"
+              on_match:
+                confidence_boost: 0.60
+                emit: stego_detected
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: extract_lsb_rgb
+      name: "Extract LSB from RGB Channels"
+      requires_signal: lsb_pattern_found
+      technique: lsb_extraction
+      steps:
+        - id: extract_rgb_lsb
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from PIL import Image
+              
+              img = Image.open('{file_path}')
+              pixels = list(img.getdata())
+              
+              # Extract LSB from each channel
+              for channel in range(3):
+                  bits = ''.join([str(pixel[channel] & 1) for pixel in pixels])
+                  # Convert to bytes
+                  data = bytes([int(bits[i:i+8], 2) for i in range(0, len(bits), 8)])
+                  text = data.decode('latin-1', errors='ignore')
+                  if 'picoCTF{' in text or 'flag{' in text:
+                      print(text)
+                      break
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: extract_lsb_sequential
+      name: "Extract LSB Sequential"
+      requires_signal: lsb_pattern_found
+      technique: lsb_sequential
+      steps:
+        - id: sequential_extraction
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from PIL import Image
+              
+              img = Image.open('{file_path}')
+              pixels = list(img.getdata())
+              
+              # Flatten all channels
+              flat = [val for pixel in pixels for val in pixel[:3]]
+              bits = ''.join([str(val & 1) for val in flat])
+              
+              # Convert to bytes
+              data = bytes([int(bits[i:i+8], 2) for i in range(0, len(bits)-8, 8)])
+              text = data.decode('latin-1', errors='ignore')
+              
+              # Search for flag
+              import re
+              flags = re.findall(r'picoCTF\\{[^}]+\\}|flag\\{[^}]+\\}', text)
+              for flag in flags:
+                  print(flag)
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: extract_lsb_msb
+      name: "Extract Multiple Bit Planes"
+      requires_signal: stego_detected
+      technique: bit_plane_extraction
+      steps:
+        - id: multi_bit_extraction
+          action: exec_command
+          with:
+            command: |
+              python3 -c "
+              from PIL import Image
+              
+              img = Image.open('{file_path}')
+              pixels = list(img.getdata())
+              
+              # Try different bit depths
+              for num_bits in [1, 2, 3, 4]:
+                  mask = (1 << num_bits) - 1
+                  flat = [val for pixel in pixels for val in pixel[:3]]
+                  bits = ''.join([bin(val & mask)[2:].zfill(num_bits) for val in flat])
+                  
+                  data = bytes([int(bits[i:i+8], 2) for i in range(0, len(bits)-8, 8)])
+                  text = data.decode('latin-1', errors='ignore')
+                  
+                  if 'picoCTF{' in text or 'flag{' in text:
+                      import re
+                      flags = re.findall(r'picoCTF\\{[^}]+\\}|flag\\{[^}]+\\}', text)
+                      for flag in flags:
+                          print(flag)
+                      break
+              "
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+
+    - id: zsteg_analysis
+      name: "Zsteg Automated Analysis"
+      requires_signal: lsb_pattern_found
+      technique: zsteg_tool
+      steps:
+        - id: run_zsteg
+          action: exec_command
+          with:
+            commands:
+              - "zsteg -a {file_path} | grep -E 'picoCTF\\{|flag\\{'"
+              - "zsteg --lsb {file_path}"
+              - "zsteg --msb {file_path}"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value

@@ -1,0 +1,102 @@
+id: forensics_binwalk
+name: Binwalk Embedded File Extraction
+category: forensics
+version: "1.0"
+author: system
+description: >
+  Detects and extracts embedded files using binwalk. Targets ZIP, PNG, JPEG
+  signatures hidden at specific offsets in images or binaries.
+
+applies_when:
+  - "context.challenge.type == 'forensics'"
+
+confidence_seeds:
+  - if: "any(ext in context.file_extensions for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bin', '.dat', '.img'])"
+    boost: 0.50
+    label: "Binary or image file detected"
+  - if: "context.file_size > 102400"
+    boost: 0.30
+    label: "File size suggests embedded content"
+  - if: "'hidden' in context.challenge.name.lower() or 'embedded' in context.challenge.name.lower()"
+    boost: 0.35
+    label: "Challenge name suggests hidden files"
+
+detection:
+  min_confidence: 0.10
+  paths:
+    - id: binwalk_signature_scan
+      name: "Binwalk Signature Detection"
+      steps:
+        - id: scan_signatures
+          action: exec_command
+          with:
+            command: "binwalk {file_path}"
+          signals:
+            - match: "Zip archive|PNG image|JPEG image|gzip compressed|POSIX tar archive"
+              on_match:
+                confidence_boost: 0.75
+                emit: embedded_files_found
+
+    - id: entropy_analysis
+      name: "Entropy Analysis"
+      steps:
+        - id: check_entropy
+          action: exec_command
+          with:
+            command: "binwalk -E {file_path}"
+          signals:
+            - match: "Rising entropy|Falling entropy"
+              on_match:
+                confidence_boost: 0.40
+                emit: entropy_anomaly
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: extract_embedded_files
+      name: "Extract Embedded Files"
+      requires_signal: embedded_files_found
+      technique: binwalk_extraction
+      steps:
+        - id: extract_all
+          action: exec_command
+          with:
+            commands:
+              - "binwalk -e {file_path}"
+              - "binwalk --dd='.*' {file_path}"
+          signals:
+            - match: "Extracted|carved"
+              on_match:
+                confidence_boost: 0.80
+                emit: files_extracted
+
+    - id: search_extracted_files
+      name: "Search Extracted Files for Flags"
+      requires_signal: files_extracted
+      technique: recursive_search
+      steps:
+        - id: grep_flags
+          action: exec_command
+          with:
+            commands:
+              - "find _*.extracted -type f -exec strings {} \\; | grep -E 'picoCTF\\{|flag\\{'"
+              - "find _*.extracted -name '*.txt' -exec cat {} \\;"
+              - "find _*.extracted -name 'flag*' -exec cat {} \\;"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value
+            - pattern: 'flag\\{[^}]+\\}'
+              as: flag_value
+
+    - id: manual_offset_extraction
+      name: "Manual Offset Extraction"
+      requires_signal: embedded_files_found
+      technique: dd_extraction
+      steps:
+        - id: extract_by_offset
+          action: exec_command
+          with:
+            command: "dd if={file_path} bs=1 skip={detected_offset} of=extracted.bin && strings extracted.bin | grep -E 'picoCTF\\{|flag\\{'"
+          capture:
+            - pattern: 'picoCTF\\{[^}]+\\}'
+              as: flag_value

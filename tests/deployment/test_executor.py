@@ -3,10 +3,10 @@
 import asyncio
 from types import SimpleNamespace
 
-import ctf_autopwn.adapters.curl_adapter as curl_module
-from ctf_autopwn.core.confidence import ConfidencePool
-from ctf_autopwn.core.executor import TreeExecutor
-from ctf_autopwn.core.tree_loader import ExploitationPath, ExploitationStep
+import lattice_mind.adapters.curl_adapter as curl_module
+from lattice_mind.core.confidence import ConfidencePool
+from lattice_mind.core.executor import TreeExecutor
+from lattice_mind.core.tree_loader import ExploitationPath, ExploitationStep
 
 
 class FakeRequestsAdapter:

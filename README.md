@@ -1,6 +1,6 @@
-﻿# ctf-autopwn — deterministic CTF exploitation toolkit
+# Lattice Mind — deterministic CTF exploitation toolkit
 
-ctf-autopwn automates vulnerability discovery and exploitation by weaving together rule-based decision trees, deterministic probes, and adaptive exploit prioritization. There are no LLMs or randomness; every action is justified by evidence collected from adapters and recorded in the execution log.
+Lattice Mind automates vulnerability discovery and exploitation by weaving together rule-based decision trees, deterministic probes, and adaptive exploit prioritization. There are no LLMs or randomness; every action is justified by evidence collected from adapters and recorded in the execution log.
 
 ## Quickstart
 
@@ -9,7 +9,7 @@ ctf-autopwn automates vulnerability discovery and exploitation by weaving togeth
 1. Build the container image with all bundled tools:
 
    ```powershell
-   docker compose build autopwn-api
+   docker compose build lattice-mind-api
    ```
 
 2. Start the service (runs the API, dashboard, and solver engine):
@@ -41,7 +41,7 @@ ctf-autopwn automates vulnerability discovery and exploitation by weaving togeth
 5. Tail the logs to observe progress:
 
    ```powershell
-   docker compose logs -f autopwn-api
+   docker compose logs -f lattice-mind-api
    ```
 
    The logs show decision nodes, payloads, captured confidence, and any flag recognition events.
@@ -59,20 +59,20 @@ When deploying to DigitalOcean, build the same Docker image and push it to your 
 2. Run the API:
 
    ```powershell
-   uvicorn ctf_autopwn.api.server:app --host 0.0.0.0 --port 8000
+   uvicorn lattice_mind.api.server:app --host 0.0.0.0 --port 8000
    ```
 
-3. Open `http://localhost:8000` to interact with the dashboard or issue `ctf-autopwn` CLI commands.
+3. Open `http://localhost:8000` to interact with the dashboard or issue `Lattice-Mind` CLI commands.
 
 ## Architecture
 
-ctf-autopwn is composed of the following layers:
+Lattice Mind is composed of the following layers:
 
 1. **Core orchestration** — `core/` defines shared data types (`ChallengeDescriptor`, `NodeResult`), the DecisionNode base class, a knowledge base for vulnerability archetypes, the orchestrator, and the flag recognizer.
 2. **Adapters** — Tool adapters (curl, ffuf, nmap, etc.) wrap command-line utilities to emit normalized JSON so decision nodes can reason about structured observations.
-3. **Decision trees** — Split between Python nodes (`trees/`) and YAML-driven trees (`ctf_autopwn/trees/yaml/`). Detection and exploitation paths read context, emit confidence boosts, and branch deterministically.
-4. **Execution engine** — `ctf_autopwn/core/executor.py` drives YAML trees, runs HTTP probes, applies exploit payloads, and checks flag patterns after every response.
-5. **API + UI** — `ctf_autopwn/api/server.py` exposes REST endpoints, persists run history (SQLite), and hosts the cyberpunk dashboard for live tree playback.
+3. **Decision trees** — Split between Python nodes (`trees/`) and YAML-driven trees (`lattice_mind/trees/yaml/`). Detection and exploitation paths read context, emit confidence boosts, and branch deterministically.
+4. **Execution engine** — `lattice_mind/core/executor.py` drives YAML trees, runs HTTP probes, applies exploit payloads, and checks flag patterns after every response.
+5. **API + UI** — `lattice_mind/api/server.py` exposes REST endpoints, persists run history (SQLite), and hosts the cyberpunk dashboard for live tree playback.
 
 ```mermaid
 flowchart LR
@@ -94,7 +94,7 @@ flowchart LR
 | `core/` | Shared orchestration logic, flag recognition, node abstractions, knowledge base. |
 | `adapters/` | Tool adapters (curl, ffuf, nmap, gdb wrappers) that return structured dictionaries. |
 | `trees/` | Legacy Python decision trees for reconnaissance, SQLi, SSTI, etc. |
-| `ctf_autopwn/trees/yaml/` | YAML-based detection/exploitation definitions (plug-and-play). |
+| `lattice_mind/trees/yaml/` | YAML-based detection/exploitation definitions (plug-and-play). |
 | `api/` | FastAPI server, REST endpoints, dashboard static assets. |
 | `templates/` | Exploit helper templates (ROP chains, RSA attacks) consumed by nodes. |
 | `config.py` | Global constants (flag regexes, tool paths, feature flags). |
@@ -122,9 +122,9 @@ The directory contains deployment, API, and exploitation-tree verifiers that imp
 
 ## Prompt blueprint for AI researchers
 
-The following prompt outlines how to instruct an AI researcher to discover new TTPs and encode them as YAML decision trees. Include these details in your own research notes, but do **not** run the prompt inside ctf-autopwn:
+The following prompt outlines how to instruct an AI researcher to discover new TTPs and encode them as YAML decision trees. Include these details in your own research notes, but do **not** run the prompt inside Lattice Mind:
 
-> You are a CTF exploit researcher and decision tree author. Your job is to search the internet for real-world attack techniques, CTF write-ups, and security TTPs, then encode them as executable YAML decision trees for the `ctf-autopwn` framework.  
+> You are a CTF exploit researcher and decision tree author. Your job is to search the internet for real-world attack techniques, CTF write-ups, and security TTPs, then encode them as executable YAML decision trees for the `Lattice Mind` framework.  
 >  
 > Search for CTF-relevant exploitation techniques across these categories. For each technique, find real write-ups (HackTheBox, TryHackMe, CTFtime, GitHub), OWASP test cases, PayloadsAllTheThings entries, HackTricks docs, Exploit-DB entries, and PortSwigger labs.  
 >  
@@ -132,6 +132,6 @@ The following prompt outlines how to instruct an AI researcher to discover new T
 >  
 > Record existing YAML trees to avoid duplication (e.g., `web_sqli`, `web_lfi`, `web_cmdi`, `web_xss`).  
 >  
-> Follow the exact schema provided by ctf-autopwn: metadata (id, name, category, version, author, description), `applies_when`, `min_confidence`, `stop_on_flag`, `confidence_seeds`, `detection_paths`, and `exploitation_paths` with ordered steps, payload permutations, and signal matching instructions.
+> Follow the exact schema provided by Lattice Mind: metadata (id, name, category, version, author, description), `applies_when`, `min_confidence`, `stop_on_flag`, `confidence_seeds`, `detection_paths`, and `exploitation_paths` with ordered steps, payload permutations, and signal matching instructions.
 
 Adhering to this blueprint ensures community research contributions can be translated into yaml files that the engine can consume immediately.

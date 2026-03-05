@@ -1,11 +1,11 @@
-"""Setup configuration for ctf-autopwn."""
+"""Setup configuration for lattice-mind."""
 from setuptools import setup, find_packages
 
 setup(
-    name="ctf-autopwn",
+    name="lattice-mind",
     version="0.1.0",
     description="Autonomous CTF exploitation and vulnerability detection toolkit",
-    author="CTF Autopwn Team",
+    author="Lattice Mind Team",
     packages=find_packages(),
     python_requires=">=3.11",
     install_requires=[
@@ -24,8 +24,8 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "ctf-autopwn=ctf_autopwn.cli:main",
-            "ctf-autopwn-api=ctf_autopwn.api.server:main",
+            "Lattice-Mind=lattice_mind.cli:main",
+            "Lattice-Mind-api=lattice_mind.api.server:main",
         ],
     },
     classifiers=[

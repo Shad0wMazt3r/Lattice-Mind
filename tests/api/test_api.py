@@ -1,8 +1,8 @@
 """Sanity tests for the FastAPI interface."""
 from fastapi.testclient import TestClient
 
-from ctf_autopwn.api import server
-from ctf_autopwn.core.types import ChallengeType, ChallengeDescriptor
+from lattice_mind.api import server
+from lattice_mind.core.types import ChallengeType, ChallengeDescriptor
 
 
 client = TestClient(server.app)
@@ -17,7 +17,7 @@ def test_health_endpoint():
 def test_frontend_served():
     response = client.get("/")
     assert response.status_code == 200
-    assert "CTF Autopwn" in response.text
+    assert "Lattice Mind" in response.text
 
 
 def test_solve_endpoint(monkeypatch):

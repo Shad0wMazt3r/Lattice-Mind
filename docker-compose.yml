@@ -1,14 +1,14 @@
 services:
-  autopwn-api:
+  lattice-mind-api:
     build: .
     ports:
       - "8000:8000"
-    command: uvicorn ctf_autopwn.api.server:app --host 0.0.0.0 --port 8000
+    command: uvicorn lattice_mind.api.server:app --host 0.0.0.0 --port 8000
     environment:
-      AUTOPWN_LOG_LEVEL: info
-      AUTOPWN_DB: /data/runs.db
+      LATTICE_MIND_LOG_LEVEL: info
+      LATTICE_MIND_DB: /data/runs.db
     volumes:
-      - autopwn-data:/data
+      - lattice-mind-data:/data
 
 volumes:
-  autopwn-data:
+  lattice-mind-data:

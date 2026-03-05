@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-"""Simple example demonstrating CTF Autopwn usage.
+"""Simple example demonstrating Lattice Mind usage.
 
 Run with: python example_usage.py
 """
 
 import logging
-from ctf_autopwn.mvp import MVPSolver
-from ctf_autopwn.core.types import ChallengeDescriptor, ChallengeType
+from lattice_mind.mvp import MVPSolver
+from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
 
 # Configure logging to see what's happening
 logging.basicConfig(
@@ -132,8 +132,8 @@ def example_5_direct_node_execution():
     logger.info("EXAMPLE 5: Direct Node Execution")
     logger.info("="*70)
     
-    from ctf_autopwn.core.orchestrator import Orchestrator
-    from ctf_autopwn.trees.asset.classify import AssetClassifyNetworkNode
+    from lattice_mind.core.orchestrator import Orchestrator
+    from lattice_mind.trees.asset.classify import AssetClassifyNetworkNode
     
     # Create orchestrator
     orchestrator = Orchestrator()
@@ -162,7 +162,7 @@ def example_5_direct_node_execution():
 def main():
     """Run all examples."""
     logger.info("\n" + "="*70)
-    logger.info("CTF AUTOPWN - USAGE EXAMPLES")
+    logger.info("LATTICE MIND - USAGE EXAMPLES")
     logger.info("="*70)
     logger.info("\nNote: These examples show API usage.")
     logger.info("To test against real vulnerabilities, you would need:")
