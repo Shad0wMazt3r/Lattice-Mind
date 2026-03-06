@@ -1,4 +1,3 @@
-"""FastAPI server exposing the Lattice Mind solver along with a simple UI."""
 from __future__ import annotations
 
 import asyncio
@@ -16,17 +15,46 @@ from typing import Any, Dict, List, Optional, Tuple
 import base64 as _b64
 import pathlib
 import re as _re
+import secrets as _secrets
 import shutil
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from passlib.context import CryptContext
+from jose import JWTError, jwt as _jwt
 
 from lattice_mind.mvp import MVPSolver
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
 
 logger = logging.getLogger(__name__)
+
+def _now() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
+_ALGORITHM = "HS256"
+_TOKEN_HOURS = int(os.environ.get("LATTICE_MIND_TOKEN_HOURS", "24"))
+_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY: str = ""  # populated after _init_db()
+
+def _hash_pw(pw: str) -> str:
+    return _pwd_ctx.hash(pw)
+
+def _verify_pw(plain: str, hashed: str) -> bool:
+    return _pwd_ctx.verify(plain, hashed)
+
+def _make_token(data: dict) -> str:
+    from datetime import timedelta
+    payload = {**data, "exp": datetime.utcnow() + timedelta(hours=_TOKEN_HOURS)}
+    return _jwt.encode(payload, SECRET_KEY, algorithm=_ALGORITHM)
+
+def _decode_token(token: str) -> Optional[dict]:
+    try:
+        return _jwt.decode(token, SECRET_KEY, algorithms=[_ALGORITHM])
+    except Exception:
+        return None
 
 # ── WebSocket Management ─────────────────────────────────────────────────────
 class ConnectionManager:
@@ -113,6 +141,18 @@ def _init_db():
         """)
         # seed default if missing
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('dir_scan_enabled', 'false')")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                username        TEXT PRIMARY KEY,
+                hashed_password TEXT NOT NULL,
+                role            TEXT NOT NULL DEFAULT 'operator',
+                created_at      TEXT NOT NULL
+            )
+        """)
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('secret_key', ?)",
+            (_secrets.token_hex(32),)
+        )
 
 def _load_settings():
     """Load persisted settings into FEATURE_FLAGS on startup."""
@@ -121,6 +161,38 @@ def _load_settings():
         row = conn.execute("SELECT value FROM settings WHERE key='dir_scan_enabled'").fetchone()
         if row:
             FEATURE_FLAGS.dir_scan_enabled = row["value"].lower() == "true"
+
+def _get_secret_key() -> str:
+    with _db() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key='secret_key'").fetchone()
+    return row["value"] if row else _secrets.token_hex(32)
+
+def _db_get_user(username: str) -> Optional[dict]:
+    with _db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    return dict(row) if row else None
+
+def _db_user_count() -> int:
+    with _db() as conn:
+        return conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()["cnt"]
+
+def _db_create_user(username: str, password: str, role: str = "operator") -> dict:
+    hashed = _hash_pw(password)
+    with _db() as conn:
+        conn.execute(
+            "INSERT INTO users (username, hashed_password, role, created_at) VALUES (?,?,?,?)",
+            (username, hashed, role, _now())
+        )
+    return {"username": username, "role": role}
+
+def _seed_admin():
+    """Create default admin account if no users exist yet."""
+    if _db_user_count() > 0:
+        return
+    admin_user = os.environ.get("LATTICE_MIND_ADMIN_USER", "admin")
+    admin_pass = os.environ.get("LATTICE_MIND_ADMIN_PASS", "admin")
+    _db_create_user(admin_user, admin_pass, "admin")
+    logger.info("Seeded default admin user: %s", admin_user)
 
 def _db_save(state: RunState):
     """Upsert a RunState to SQLite."""
@@ -195,15 +267,28 @@ app = FastAPI(
     version="0.1.0",
 )
 
+_PUBLIC_PATHS = {"/", "/health", "/auth/login", "/auth/register",
+                 "/docs", "/openapi.json", "/redoc"}
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if (path.startswith("/static/") or path.startswith("/ws/") or path in _PUBLIC_PATHS):
+        return await call_next(request)
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    if not _decode_token(auth[7:]):
+        return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
+    return await call_next(request)
+
 _init_db()  # ensure schema exists at import time
 _load_settings()  # restore persisted feature flags
+SECRET_KEY = _get_secret_key()  # load or create persistent JWT secret
+_seed_admin()  # seed default admin if no users
 
 solver = MVPSolver()
 solver_lock = asyncio.Lock()
-
-
-def _now() -> str:
-    return datetime.utcnow().isoformat() + "Z"
 
 
 @dataclass
@@ -350,6 +435,44 @@ class RunStatusResponse(BaseModel):
     finished_at: Optional[str] = None
 
 
+# ── Auth endpoints ───────────────────────────────────────────────────────────
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+    role: str
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def auth_login(payload: AuthRequest):
+    user = _db_get_user(payload.username)
+    if not user or not _verify_pw(payload.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = _make_token({"sub": user["username"], "role": user["role"]})
+    return TokenResponse(access_token=token, username=user["username"], role=user["role"])
+
+@app.post("/auth/register", response_model=TokenResponse)
+async def auth_register(payload: AuthRequest):
+    if len(payload.username) < 2 or len(payload.password) < 6:
+        raise HTTPException(status_code=422, detail="Username ≥ 2 chars and password ≥ 6 chars required")
+    if _db_get_user(payload.username):
+        raise HTTPException(status_code=409, detail="Username already exists")
+    role = "admin" if _db_user_count() == 0 else "operator"
+    user = _db_create_user(payload.username, payload.password, role)
+    token = _make_token({"sub": user["username"], "role": user["role"]})
+    return TokenResponse(access_token=token, username=user["username"], role=user["role"])
+
+@app.get("/auth/me")
+async def auth_me(request: Request):
+    auth = request.headers.get("Authorization", "")
+    payload = _decode_token(auth[7:]) if auth.startswith("Bearer ") else None
+    if not payload:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"username": payload.get("sub"), "role": payload.get("role")}
+
 @app.get("/rules")
 async def list_rules():
     """List all loaded YAML decision trees."""
@@ -421,16 +544,16 @@ BASE_DIR = pathlib.Path(__file__).parent.parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 
 @app.websocket("/ws/{run_id}")
-async def websocket_endpoint(websocket: WebSocket, run_id: str):
+async def websocket_endpoint(websocket: WebSocket, run_id: str, token: str = ""):
+    if not _decode_token(token):
+        await websocket.close(code=4001)
+        return
     await manager.connect(websocket, run_id)
     try:
-        # Send current state immediately
         state = get_run_state(run_id)
         if state:
             await websocket.send_json({"type": "init", "data": state.to_dict()})
-        
         while True:
-            # Keep connection alive
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, run_id)
