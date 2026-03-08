@@ -13,6 +13,7 @@ setup(
         "uvicorn[standard]>=0.27.0",
         "requests>=2.31.0",
         "python-multipart>=0.0.9",
+        "httpx>=0.24.1",
     ],
     extras_require={
         "dev": [

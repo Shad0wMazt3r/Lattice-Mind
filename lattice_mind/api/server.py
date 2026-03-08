@@ -60,11 +60,13 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ── SQLite persistence ────────────────────────────────────────────────────────
-DB_PATH = os.environ.get("LATTICE_MIND_DB", "/data/runs.db")
+DB_PATH = pathlib.Path(
+    os.environ.get("LATTICE_MIND_DB", pathlib.Path.home() / ".lattice_mind" / "runs.db")
+).expanduser()
 
 def _db_connect() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -742,4 +744,3 @@ def main():
     import uvicorn
 
     uvicorn.run("lattice_mind.api.server:app", host="0.0.0.0", port=8000, reload=False)
-

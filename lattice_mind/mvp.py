@@ -3,6 +3,7 @@
 Demonstrates autonomous vulnerability detection and exploitation
 across all challenge categories using integrated decision trees.
 """
+import asyncio
 import logging
 from typing import Optional, Dict, Any
 
@@ -33,6 +34,11 @@ class MVPSolver:
     """MVP solver that chains asset classification to specialized detection trees."""
     
     def __init__(self):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+
         self.orchestrator = Orchestrator()
         self.flag_recognizer = get_flag_recognizer()
         self.registry = get_tree_registry()
@@ -170,7 +176,7 @@ class MVPSolver:
             logger.info(f"\n[MVP] Executing tree: {tree.id} (confidence: {current_score:.2f})")
             
             # We need to bridge sync solve() with async executor
-            flag = asyncio.run(self.executor.execute_tree(tree, context))
+            flag = asyncio.run(self._execute_tree_async(tree, context))
             if flag:
                 return flag
             
@@ -282,12 +288,18 @@ class MVPSolver:
                 flag = self._dispatch_web_exploit(vuln_type, evidence, challenge)
                 if flag:
                     return flag
-
+            
             return self.orchestrator.execution_context.get("flag_found")
-
         except Exception as e:
             logger.error(f"[web] Detection failed: {str(e)}")
             return None
+
+    async def _execute_tree_async(self, tree, context):
+        """Execute a tree, awaiting futures or coroutines transparently."""
+        result = self.executor.execute_tree(tree, context)
+        if asyncio.isfuture(result) or asyncio.iscoroutine(result):
+            return await result
+        return result
 
     def _dispatch_web_exploit(
         self, vuln_type: str, evidence: list, challenge: ChallengeDescriptor

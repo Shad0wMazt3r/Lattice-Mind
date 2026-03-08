@@ -88,6 +88,10 @@ class Orchestrator:
             # Run the node
             result = current_node.run(self.execution_context)
             self._last_node_id = current_node.node_id
+
+            if not isinstance(result, NodeResult):
+                logger.warning(f"Node {current_node} returned invalid result {result}; stopping tree.")
+                break
             
             # Determine next node BEFORE emitting node_end so we can include it
             next_node = current_node.next_node(result) if hasattr(current_node, "next_node") else None
