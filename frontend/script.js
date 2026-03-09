@@ -185,6 +185,8 @@ function showLogin() {
   startLoginCanvas();
 }
 
+let _forcePasswordChange = false;
+
 function showApp(user) {
   const overlay = document.getElementById("login-overlay");
   overlay.classList.add("hidden");
@@ -195,6 +197,11 @@ function showApp(user) {
   if (chip)
     chip.textContent =
       (user?.username || "") + (user?.role === "admin" ? " ◊" : "");
+
+  if (user?.must_change_password) {
+    showChangePasswordModal(true);
+  }
+
   initApp();
 }
 
@@ -383,17 +390,27 @@ async function doReset() {
   }
 }
 
-function showChangePasswordModal() {
+function showChangePasswordModal(force = false) {
   const modal = document.getElementById("change-pw-modal");
   document.getElementById("cpw-current").value = "";
   document.getElementById("cpw-new").value = "";
   document.getElementById("cpw-confirm").value = "";
   document.getElementById("change-pw-error").classList.add("hidden");
   document.getElementById("change-pw-success").classList.add("hidden");
+
+  if (force === true) {
+    _forcePasswordChange = true;
+    document.getElementById("cpw-close-btn").classList.add("hidden");
+  } else {
+    _forcePasswordChange = false;
+    document.getElementById("cpw-close-btn").classList.remove("hidden");
+  }
+
   modal.classList.remove("hidden");
 }
 
 function closeChangePasswordModal() {
+  if (_forcePasswordChange) return;
   document.getElementById("change-pw-modal").classList.add("hidden");
 }
 
@@ -450,6 +467,12 @@ async function doChangePassword() {
       document.getElementById("cpw-current").value = "";
       document.getElementById("cpw-new").value = "";
       document.getElementById("cpw-confirm").value = "";
+
+      if (_forcePasswordChange) {
+        _forcePasswordChange = false;
+        document.getElementById("cpw-close-btn").classList.remove("hidden");
+      }
+
       setTimeout(closeChangePasswordModal, 1500);
     }
   } catch (e) {

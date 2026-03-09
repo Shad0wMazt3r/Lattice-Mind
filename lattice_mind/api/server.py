@@ -547,6 +547,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     username: str
     role: str
+    must_change_password: bool = False
 
 
 @app.post("/auth/login", response_model=TokenResponse)
@@ -555,8 +556,20 @@ async def auth_login(payload: AuthRequest):
     if not user or not _verify_pw(payload.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     token = _make_token({"sub": user["username"], "role": user["role"]})
+
+    must_change_password = False
+    admin_user = os.environ.get("LATTICE_MIND_ADMIN_USER", "admin")
+    admin_pass = os.environ.get("LATTICE_MIND_ADMIN_PASS", "admin")
+    if user["username"] == admin_user and _verify_pw(
+        admin_pass, user["hashed_password"]
+    ):
+        must_change_password = True
+
     return TokenResponse(
-        access_token=token, username=user["username"], role=user["role"]
+        access_token=token,
+        username=user["username"],
+        role=user["role"],
+        must_change_password=must_change_password,
     )
 
 
@@ -626,7 +639,25 @@ async def auth_me(request: Request):
     payload = _decode_token(auth[7:]) if auth.startswith("Bearer ") else None
     if not payload:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return {"username": payload.get("sub"), "role": payload.get("role")}
+
+    username = payload.get("sub")
+    user = _db_get_user(username)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    must_change_password = False
+    admin_user = os.environ.get("LATTICE_MIND_ADMIN_USER", "admin")
+    admin_pass = os.environ.get("LATTICE_MIND_ADMIN_PASS", "admin")
+    if user["username"] == admin_user and _verify_pw(
+        admin_pass, user["hashed_password"]
+    ):
+        must_change_password = True
+
+    return {
+        "username": username,
+        "role": user["role"],
+        "must_change_password": must_change_password,
+    }
 
 
 class ChangePasswordRequest(BaseModel):
