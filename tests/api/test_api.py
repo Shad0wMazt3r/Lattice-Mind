@@ -1,9 +1,9 @@
 """Sanity tests for the FastAPI interface."""
+
 from fastapi.testclient import TestClient
 
 from lattice_mind.api import server
-from lattice_mind.core.types import ChallengeType, ChallengeDescriptor
-
+from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
 
 client = TestClient(server.app)
 
@@ -35,9 +35,18 @@ def test_solve_endpoint(monkeypatch):
         state = server.get_run_state(run_id)
         assert state
         state.update(status="running", started_at="now")
-        state.add_step({"event": "node_start", "node_name": "asset_classify", "timestamp": "now"})
+        state.add_step(
+            {"event": "node_start", "node_name": "asset_classify", "timestamp": "now"}
+        )
         flag, raw_log = fake_execute(descriptor)
-        state.add_step({"event": "node_end", "node_name": "asset_classify", "status": "success", "timestamp": "now"})
+        state.add_step(
+            {
+                "event": "node_end",
+                "node_name": "asset_classify",
+                "status": "success",
+                "timestamp": "now",
+            }
+        )
         state.update(
             status="success",
             flag=flag,
@@ -48,6 +57,11 @@ def test_solve_endpoint(monkeypatch):
     monkeypatch.setattr(server, "_execute_solver", fake_execute)
     monkeypatch.setattr(server, "_start_solver_task", fake_start_solver)
 
+    def fake_decode_token(token: str):
+        return {"sub": "admin", "role": "admin"}
+
+    monkeypatch.setattr(server, "_decode_token", fake_decode_token)
+
     payload = {
         "challenge_type": ChallengeType.WEB.value,
         "name": "Demo",
@@ -55,14 +69,15 @@ def test_solve_endpoint(monkeypatch):
         "metadata": {"description": "demo"},
     }
 
-    response = client.post("/solve", json=payload)
+    headers = {"Authorization": "Bearer fake_token"}
+    response = client.post("/solve", json=payload, headers=headers)
     assert response.status_code == 200
 
     submission = response.json()
     assert submission["status"] in ("queued", "success", "completed")
     run_id = submission["run_id"]
 
-    run_status = client.get(f"/runs/{run_id}")
+    run_status = client.get(f"/runs/{run_id}", headers=headers)
     assert run_status.status_code == 200
 
     body = run_status.json()

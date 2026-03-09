@@ -2,6 +2,17 @@ services:
   # ── Production ─────────────────────────────────────────────────────────────
   # DO App Platform ignores docker-compose entirely (builds from Dockerfile).
   # If deploying via docker compose on a Droplet: docker compose --profile prod up
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    environment:
+      MP_MAX_MESSAGES: 500
+    profiles:
+      - prod
+      - dev
+
   lattice-mind-api:
     build:
       context: .
@@ -12,6 +23,8 @@ services:
     environment:
       LATTICE_MIND_LOG_LEVEL: info
       LATTICE_MIND_DB: /data/runs.db
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
     volumes:
       - lattice-mind-data:/data
     profiles:
@@ -40,6 +53,8 @@ services:
     environment:
       LATTICE_MIND_LOG_LEVEL: debug
       LATTICE_MIND_DB: /data/runs.db
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
     volumes:
       # Live-mount the entire project — edits on disk = live in container
       - .:/app

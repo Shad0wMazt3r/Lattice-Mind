@@ -149,6 +149,11 @@ async function apiFetch(url, opts = {}) {
 }
 
 async function checkAuth() {
+  if (window.location.hash.startsWith("#reset=")) {
+    clearAuth();
+    showLogin();
+    return;
+  }
   if (!_authToken) {
     showLogin();
     return;
@@ -174,6 +179,9 @@ function showLogin() {
   document.getElementById("login-overlay").classList.remove("hidden");
   document.getElementById("app-root").classList.add("hidden");
   document.getElementById("auth-username")?.focus();
+  if (window.location.hash.startsWith("#reset=")) {
+    showAuthTab("reset");
+  }
   startLoginCanvas();
 }
 
@@ -199,17 +207,20 @@ function doLogout() {
 }
 
 function showAuthTab(tab) {
-  const isLogin = tab === "login";
-  document
-    .getElementById("auth-form-login")
-    .classList.toggle("hidden", !isLogin);
-  document
-    .getElementById("auth-form-register")
-    .classList.toggle("hidden", isLogin);
-  document.getElementById("auth-tab-login").classList.toggle("active", isLogin);
-  document
-    .getElementById("auth-tab-register")
-    .classList.toggle("active", !isLogin);
+  const forms = ["login", "register", "forgot", "reset"];
+  forms.forEach((f) => {
+    const el = document.getElementById("auth-form-" + f);
+    if (el) el.classList.toggle("hidden", tab !== f);
+  });
+
+  const tabL = document.getElementById("auth-tab-login");
+  const tabR = document.getElementById("auth-tab-register");
+  if (tabL)
+    tabL.classList.toggle(
+      "active",
+      tab === "login" || tab === "forgot" || tab === "reset",
+    );
+  if (tabR) tabR.classList.toggle("active", tab === "register");
   setAuthError("");
 }
 
@@ -268,9 +279,10 @@ async function doLogin() {
 
 async function doRegister() {
   const username = document.getElementById("reg-username").value.trim();
+  const email = document.getElementById("reg-email").value.trim();
   const password = document.getElementById("reg-password").value;
   const password2 = document.getElementById("reg-password2").value;
-  if (!username || !password) {
+  if (!username || !email || !password) {
     setAuthError("All fields required.");
     return;
   }
@@ -293,7 +305,7 @@ async function doRegister() {
     const r = await fetch("/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, email }),
     });
     if (!r.ok) {
       const d = await r.json();
@@ -305,6 +317,144 @@ async function doRegister() {
     showApp({ username: data.username, role: data.role });
   } catch (e) {
     setAuthError("Network error. Is the server running?");
+  } finally {
+    btn.disabled = false;
+    txt.classList.remove("hidden");
+    spn.classList.add("hidden");
+  }
+}
+
+async function doForgot() {
+  const email = document.getElementById("forgot-email").value.trim();
+  if (!email) {
+    setAuthError("Email required.");
+    return;
+  }
+  const btn = document.getElementById("forgot-submit-btn");
+  btn.disabled = true;
+  setAuthError("");
+  try {
+    const r = await fetch("/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      setAuthError(d.detail);
+      return;
+    }
+    setAuthError(d.detail); // Shows success message in the error area
+  } catch (e) {
+    setAuthError("Network error.");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function doReset() {
+  const new_password = document.getElementById("reset-password").value;
+  if (new_password.length < 6) {
+    setAuthError("Password must be at least 6 characters.");
+    return;
+  }
+  const token = window.location.hash.replace("#reset=", "");
+  const btn = document.getElementById("reset-submit-btn");
+  btn.disabled = true;
+  setAuthError("");
+  try {
+    const r = await fetch("/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, new_password }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      setAuthError(d.detail);
+      return;
+    }
+    window.location.hash = "";
+    showAuthTab("login");
+    setAuthError("Password reset successful. Please login.");
+  } catch (e) {
+    setAuthError("Network error.");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showChangePasswordModal() {
+  const modal = document.getElementById("change-pw-modal");
+  document.getElementById("cpw-current").value = "";
+  document.getElementById("cpw-new").value = "";
+  document.getElementById("cpw-confirm").value = "";
+  document.getElementById("change-pw-error").classList.add("hidden");
+  document.getElementById("change-pw-success").classList.add("hidden");
+  modal.classList.remove("hidden");
+}
+
+function closeChangePasswordModal() {
+  document.getElementById("change-pw-modal").classList.add("hidden");
+}
+
+async function doChangePassword() {
+  const current_password = document.getElementById("cpw-current").value;
+  const new_password = document.getElementById("cpw-new").value;
+  const confirm_password = document.getElementById("cpw-confirm").value;
+
+  const errEl = document.getElementById("change-pw-error");
+  const sucEl = document.getElementById("change-pw-success");
+  errEl.classList.add("hidden");
+  sucEl.classList.add("hidden");
+
+  if (!current_password || !new_password || !confirm_password) {
+    errEl.textContent = "All fields are required.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  if (new_password !== confirm_password) {
+    errEl.textContent = "New passwords do not match.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  if (new_password.length < 6) {
+    errEl.textContent = "New password must be at least 6 characters.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+
+  const btn = document.getElementById("cpw-submit-btn");
+  const txt = document.getElementById("cpw-btn-text");
+  const spn = document.getElementById("cpw-btn-spinner");
+
+  btn.disabled = true;
+  txt.classList.add("hidden");
+  spn.classList.remove("hidden");
+
+  try {
+    const r = await fetch("/auth/change-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + _authToken,
+      },
+      body: JSON.stringify({ current_password, new_password }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      errEl.textContent = d.detail || "Failed to change password.";
+      errEl.classList.remove("hidden");
+    } else {
+      sucEl.textContent = d.detail || "Password changed successfully.";
+      sucEl.classList.remove("hidden");
+      document.getElementById("cpw-current").value = "";
+      document.getElementById("cpw-new").value = "";
+      document.getElementById("cpw-confirm").value = "";
+      setTimeout(closeChangePasswordModal, 1500);
+    }
+  } catch (e) {
+    errEl.textContent = "Network error.";
+    errEl.classList.remove("hidden");
   } finally {
     btn.disabled = false;
     txt.classList.remove("hidden");

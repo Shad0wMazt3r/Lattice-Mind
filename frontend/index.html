@@ -76,6 +76,18 @@
             <span id="login-btn-text">ACCESS SYSTEM</span>
             <span id="login-btn-spinner" class="btn-spinner hidden"></span>
           </button>
+          <div style="text-align: center; margin-top: 10px">
+            <a
+              href="#"
+              class="auth-note"
+              onclick="
+                showAuthTab('forgot');
+                return false;
+              "
+              style="text-decoration: underline"
+              >Forgot Password?</a
+            >
+          </div>
         </div>
         <div id="auth-form-register" class="hidden">
           <div class="field">
@@ -85,6 +97,16 @@
               type="text"
               placeholder="operator"
               autocomplete="username"
+              onkeydown="if (event.key === 'Enter') doRegister();"
+            />
+          </div>
+          <div class="field">
+            <label>EMAIL</label>
+            <input
+              id="reg-email"
+              type="email"
+              placeholder="operator@system.local"
+              autocomplete="email"
               onkeydown="if (event.key === 'Enter') doRegister();"
             />
           </div>
@@ -118,6 +140,60 @@
           </button>
           <p class="auth-note">First account will receive admin privileges.</p>
         </div>
+        <div id="auth-form-forgot" class="hidden">
+          <h4 style="text-align: center; margin-bottom: 10px">
+            RESET PASSWORD
+          </h4>
+          <div class="field">
+            <label>EMAIL</label>
+            <input
+              id="forgot-email"
+              type="email"
+              placeholder="operator@system.local"
+              onkeydown="if (event.key === 'Enter') doForgot();"
+            />
+          </div>
+          <button
+            class="btn btn-full"
+            id="forgot-submit-btn"
+            onclick="doForgot()"
+          >
+            <span id="forgot-btn-text">SEND RESET LINK</span>
+            <span id="forgot-btn-spinner" class="btn-spinner hidden"></span>
+          </button>
+          <div style="text-align: center; margin-top: 10px">
+            <a
+              href="#"
+              class="auth-note"
+              onclick="
+                showAuthTab('login');
+                return false;
+              "
+              style="text-decoration: underline"
+              >Back to Login</a
+            >
+          </div>
+        </div>
+        <div id="auth-form-reset" class="hidden">
+          <h4 style="text-align: center; margin-bottom: 10px">NEW PASSWORD</h4>
+          <div class="field">
+            <label>NEW PASSWORD</label>
+            <input
+              id="reset-password"
+              type="password"
+              placeholder="min 6 chars"
+              onkeydown="if (event.key === 'Enter') doReset();"
+            />
+          </div>
+          <button
+            class="btn btn-full"
+            id="reset-submit-btn"
+            onclick="doReset()"
+          >
+            <span id="reset-btn-text">UPDATE PASSWORD</span>
+            <span id="reset-btn-spinner" class="btn-spinner hidden"></span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -137,6 +213,14 @@
           <span class="flag-dot flag-dot-off" id="dirscan-dot"></span>DIR SCAN
         </span>
         <span id="hdr-clock"></span>
+        <button
+          class="btn btn-sm"
+          id="hdr-change-pw"
+          onclick="showChangePasswordModal()"
+          title="Change Password"
+        >
+          CHANGE PW
+        </button>
         <button
           class="btn btn-sm btn-danger"
           id="hdr-logout"
@@ -475,6 +559,54 @@
         <!-- /main-content -->
       </div>
       <!-- /layout -->
+
+      <!-- CHANGE PASSWORD MODAL -->
+      <div id="change-pw-modal" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width: 400px; height: auto">
+          <div class="modal-hdr">
+            <span class="modal-title-text">CHANGE PASSWORD</span>
+            <button class="btn btn-sm" onclick="closeChangePasswordModal()">
+              &#x2715; CLOSE
+            </button>
+          </div>
+          <div style="padding: 16px">
+            <div
+              id="change-pw-error"
+              class="hidden"
+              style="color: var(--red); margin-bottom: 12px; text-align: center"
+            ></div>
+            <div
+              id="change-pw-success"
+              class="hidden"
+              style="
+                color: var(--green);
+                margin-bottom: 12px;
+                text-align: center;
+              "
+            ></div>
+            <div class="field">
+              <label for="cpw-current">CURRENT PASSWORD</label>
+              <input id="cpw-current" type="password" />
+            </div>
+            <div class="field">
+              <label for="cpw-new">NEW PASSWORD</label>
+              <input id="cpw-new" type="password" />
+            </div>
+            <div class="field">
+              <label for="cpw-confirm">CONFIRM NEW PASSWORD</label>
+              <input id="cpw-confirm" type="password" />
+            </div>
+            <button
+              class="btn btn-full"
+              id="cpw-submit-btn"
+              onclick="doChangePassword()"
+            >
+              <span id="cpw-btn-text">UPDATE PASSWORD</span>
+              <span id="cpw-btn-spinner" class="btn-spinner hidden"></span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- RUN DETAIL MODAL -->
       <div id="run-detail-modal" class="modal-overlay hidden">
