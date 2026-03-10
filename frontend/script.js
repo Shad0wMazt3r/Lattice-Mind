@@ -117,8 +117,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 // ── Auth ─────────────────────────────────────────────────────────────
-let _authToken = localStorage.getItem("lm_auth_token") || null;
-let _authUser = JSON.parse(localStorage.getItem("lm_auth_user") || "null");
+// SECURITY: Using sessionStorage instead of localStorage to mitigate XSS token theft
+// sessionStorage is cleared when tab closes, reducing attack window
+let _authToken = sessionStorage.getItem("lm_auth_token") || null;
+let _authUser = JSON.parse(sessionStorage.getItem("lm_auth_user") || "null");
+let _sessionTimeout = null;
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 function getToken() {
   return _authToken;
@@ -126,14 +130,49 @@ function getToken() {
 function setAuth(token, user) {
   _authToken = token;
   _authUser = user;
-  localStorage.setItem("lm_auth_token", token);
-  localStorage.setItem("lm_auth_user", JSON.stringify(user));
+  sessionStorage.setItem("lm_auth_token", token);
+  sessionStorage.setItem("lm_auth_user", JSON.stringify(user));
+  // SECURITY: Start session timeout timer
+  resetSessionTimeout();
 }
 function clearAuth() {
   _authToken = null;
   _authUser = null;
-  localStorage.removeItem("lm_auth_token");
-  localStorage.removeItem("lm_auth_user");
+  sessionStorage.removeItem("lm_auth_token");
+  sessionStorage.removeItem("lm_auth_user");
+  // Clear session timeout
+  if (_sessionTimeout) {
+    clearTimeout(_sessionTimeout);
+    _sessionTimeout = null;
+  }
+}
+
+// ── Session Timeout (Security) ───────────────────────────────────────
+function resetSessionTimeout() {
+  // Clear existing timeout
+  if (_sessionTimeout) {
+    clearTimeout(_sessionTimeout);
+  }
+  // Set new timeout
+  _sessionTimeout = setTimeout(() => {
+    if (_authToken) {
+      clearAuth();
+      alert("Your session has expired due to inactivity. Please log in again.");
+      showLogin();
+    }
+  }, SESSION_TIMEOUT_MS);
+}
+
+// Reset session timeout on user activity
+function setupActivityListeners() {
+  const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+  events.forEach(event => {
+    document.addEventListener(event, () => {
+      if (_authToken) {
+        resetSessionTimeout();
+      }
+    }, { passive: true });
+  });
 }
 
 async function apiFetch(url, opts = {}) {
@@ -202,6 +241,9 @@ function showApp(user) {
     showChangePasswordModal(true);
   }
 
+  // SECURITY: Setup activity listeners for session timeout
+  setupActivityListeners();
+
   initApp();
 }
 
@@ -247,9 +289,110 @@ function setAuthError(msg) {
   el.style.animation = "";
 }
 
+// ── Input Validation (Security) ──────────────────────────────────────
+function validateUsername(username) {
+  if (username.length < 2 || username.length > 50) {
+    return "Username must be 2-50 characters";
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+    return "Username can only contain letters, numbers, _ and -";
+  }
+  return null;
+}
+
+function validateEmail(email) {
+  if (!email || email.length < 3 || email.length > 254) {
+    return "Email must be 3-254 characters";
+  }
+  // Basic email validation
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return "Invalid email format";
+  }
+  return null;
+}
+
+function validatePassword(password) {
+  if (password.length < 8) {
+    return "Password must be at least 8 characters";
+  }
+  if (password.length > 128) {
+    return "Password must be less than 128 characters";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "Password must contain at least one uppercase letter";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "Password must contain at least one lowercase letter";
+  }
+  if (!/[0-9]/.test(password)) {
+    return "Password must contain at least one number";
+  }
+  // Check against common passwords list
+  const common = ["password", "12345678", "admin123", "password123", "qwerty123"];
+  if (common.includes(password.toLowerCase())) {
+    return "Password is too common";
+  }
+  return null;
+}
+
+function validateURL(url) {
+  if (!url) return null; // Allow empty for optional fields
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return "URL must use HTTP or HTTPS protocol";
+    }
+    // Prevent SSRF attacks by blocking localhost
+    if (parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname.startsWith("192.168.") ||
+        parsed.hostname.startsWith("10.") ||
+        parsed.hostname.startsWith("172.")) {
+      return "Cannot target internal/private network addresses";
+    }
+    return null;
+  } catch (e) {
+    return "Invalid URL format";
+  }
+}
+
+// ── Authentication Rate Limiting ─────────────────────────────────────
+let loginAttempts = 0;
+let loginLockoutUntil = null;
+
+function checkRateLimit() {
+  if (loginLockoutUntil && Date.now() < loginLockoutUntil) {
+    const remainingSeconds = Math.ceil((loginLockoutUntil - Date.now()) / 1000);
+    return `Too many attempts. Try again in ${remainingSeconds}s`;
+  }
+  return null;
+}
+
+function recordFailedLogin() {
+  loginAttempts++;
+  // Exponential backoff after 3 attempts
+  if (loginAttempts >= 3) {
+    const delay = Math.min(Math.pow(2, loginAttempts - 3) * 5000, 60000); // Max 60s
+    loginLockoutUntil = Date.now() + delay;
+  }
+}
+
+function resetLoginAttempts() {
+  loginAttempts = 0;
+  loginLockoutUntil = null;
+}
+
 async function doLogin() {
+  // Check rate limit
+  const rateLimitError = checkRateLimit();
+  if (rateLimitError) {
+    setAuthError(rateLimitError);
+    return;
+  }
+
   const username = document.getElementById("auth-username").value.trim();
   const password = document.getElementById("auth-password").value;
+
   if (!username || !password) {
     setAuthError("Username and password required.");
     return;
@@ -268,15 +411,29 @@ async function doLogin() {
       body: JSON.stringify({ username, password }),
     });
     if (!r.ok) {
-      const d = await r.json();
-      setAuthError(d.detail || "Login failed.");
+      // SECURITY: Generic error messages to prevent user enumeration
+      recordFailedLogin();
+      if (r.status === 401 || r.status === 403) {
+        setAuthError("Invalid username or password.");
+      } else if (r.status === 429) {
+        setAuthError("Too many attempts. Please try again later.");
+      } else {
+        setAuthError("Login failed. Please try again.");
+      }
+      // Log detailed error for debugging (not shown to user)
+      const d = await r.json().catch(() => ({}));
+      console.error("Login failed:", d);
       return;
     }
     const data = await r.json();
+    resetLoginAttempts(); // Reset on successful login
     setAuth(data.access_token, { username: data.username, role: data.role });
     showApp({ username: data.username, role: data.role });
   } catch (e) {
-    setAuthError("Network error. Is the server running?");
+    recordFailedLogin();
+    // SECURITY: Generic network error message
+    setAuthError("Unable to connect. Please check your connection.");
+    console.error("Network error:", e);
   } finally {
     btn.disabled = false;
     txt.classList.remove("hidden");
@@ -289,18 +446,36 @@ async function doRegister() {
   const email = document.getElementById("reg-email").value.trim();
   const password = document.getElementById("reg-password").value;
   const password2 = document.getElementById("reg-password2").value;
+
+  // SECURITY: Comprehensive input validation
   if (!username || !email || !password) {
     setAuthError("All fields required.");
     return;
   }
+
+  const usernameError = validateUsername(username);
+  if (usernameError) {
+    setAuthError(usernameError);
+    return;
+  }
+
+  const emailError = validateEmail(email);
+  if (emailError) {
+    setAuthError(emailError);
+    return;
+  }
+
+  const passwordError = validatePassword(password);
+  if (passwordError) {
+    setAuthError(passwordError);
+    return;
+  }
+
   if (password !== password2) {
     setAuthError("Passwords do not match.");
     return;
   }
-  if (password.length < 6) {
-    setAuthError("Password must be at least 6 characters.");
-    return;
-  }
+
   const btn = document.getElementById("register-submit-btn");
   const txt = document.getElementById("register-btn-text");
   const spn = document.getElementById("register-btn-spinner");
@@ -315,15 +490,26 @@ async function doRegister() {
       body: JSON.stringify({ username, password, email }),
     });
     if (!r.ok) {
-      const d = await r.json();
-      setAuthError(d.detail || "Registration failed.");
+      // SECURITY: Generic error messages
+      if (r.status === 409) {
+        setAuthError("Username or email already exists.");
+      } else if (r.status === 400) {
+        setAuthError("Invalid registration data. Please check your inputs.");
+      } else {
+        setAuthError("Registration failed. Please try again.");
+      }
+      // Log detailed error for debugging (not shown to user)
+      const d = await r.json().catch(() => ({}));
+      console.error("Registration failed:", d);
       return;
     }
     const data = await r.json();
     setAuth(data.access_token, { username: data.username, role: data.role });
     showApp({ username: data.username, role: data.role });
   } catch (e) {
-    setAuthError("Network error. Is the server running?");
+    // SECURITY: Generic network error message
+    setAuthError("Unable to connect. Please check your connection.");
+    console.error("Network error:", e);
   } finally {
     btn.disabled = false;
     txt.classList.remove("hidden");
@@ -703,20 +889,36 @@ async function submitChallenge() {
 }
 
 //  WebSockets
+// SECURITY: Send token after connection instead of in URL to avoid logging in browser history
 function connectWebSocket(runId) {
   if (ws) ws.close();
-  const token = getToken() || "";
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(
-    `${protocol}//${window.location.host}/ws/${runId}?token=${encodeURIComponent(token)}`,
+    `${protocol}//${window.location.host}/ws/${runId}`,
   );
+
+  ws.onopen = () => {
+    // Send authentication token as first message after connection
+    const token = getToken();
+    if (token) {
+      ws.send(JSON.stringify({
+        type: "auth",
+        token: token
+      }));
+    }
+  };
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
-    if (msg.type === "init" || msg.type === "update") {
+    if (msg.type === "auth_success") {
+      console.log("WebSocket authenticated");
+    } else if (msg.type === "init" || msg.type === "update") {
       updateActiveRunUI(msg.data);
     } else if (msg.type === "step") {
       fetchRunState(runId);
+    } else if (msg.type === "auth_failed") {
+      console.error("WebSocket authentication failed");
+      ws.close();
     }
   };
 
