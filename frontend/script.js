@@ -112,9 +112,228 @@ document.addEventListener("DOMContentLoaded", async () => {
     500,
     "lm_intel_h",
   );
+  // SECURITY: Setup event delegation to avoid inline handlers
+  setupEventDelegation();
   await bootSequence();
   await checkAuth();
 });
+
+// ── Event Delegation Setup (Security) ────────────────────────────────
+// SECURITY: Remove all inline event handlers and use event delegation instead
+function setupEventDelegation() {
+  // Auth tab switching
+  const authTabLogin = document.getElementById("auth-tab-login");
+  const authTabRegister = document.getElementById("auth-tab-register");
+  if (authTabLogin) authTabLogin.addEventListener("click", () => showAuthTab("login"));
+  if (authTabRegister) authTabRegister.addEventListener("click", () => showAuthTab("register"));
+
+  // Login form
+  const authUsername = document.getElementById("auth-username");
+  const authPassword = document.getElementById("auth-password");
+  const loginBtn = document.getElementById("login-submit-btn");
+  if (authUsername) authUsername.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doLogin();
+  });
+  if (authPassword) authPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doLogin();
+  });
+  if (loginBtn) loginBtn.addEventListener("click", doLogin);
+
+  // Register form
+  const regUsername = document.getElementById("reg-username");
+  const regEmail = document.getElementById("reg-email");
+  const regPassword = document.getElementById("reg-password");
+  const regPassword2 = document.getElementById("reg-password2");
+  const registerBtn = document.getElementById("register-submit-btn");
+  if (regUsername) regUsername.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doRegister();
+  });
+  if (regEmail) regEmail.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doRegister();
+  });
+  if (regPassword) regPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doRegister();
+  });
+  if (regPassword2) regPassword2.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doRegister();
+  });
+  if (registerBtn) registerBtn.addEventListener("click", doRegister);
+
+  // Forgot password
+  const forgotEmail = document.getElementById("forgot-email");
+  const forgotBtn = document.getElementById("forgot-submit-btn");
+  if (forgotEmail) forgotEmail.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doForgot();
+  });
+  if (forgotBtn) forgotBtn.addEventListener("click", doForgot);
+
+  // Reset password
+  const resetPassword = document.getElementById("reset-password");
+  const resetBtn = document.getElementById("reset-submit-btn");
+  if (resetPassword) resetPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doReset();
+  });
+  if (resetBtn) resetBtn.addEventListener("click", doReset);
+
+  // Header buttons
+  const hitlBadge = document.getElementById("hdr-hitl-badge");
+  const dirScanToggle = document.getElementById("hdr-dirscan-toggle");
+  const changePasswordBtn = document.getElementById("hdr-chpwd");
+  const logoutBtn = document.getElementById("hdr-logout");
+  if (hitlBadge) hitlBadge.addEventListener("click", () => switchTab("hitl"));
+  if (dirScanToggle) dirScanToggle.addEventListener("click", toggleDirScan);
+  if (changePasswordBtn) changePasswordBtn.addEventListener("click", () => showChangePasswordModal());
+  if (logoutBtn) logoutBtn.addEventListener("click", doLogout);
+
+  // Challenge form
+  const chType = document.getElementById("ch-type");
+  const solveBtn = document.getElementById("solve-btn");
+  if (chType) chType.addEventListener("change", onTypeChange);
+  if (solveBtn) solveBtn.addEventListener("click", submitChallenge);
+
+  // Tab buttons - use event delegation on parent
+  const tabsBar = document.getElementById("tabs-bar");
+  if (tabsBar) {
+    tabsBar.addEventListener("click", (e) => {
+      if (e.target.classList.contains("tab-btn")) {
+        const tabName = e.target.textContent.trim().toLowerCase().split("[")[0].trim();
+        const tabMap = {
+          "active run": "active",
+          "history": "history",
+          "hitl": "hitl",
+          "rules": "rules",
+          "crypto tools": "crypto"
+        };
+        if (tabMap[tabName]) switchTab(tabMap[tabName]);
+      }
+    });
+  }
+
+  // History search and refresh
+  const historySearch = document.getElementById("history-search");
+  const historyRefresh = document.querySelector("#history-panel .btn-sm");
+  if (historySearch) historySearch.addEventListener("input", filterHistory);
+  if (historyRefresh && historyRefresh.textContent.includes("REFRESH")) {
+    historyRefresh.addEventListener("click", loadHistory);
+  }
+
+  // Rules search and reload
+  const rulesSearch = document.getElementById("rules-search");
+  const rulesReload = document.querySelector("#tab-rules .btn-sm");
+  if (rulesSearch) rulesSearch.addEventListener("input", filterRules);
+  if (rulesReload && rulesReload.textContent.includes("RELOAD")) {
+    rulesReload.addEventListener("click", reloadRules);
+  }
+
+  // Crypto solve button
+  const crType = document.getElementById("cr-type");
+  const cryptoSolveBtn = document.querySelector("#crypto-panel .btn-full");
+  if (crType) crType.addEventListener("change", onCrTypeChange);
+  if (cryptoSolveBtn && cryptoSolveBtn.textContent.includes("SOLVE")) {
+    cryptoSolveBtn.addEventListener("click", cryptoSolve);
+  }
+
+  // Change password modal
+  const cpwdCloseBtn = document.getElementById("cpwd-close-btn");
+  const cpwdSubmitBtn = document.getElementById("cpwd-submit-btn");
+  if (cpwdCloseBtn) cpwdCloseBtn.addEventListener("click", closeChangePasswordModal);
+  if (cpwdSubmitBtn) cpwdSubmitBtn.addEventListener("click", doChangePassword);
+
+  // Run modal close button
+  const runModalClose = document.getElementById("run-modal-close-btn");
+  if (runModalClose) runModalClose.addEventListener("click", closeRunModal);
+
+  // Modal tabs - use event delegation
+  const modalTabsBar = document.getElementById("run-modal-tabs");
+  if (modalTabsBar) {
+    modalTabsBar.addEventListener("click", (e) => {
+      if (e.target.classList.contains("modal-tab")) {
+        const tabName = e.target.textContent.trim().toLowerCase();
+        switchModalTab(tabName);
+      }
+    });
+  }
+
+  // Forgot password link
+  const forgotLink = document.querySelector('a[href="#"]');
+  if (forgotLink && forgotLink.textContent.includes("Forgot Password")) {
+    forgotLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      showAuthTab("forgot");
+    });
+  }
+
+  // Back to login link
+  const backLinks = document.querySelectorAll(".auth-note");
+  backLinks.forEach(link => {
+    if (link.textContent.includes("Back to Login")) {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        showAuthTab("login");
+      });
+    }
+  });
+
+  // SECURITY: Global event delegation for dynamically generated buttons
+  document.addEventListener("click", (e) => {
+    const target = e.target;
+
+    // View run
+    if (target.classList.contains("view-run") || target.closest(".view-run")) {
+      const el = target.classList.contains("view-run") ? target : target.closest(".view-run");
+      const runId = el.dataset.runId;
+      if (runId) viewRun(runId);
+    }
+
+    // Open run modal
+    if (target.classList.contains("open-run-modal") || target.closest(".open-run-modal")) {
+      const el = target.classList.contains("open-run-modal") ? target : target.closest(".open-run-modal");
+      const runId = el.dataset.runId;
+      if (runId) openRunModal(runId);
+    }
+
+    // Rerun challenge
+    if (target.classList.contains("rerun-challenge") || target.closest(".rerun-challenge")) {
+      const el = target.classList.contains("rerun-challenge") ? target : target.closest(".rerun-challenge");
+      const runId = el.dataset.runId;
+      if (runId) rerunChallenge(runId);
+    }
+
+    // View rule
+    if (target.classList.contains("view-rule") || target.closest(".view-rule")) {
+      const el = target.classList.contains("view-rule") ? target : target.closest(".view-rule");
+      const ruleId = el.dataset.ruleId;
+      if (ruleId) viewRule(ruleId);
+    }
+
+    // Toggle rule
+    if (target.classList.contains("toggle-rule") || target.closest(".toggle-rule")) {
+      const el = target.classList.contains("toggle-rule") ? target : target.closest(".toggle-rule");
+      const ruleId = el.dataset.ruleId;
+      const enabled = el.dataset.enabled === "true";
+      if (ruleId) toggleRule(ruleId, enabled);
+    }
+
+    // Answer HITL
+    if (target.classList.contains("answer-hitl") || target.closest(".answer-hitl")) {
+      const el = target.classList.contains("answer-hitl") ? target : target.closest(".answer-hitl");
+      const questionId = el.dataset.questionId;
+      if (questionId) answerHITL(questionId);
+    }
+
+    // Copy to clipboard
+    if (target.classList.contains("copy-to-clipboard") || target.closest(".copy-to-clipboard")) {
+      const el = target.classList.contains("copy-to-clipboard") ? target : target.closest(".copy-to-clipboard");
+      const content = el.dataset.copyContent;
+      if (content) navigator.clipboard.writeText(content);
+    }
+
+    // Toggle step data
+    if (target.classList.contains("modal-step") && target.dataset.toggleId) {
+      toggleStepData(target.dataset.toggleId);
+    }
+  });
+}
 
 // ── Auth ─────────────────────────────────────────────────────────────
 // SECURITY: Using sessionStorage instead of localStorage to mitigate XSS token theft
@@ -1126,7 +1345,7 @@ function renderTree({ nodes, rootIds, width, height }) {
     const label =
       node.name.length > 20 ? node.name.slice(0, 19) + "…" : node.name;
     html +=
-      `<g onclick="selectNode('${esc(node.id)}')">` +
+      `<g class="tree-node" data-node-id="${esc(node.id)}">` +
       `<rect class="tree-node-rect" x="${node.x}" y="${node.y}" width="${NODE_W}" height="${NODE_H}" rx="4" fill="${sf}" stroke="${sc}" stroke-width="${node.status === "running" ? 2 : 1}"/>` +
       `<text x="${node.x + NODE_W / 2}" y="${node.y + 18}" fill="${sc}" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle" dominant-baseline="middle">${esc(label)}</text>` +
       `<text x="${node.x + NODE_W / 2}" y="${node.y + 32}" fill="#5a5f72" font-family="JetBrains Mono,monospace" font-size="9" text-anchor="middle" dominant-baseline="middle">${esc(node.status)}</text>` +
@@ -1136,6 +1355,18 @@ function renderTree({ nodes, rootIds, width, height }) {
   svg.innerHTML = html;
   // store for selectNode
   svg._nodes = nodes;
+
+  // SECURITY: Event delegation for tree node clicks instead of inline onclick
+  svg.removeEventListener("click", handleTreeNodeClick); // Remove old listener if any
+  svg.addEventListener("click", handleTreeNodeClick);
+}
+
+function handleTreeNodeClick(e) {
+  const node = e.target.closest(".tree-node");
+  if (node) {
+    const nodeId = node.dataset.nodeId;
+    if (nodeId) selectNode(nodeId);
+  }
 }
 
 //  node inspector
@@ -1192,7 +1423,7 @@ async function loadRecentRuns() {
         const target = ch.url || ch.file_path || ch.name || "";
         const st = run.status || "?";
         const sc = STATUS_COLOR[st] || "#444";
-        return `<div class="run-item${currentRunId === run.run_id ? " active" : ""}" onclick="viewRun('${run.run_id}')">
+        return `<div class="run-item${currentRunId === run.run_id ? " active" : ""}" class="view-run" data-run-id='${run.run_id}'>
         <div class="run-item-top">
           <span class="run-item-id">${run.run_id.slice(0, 8)}</span>
           <span style="color:${sc};font-size:10px">${st}</span>
@@ -1249,9 +1480,9 @@ function renderHistoryTable(rows) {
       <td style="color:var(--dim)">${started}</td>
       <td style="color:var(--dim)">${dur}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-sm" onclick="viewRun('${run.run_id}')">VIEW</button>
-        <button class="btn btn-sm" style="margin-left:4px" onclick="openRunModal('${run.run_id}')">DETAILS</button>
-        <button class="btn btn-sm" style="margin-left:4px" onclick="rerunChallenge('${run.run_id}')">RERUN</button>
+        <button class="btn btn-sm" class="view-run" data-run-id='${run.run_id}'>VIEW</button>
+        <button class="btn btn-sm" style="margin-left:4px" class="open-run-modal" data-run-id='${run.run_id}'>DETAILS</button>
+        <button class="btn btn-sm" style="margin-left:4px" class="rerun-challenge" data-run-id='${run.run_id}'>RERUN</button>
       </td>
     </tr>`;
     })
@@ -1324,7 +1555,7 @@ function renderRulesTable(rules) {
     <td><span style="color:${t.enabled ? "var(--green)" : "var(--red)"}">${t.enabled ? "ENABLED" : "DISABLED"}</span></td>
     <td style="white-space:nowrap">
       <button class="btn btn-sm" onclick="viewRule('${esc(t.id)}')">VIEW</button>
-      <button class="btn btn-sm" style="margin-left:4px" onclick="toggleRule('${esc(t.id)}', ${!t.enabled})">${t.enabled ? "DISABLE" : "ENABLE"}</button>
+      <button class="btn btn-sm" style="margin-left:4px" class="toggle-rule" data-rule-id='${esc(t.id)}' data-enabled=${!t.enabled}>${t.enabled ? "DISABLE" : "ENABLE"}</button>
     </td>
   </tr>`,
     )
