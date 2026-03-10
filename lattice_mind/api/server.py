@@ -377,7 +377,7 @@ async def _auth_middleware(request: Request, call_next):
 _init_db()  # ensure schema exists at import time
 _load_settings()  # restore persisted feature flags
 SECRET_KEY = _get_secret_key()  # load or create persistent JWT secret
-_seed_admin()  # seed default admin if no users
+# _seed_admin()  # seed default admin if no users
 
 solver = MVPSolver()
 solver_lock = asyncio.Lock()

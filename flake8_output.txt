@@ -1,0 +1,2029 @@
+.\.trunk\plugins\trunk\actions\terraform-docs\terraform-docs.py:5:80: E501 line too long (86 > 79 characters)
+.\.trunk\plugins\trunk\actions\terraform-docs\terraform-docs.py:35:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\actions\terraform-docs\terraform-docs.py:41:80: E501 line too long (102 > 79 characters)
+.\.trunk\plugins\trunk\actions\terraform-docs\terraform-docs.py:54:80: E501 line too long (88 > 79 characters)
+.\.trunk\plugins\trunk\actions\terraform-docs\terraform-docs.py:69:80: E501 line too long (85 > 79 characters)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:2:12: E401 multiple imports on one line
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:2:17: E703 statement ends with a semicolon
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:4:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:5:5: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:5:80: E501 line too long (83 > 79 characters)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:15: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:17: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:21: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:26: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:31: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:33: E703 statement ends with a semicolon
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:7:18: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:7:26: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:7:80: E501 line too long (84 > 79 characters)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:5: E128 continuation line under-indented for visual indent
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:12: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:26: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:30: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:34: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:45: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:80: E501 line too long (83 > 79 characters)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:5: E122 continuation line missing indentation or outdented
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:11: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:20: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:65: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:76: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:5: E128 continuation line under-indented for visual indent
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:7: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:11: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:17: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:27: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:1: E302 expected 2 blank lines, found 0
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:50: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:69: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:80: E501 line too long (85 > 79 characters)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:85: E703 statement ends with a semicolon
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:13:1: E302 expected 2 blank lines, found 0
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:13:16: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:13:25: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:14:17: E211 whitespace before '('
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:14:22: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:14:32: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:15:6: E114 indentation is not a multiple of 4 (comment)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:15:6: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:6: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:12: E203 whitespace before ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:13: E701 multiple statements on one line (colon)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:18: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:21: E702 multiple statements on one line (semicolon)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:27: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:31: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:38: E203 whitespace before ';'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:39: E702 multiple statements on one line (semicolon)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:17:6: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:18:21: E117 over-indented
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:2:1: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:4:3: E114 indentation is not a multiple of 4 (comment)
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:4:3: E116 unexpected indentation (comment)
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:4:3: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:5:26: E203 whitespace before ':'
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:6:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:6:7: E117 over-indented
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:6:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:7:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:7:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:7:10: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:7:14: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:8:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:11:7: E124 closing bracket does not match visual indentation
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:12:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\codespell\codespell_to_sarif.py:44:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\codespell\test_data\basic_py.in.py:20:26: E999 SyntaxError: invalid syntax
+.\.trunk\plugins\trunk\linters\cspell\test_data\basic_py.in.py:20:26: E999 SyntaxError: invalid syntax
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:7:1: F401 'sys' imported but unused
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:7:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:7:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:9:80: E501 line too long (93 > 79 characters)
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:10:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:14:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\graphql-schema-linter\parse.py:7:80: E501 line too long (84 > 79 characters)
+.\.trunk\plugins\trunk\linters\graphql-schema-linter\parse.py:44:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:2:1: F401 'my_lib.Object' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:4:1: F401 'os' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:6:1: F401 'my_lib.Object3' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:8:1: F401 'my_lib.Object2' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib15' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib1' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib2' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib4' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib5' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib6' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib7' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib8' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib9' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib10' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib11' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib12' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib13' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib14' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:80: E501 line too long (118 > 79 characters)
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:14:1: F811 redefinition of unused 'sys' from line 10
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:14:1: F401 'sys' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:16:1: F404 from __future__ imports must occur at the beginning of the file
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:18:1: F811 redefinition of unused 'lib3' from line 12
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:18:1: F401 'third_party.lib3' imported but unused
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:56:80: E501 line too long (87 > 79 characters)
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:62:80: E501 line too long (115 > 79 characters)
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:22: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:26: W605 invalid escape sequence '\['
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:30: W605 invalid escape sequence '\]'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:33: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:49: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:53: W605 invalid escape sequence '\d'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:93:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:1:1: F401 'google.protobuf.descriptor_pb2 as d' imported but unused
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:3:1: F401 '.mypy_import2' imported but unused
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:5:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:18:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:20:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:21:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:3:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:5:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:6:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:8:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:9:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\nancy\parse.py:12:80: E501 line too long (163 > 79 characters)
+.\.trunk\plugins\trunk\linters\nancy\parse.py:16:80: E501 line too long (105 > 79 characters)
+.\.trunk\plugins\trunk\linters\nancy\parse.py:17:80: E501 line too long (170 > 79 characters)
+.\.trunk\plugins\trunk\linters\nancy\parse.py:21:80: E501 line too long (209 > 79 characters)
+.\.trunk\plugins\trunk\linters\nancy\parse.py:74:80: E501 line too long (88 > 79 characters)
+.\.trunk\plugins\trunk\linters\nancy\parse.py:79:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:9:80: E501 line too long (152 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:10:80: E501 line too long (98 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:23:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:88:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:96:80: E501 line too long (149 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:98:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:135:80: E501 line too long (88 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:137:80: E501 line too long (113 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:139:26: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:139:47: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:149:80: E501 line too long (86 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:166:80: E501 line too long (170 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:169:80: E501 line too long (82 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:185:80: E501 line too long (82 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:191:80: E501 line too long (82 > 79 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:194:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\phpstan\phpstan_parser.py:27:80: E501 line too long (94 > 79 characters)
+.\.trunk\plugins\trunk\linters\phpstan\phpstan_parser.py:36:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\prettier\prettier_to_sarif.py:8:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\prettier\prettier_to_sarif.py:39:80: E501 line too long (120 > 79 characters)
+.\.trunk\plugins\trunk\linters\prettier\prettier_to_sarif.py:59:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\pylint\test_data\basic.in.py:4:10: F821 undefined name 'raw_input'
+.\.trunk\plugins\trunk\linters\pylint\test_data\basic.in.py:5:8: F821 undefined name 'raw_input'
+.\.trunk\plugins\trunk\linters\pyright\pyright_to_sarif.py:10:80: E501 line too long (87 > 79 characters)
+.\.trunk\plugins\trunk\linters\pyright\pyright_to_sarif.py:20:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\pyright\pyright_to_sarif.py:36:80: E501 line too long (112 > 79 characters)
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:1:1: F401 'typing.Callable' imported but unused
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:1:1: F401 'typing.Iterator' imported but unused
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:1:1: F401 'typing.Union' imported but unused
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:1:1: F401 'typing.Optional' imported but unused
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:5:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:7:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:12:20: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:12:80: E501 line too long (94 > 79 characters)
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:14:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:15:1: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:17:9: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:18:10: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:18:80: E501 line too long (82 > 79 characters)
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:22:1: E303 too many blank lines (3)
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:23:15: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:24:8: F821 undefined name 'ClassVar'
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:24:25: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:27:19: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:29:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:31:11: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:35:1: E303 too many blank lines (3)
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:39:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:51:13: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:54:9: E731 do not assign a lambda expression, use a def
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:54:27: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:8:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:9:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:10:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:11:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:12:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:13:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:14:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:15:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:16:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:17:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:18:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:19:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:20:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:21:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:22:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:23:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:24:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:25:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:26:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:27:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:28:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:29:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:30:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:30:80: E501 line too long (96 > 79 characters)
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:31:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:42:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:44:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:45:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:46:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:47:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:48:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:49:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:50:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:51:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:52:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:53:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:54:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:55:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:56:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:57:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:58:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:59:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:60:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:61:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:62:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:63:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:67:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:68:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:69:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:70:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:71:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:72:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:73:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:74:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:75:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:76:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:76:80: E501 line too long (85 > 79 characters)
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:77:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:78:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:80:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:81:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:81:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:82:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:83:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:84:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:86:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:90:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\renovate\parse.py:12:80: E501 line too long (87 > 79 characters)
+.\.trunk\plugins\trunk\linters\renovate\parse.py:24:80: E501 line too long (961 > 79 characters)
+.\.trunk\plugins\trunk\linters\renovate\parse.py:74:80: E501 line too long (83 > 79 characters)
+.\.trunk\plugins\trunk\linters\renovate\parse.py:78:80: E501 line too long (83 > 79 characters)
+.\.trunk\plugins\trunk\linters\renovate\parse.py:89:80: E501 line too long (88 > 79 characters)
+.\.trunk\plugins\trunk\linters\renovate\parse.py:92:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\rubocop\rubocop_to_sarif.py:44:80: E501 line too long (112 > 79 characters)
+.\.trunk\plugins\trunk\linters\ruff\ruff_to_sarif.py:22:80: E501 line too long (92 > 79 characters)
+.\.trunk\plugins\trunk\linters\ruff\ruff_to_sarif.py:58:80: E501 line too long (105 > 79 characters)
+.\.trunk\plugins\trunk\linters\ruff\ruff_to_sarif.py:79:80: E501 line too long (88 > 79 characters)
+.\.trunk\plugins\trunk\linters\ruff\ruff_to_sarif.py:81:80: E501 line too long (84 > 79 characters)
+.\.trunk\plugins\trunk\linters\ruff\ruff_to_sarif.py:96:80: E501 line too long (112 > 79 characters)
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:7:1: F401 'sys' imported but unused
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:7:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:7:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:9:1: F401 'json' imported but unused
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:9:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:11:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:15:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:2:1: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:4:3: E114 indentation is not a multiple of 4 (comment)
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:4:3: E116 unexpected indentation (comment)
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:4:3: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:5:26: E203 whitespace before ':'
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:6:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:6:7: E117 over-indented
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:6:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:7:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:7:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:7:10: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:7:14: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:8:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:11:7: E124 closing bracket does not match visual indentation
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:12:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\ruff\test_data\syntax.in.py:1:11: E999 SyntaxError: '{' was never closed
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:3:1: F811 redefinition of unused 'test' from line 1
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:3:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:4:3: F841 local variable 'substitution' is assigned to but never used
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:4:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:6:3: F841 local variable 'my_list' is assigned to but never used
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:6:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:6:13: F821 undefined name 'List'
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:7:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:9:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\sqlfluff\sqlfluff_to_sarif.py:52:80: E501 line too long (88 > 79 characters)
+.\.trunk\plugins\trunk\linters\sqlfluff\sqlfluff_to_sarif.py:75:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\terrascan\sarif_to_sarif.py:10:80: E501 line too long (113 > 79 characters)
+.\.trunk\plugins\trunk\linters\terrascan\sarif_to_sarif.py:14:80: E501 line too long (83 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\test_data\secrets.py:5:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_config_to_sarif.py:45:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_config_to_sarif.py:53:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_secret_to_sarif.py:7:80: E501 line too long (152 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_secret_to_sarif.py:8:80: E501 line too long (98 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_secret_to_sarif.py:21:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_secret_to_sarif.py:30:80: E501 line too long (88 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_secret_to_sarif.py:75:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_vuln_to_sarif.py:7:80: E501 line too long (152 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_vuln_to_sarif.py:8:80: E501 line too long (98 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_vuln_to_sarif.py:21:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_vuln_to_sarif.py:75:80: E501 line too long (119 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_vuln_to_sarif.py:77:80: E501 line too long (85 > 79 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_vuln_to_sarif.py:96:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\test_data\secrets.in.py:5:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:10:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:58:80: E501 line too long (96 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:74:80: E501 line too long (94 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:77:80: E501 line too long (99 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:80:80: E501 line too long (102 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:106:80: E501 line too long (83 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:116:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:119:80: E501 line too long (80 > 79 characters)
+.\.trunk\plugins\trunk\linters\trufflehog\trufflehog_to_sarif.py:122:80: E501 line too long (116 > 79 characters)
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:1:1: F401 'typing.Callable' imported but unused
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:1:1: F401 'typing.Iterator' imported but unused
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:1:1: F401 'typing.Union' imported but unused
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:1:1: F401 'typing.Optional' imported but unused
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:5:80: E501 line too long (81 > 79 characters)
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:7:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:14:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:15:1: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:22:1: E303 too many blank lines (3)
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:23:15: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:24:8: F821 undefined name 'ClassVar'
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:24:25: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:27:19: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:29:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:35:1: E303 too many blank lines (3)
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:39:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:50:13: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:53:9: E731 do not assign a lambda expression, use a def
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:53:27: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:8:1: F401 'sys' imported but unused
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:8:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:8:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:10:80: E501 line too long (93 > 79 characters)
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:11:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:15:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:20:1: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:22:3: E114 indentation is not a multiple of 4 (comment)
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:22:3: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:23:26: E203 whitespace before ':'
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:24:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:24:7: E117 over-indented
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:24:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:25:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:25:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:25:10: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:25:14: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:26:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:29:7: E124 closing bracket does not match visual indentation
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:30:7: E111 indentation is not a multiple of 4
+.\check_scoring.py:14:1: E302 expected 2 blank lines, found 1
+.\check_scoring.py:18:80: E501 line too long (88 > 79 characters)
+.\check_scoring.py:44:80: E501 line too long (84 > 79 characters)
+.\check_scoring.py:58:80: E501 line too long (87 > 79 characters)
+.\example_usage.py:18:1: E302 expected 2 blank lines, found 1
+.\example_usage.py:23:1: W293 blank line contains whitespace
+.\example_usage.py:25:1: W293 blank line contains whitespace
+.\example_usage.py:34:1: W293 blank line contains whitespace
+.\example_usage.py:37:1: W293 blank line contains whitespace
+.\example_usage.py:40:1: W293 blank line contains whitespace
+.\example_usage.py:46:1: E302 expected 2 blank lines, found 1
+.\example_usage.py:51:1: W293 blank line contains whitespace
+.\example_usage.py:53:1: W293 blank line contains whitespace
+.\example_usage.py:62:1: W293 blank line contains whitespace
+.\example_usage.py:65:1: W293 blank line contains whitespace
+.\example_usage.py:68:1: W293 blank line contains whitespace
+.\example_usage.py:74:1: E302 expected 2 blank lines, found 1
+.\example_usage.py:79:1: W293 blank line contains whitespace
+.\example_usage.py:81:1: W293 blank line contains whitespace
+.\example_usage.py:89:1: W293 blank line contains whitespace
+.\example_usage.py:92:1: W293 blank line contains whitespace
+.\example_usage.py:95:1: W293 blank line contains whitespace
+.\example_usage.py:101:1: E302 expected 2 blank lines, found 1
+.\example_usage.py:106:1: W293 blank line contains whitespace
+.\example_usage.py:108:1: W293 blank line contains whitespace
+.\example_usage.py:117:1: W293 blank line contains whitespace
+.\example_usage.py:120:1: W293 blank line contains whitespace
+.\example_usage.py:123:1: W293 blank line contains whitespace
+.\example_usage.py:129:1: E302 expected 2 blank lines, found 1
+.\example_usage.py:134:1: W293 blank line contains whitespace
+.\example_usage.py:137:1: W293 blank line contains whitespace
+.\example_usage.py:140:1: W293 blank line contains whitespace
+.\example_usage.py:147:1: W293 blank line contains whitespace
+.\example_usage.py:150:1: W293 blank line contains whitespace
+.\example_usage.py:153:1: W293 blank line contains whitespace
+.\example_usage.py:157:1: W293 blank line contains whitespace
+.\example_usage.py:158:5: F841 local variable 'flag' is assigned to but never used
+.\example_usage.py:159:1: W293 blank line contains whitespace
+.\example_usage.py:160:80: E501 line too long (87 > 79 characters)
+.\example_usage.py:162:1: E302 expected 2 blank lines, found 1
+.\example_usage.py:172:1: W293 blank line contains whitespace
+.\example_usage.py:179:1: W293 blank line contains whitespace
+.\example_usage.py:189:1: E305 expected 2 blank lines after class or function definition, found 1
+.\lattice_mind\adapters\base.py:13:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:16:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:21:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:26:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:29:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:38:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:42:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:51:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:54:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:57:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:60:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:73:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:75:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:78:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\adapters\base.py:81:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:83:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:90:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:93:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:96:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:99:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:106:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\adapters\base.py:107:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:110:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:112:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:115:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:120:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:127:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:133:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:137:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:141:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:146:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:158:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:161:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:168:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\base.py:171:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\adapters\curl_adapter.py:2:1: F401 'typing.Optional' imported but unused
+.\lattice_mind\adapters\curl_adapter.py:13:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:22:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:25:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:28:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:38:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:43:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:47:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:52:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:56:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:63:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:67:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:71:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:74:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:77:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:80:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:83:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:93:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:97:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:105:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:113:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:116:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\adapters\curl_adapter.py:117:22: E127 continuation line over-indented for visual indent
+.\lattice_mind\adapters\curl_adapter.py:118:22: E127 continuation line over-indented for visual indent
+.\lattice_mind\adapters\curl_adapter.py:120:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:124:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:129:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:135:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:137:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:150:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:154:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:162:80: E501 line too long (92 > 79 characters)
+.\lattice_mind\adapters\curl_adapter.py:165:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:172:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:177:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:185:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:196:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:203:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\curl_adapter.py:206:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:2:1: F401 'typing.Optional' imported but unused
+.\lattice_mind\adapters\ffuf_adapter.py:13:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:38:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:41:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:54:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:64:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:68:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:72:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:78:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:84:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:88:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:92:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:97:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:100:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:102:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:116:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\adapters\ffuf_adapter.py:123:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\adapters\ffuf_adapter.py:140:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\adapters\ffuf_adapter.py:147:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:150:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:154:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:173:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:179:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:182:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:185:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:188:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:192:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:197:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:201:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:205:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:209:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:211:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:220:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:224:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:235:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\ffuf_adapter.py:238:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:2:1: F401 'typing.Optional' imported but unused
+.\lattice_mind\adapters\file_adapter.py:13:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:15:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:34:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:37:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:51:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:55:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:60:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:64:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:68:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:71:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:73:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:76:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:79:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:89:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:92:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:95:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:100:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:104:21: F841 local variable 'in_results' is assigned to but never used
+.\lattice_mind\adapters\file_adapter.py:106:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:117:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:129:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:134:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:136:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:145:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:147:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:159:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:162:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:165:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:170:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:175:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:179:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:181:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:183:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:186:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:189:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:198:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:202:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:206:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:207:80: E501 line too long (91 > 79 characters)
+.\lattice_mind\adapters\file_adapter.py:209:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:222:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:225:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:228:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\file_adapter.py:232:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:2:1: F401 'typing.Optional' imported but unused
+.\lattice_mind\adapters\nmap_adapter.py:13:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:28:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:34:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:44:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:49:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:53:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:57:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:61:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:65:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:69:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:75:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:78:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:81:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:84:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:96:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:100:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:106:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:111:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:116:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:122:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:125:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\adapters\nmap_adapter.py:127:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:138:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:149:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:155:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:157:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:170:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:173:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:176:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:180:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:190:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:202:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:209:1: W293 blank line contains whitespace
+.\lattice_mind\adapters\nmap_adapter.py:219:1: W293 blank line contains whitespace
+.\lattice_mind\api\server.py:12:1: F401 'smtplib' imported but unused
+.\lattice_mind\api\server.py:19:1: F401 'email.message.EmailMessage' imported but unused
+.\lattice_mind\api\server.py:32:1: F401 'fastapi.responses.HTMLResponse' imported but unused
+.\lattice_mind\api\server.py:33:1: F401 'jose.JWTError' imported but unused
+.\lattice_mind\api\server.py:66:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\api\server.py:78:5: F811 redefinition of unused 'smtplib' from line 12
+.\lattice_mind\api\server.py:79:5: F811 redefinition of unused 'EmailMessage' from line 19
+.\lattice_mind\api\server.py:127:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\api\server.py:184:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\api\server.py:200:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\api\server.py:235:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\api\server.py:241:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\api\server.py:250:80: E501 line too long (104 > 79 characters)
+.\lattice_mind\api\server.py:262:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\api\server.py:274:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\api\server.py:311:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\api\server.py:323:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\api\server.py:324:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\api\server.py:331:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\api\server.py:365:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\api\server.py:369:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\api\server.py:433:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\api\server.py:557:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\api\server.py:580:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\api\server.py:587:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\api\server.py:602:17: F821 undefined name 'base64'
+.\lattice_mind\api\server.py:602:34: F821 undefined name 'urllib'
+.\lattice_mind\api\server.py:602:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\api\server.py:620:17: F821 undefined name 'urllib'
+.\lattice_mind\api\server.py:620:38: F821 undefined name 'base64'
+.\lattice_mind\api\server.py:621:5: E722 do not use bare 'except'
+.\lattice_mind\api\server.py:631:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\api\server.py:669:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\api\server.py:671:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\api\server.py:677:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\api\server.py:682:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\api\server.py:750:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\api\server.py:770:1: E402 module level import not at top of file
+.\lattice_mind\api\server.py:771:1: E402 module level import not at top of file
+.\lattice_mind\api\server.py:778:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\api\server.py:786:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\api\server.py:813:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\api\server.py:873:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\api\server.py:1023:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\api\server.py:1031:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\api\server.py:1081:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\api\server.py:1098:36: E203 whitespace before ':'
+.\lattice_mind\api\server.py:1098:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\api\server.py:1162:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\api\server.py:1170:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\api\server.py:1178:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\api\server.py:1185:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\cli.py:6:1: F401 'lattice_mind.get_flag_recognizer' imported but unused
+.\lattice_mind\cli.py:25:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:29:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:38:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\cli.py:52:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:54:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\cli.py:61:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:69:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:73:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:76:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:79:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:82:11: F541 f-string is missing placeholders
+.\lattice_mind\cli.py:90:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:96:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:103:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:117:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:123:1: W293 blank line contains whitespace
+.\lattice_mind\cli.py:127:1: W293 blank line contains whitespace
+.\lattice_mind\config.py:20:80: E501 line too long (90 > 79 characters)
+.\lattice_mind\config.py:55:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\config.py:56:1: E302 expected 2 blank lines, found 1
+.\lattice_mind\config.py:60:1: E305 expected 2 blank lines after class or function definition, found 1
+.\lattice_mind\config.py:61:1: W391 blank line at end of file
+.\lattice_mind\core\confidence.py:4:1: F401 'typing.Tuple' imported but unused
+.\lattice_mind\core\confidence.py:23:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\core\confidence.py:29:1: W293 blank line contains whitespace
+.\lattice_mind\core\confidence.py:32:1: W293 blank line contains whitespace
+.\lattice_mind\core\confidence.py:35:1: W293 blank line contains whitespace
+.\lattice_mind\core\confidence.py:37:1: W293 blank line contains whitespace
+.\lattice_mind\core\confidence.py:45:40: E261 at least two spaces before inline comment
+.\lattice_mind\core\confidence.py:47:1: W293 blank line contains whitespace
+.\lattice_mind\core\confidence.py:50:1: W293 blank line contains whitespace
+.\lattice_mind\core\confidence.py:53:1: W293 blank line contains whitespace
+.\lattice_mind\core\confidence.py:72:80: E501 line too long (99 > 79 characters)
+.\lattice_mind\core\confidence.py:74:80: E501 line too long (89 > 79 characters)
+.\lattice_mind\core\confidence.py:76:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:9:1: F401 'lattice_mind.core.types.ChallengeDescriptor' imported but unused
+.\lattice_mind\core\executor.py:9:1: F401 'lattice_mind.core.types.NodeStatus' imported but unused
+.\lattice_mind\core\executor.py:10:1: F401 'lattice_mind.core.tree_loader.DetectionStep' imported but unused
+.\lattice_mind\core\executor.py:10:1: F401 'lattice_mind.core.tree_loader.ExploitationStep' imported but unused
+.\lattice_mind\core\executor.py:10:80: E501 line too long (120 > 79 characters)
+.\lattice_mind\core\executor.py:12:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\core\executor.py:52:80: E501 line too long (99 > 79 characters)
+.\lattice_mind\core\executor.py:58:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:64:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\core\executor.py:70:80: E501 line too long (115 > 79 characters)
+.\lattice_mind\core\executor.py:76:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\core\executor.py:77:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:83:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:86:47: W291 trailing whitespace
+.\lattice_mind\core\executor.py:89:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:95:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:98:80: E501 line too long (106 > 79 characters)
+.\lattice_mind\core\executor.py:101:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:105:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:112:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\core\executor.py:117:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\core\executor.py:124:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\core\executor.py:127:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\core\executor.py:129:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\core\executor.py:135:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:141:80: E501 line too long (115 > 79 characters)
+.\lattice_mind\core\executor.py:142:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:148:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\core\executor.py:154:80: E501 line too long (112 > 79 characters)
+.\lattice_mind\core\executor.py:157:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:161:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:164:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:168:80: E501 line too long (177 > 79 characters)
+.\lattice_mind\core\executor.py:206:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:216:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:224:80: E501 line too long (110 > 79 characters)
+.\lattice_mind\core\executor.py:226:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\core\executor.py:228:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:230:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:233:80: E501 line too long (110 > 79 characters)
+.\lattice_mind\core\executor.py:236:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:237:9: F841 local variable 'action' is assigned to but never used
+.\lattice_mind\core\executor.py:239:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:243:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:248:80: E501 line too long (100 > 79 characters)
+.\lattice_mind\core\executor.py:249:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:252:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:256:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:262:80: E501 line too long (89 > 79 characters)
+.\lattice_mind\core\executor.py:274:80: E501 line too long (92 > 79 characters)
+.\lattice_mind\core\executor.py:281:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:286:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:290:80: E501 line too long (89 > 79 characters)
+.\lattice_mind\core\executor.py:299:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:309:1: W293 blank line contains whitespace
+.\lattice_mind\core\executor.py:312:80: E501 line too long (96 > 79 characters)
+.\lattice_mind\core\executor.py:313:37: E127 continuation line over-indented for visual indent
+.\lattice_mind\core\executor.py:313:80: E501 line too long (99 > 79 characters)
+.\lattice_mind\core\executor.py:314:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\core\executor.py:333:80: E501 line too long (99 > 79 characters)
+.\lattice_mind\core\executor.py:351:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\core\executor.py:352:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\core\executor.py:354:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\core\executor.py:360:80: E501 line too long (91 > 79 characters)
+.\lattice_mind\core\executor.py:370:80: E501 line too long (98 > 79 characters)
+.\lattice_mind\core\expressions.py:42:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\core\expressions.py:47:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:54:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:58:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:70:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:76:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\core\expressions.py:83:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:88:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:93:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:94:80: E501 line too long (114 > 79 characters)
+.\lattice_mind\core\expressions.py:108:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:112:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:119:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:121:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:124:1: W293 blank line contains whitespace
+.\lattice_mind\core\expressions.py:132:1: E302 expected 2 blank lines, found 1
+.\lattice_mind\core\flag_recognizer.py:2:1: F401 're' imported but unused
+.\lattice_mind\core\flag_recognizer.py:10:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:13:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:16:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:19:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:25:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:32:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:34:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:37:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:40:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:51:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:53:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:56:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:59:1: W293 blank line contains whitespace
+.\lattice_mind\core\flag_recognizer.py:64:1: W293 blank line contains whitespace
+.\lattice_mind\core\human_loop.py:16:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\core\knowledge_base.py:1:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\core\knowledge_base.py:2:1: F401 'typing.Optional' imported but unused
+.\lattice_mind\core\knowledge_base.py:8:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\core\knowledge_base.py:9:1: W293 blank line contains whitespace
+.\lattice_mind\core\knowledge_base.py:59:1: W293 blank line contains whitespace
+.\lattice_mind\core\knowledge_base.py:62:1: W293 blank line contains whitespace
+.\lattice_mind\core\knowledge_base.py:63:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\core\knowledge_base.py:65:1: W293 blank line contains whitespace
+.\lattice_mind\core\knowledge_base.py:68:1: W293 blank line contains whitespace
+.\lattice_mind\core\knowledge_base.py:73:1: W293 blank line contains whitespace
+.\lattice_mind\core\knowledge_base.py:76:1: W293 blank line contains whitespace
+.\lattice_mind\core\knowledge_base.py:81:1: W293 blank line contains whitespace
+.\lattice_mind\core\knowledge_base.py:85:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:5:1: F401 'lattice_mind.core.types.ChallengeDescriptor' imported but unused
+.\lattice_mind\core\nodes.py:10:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:14:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:18:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:20:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\core\nodes.py:21:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:26:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:29:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:34:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:39:1: W293 blank line contains whitespace
+.\lattice_mind\core\nodes.py:41:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\core\nodes.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\core\orchestrator.py:15:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\core\orchestrator.py:23:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\core\orchestrator.py:46:80: E501 line too long (90 > 79 characters)
+.\lattice_mind\core\orchestrator.py:47:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\core\orchestrator.py:55:80: E501 line too long (97 > 79 characters)
+.\lattice_mind\core\orchestrator.py:77:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\core\orchestrator.py:86:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\core\orchestrator.py:91:1: W293 blank line contains whitespace
+.\lattice_mind\core\orchestrator.py:93:80: E501 line too long (102 > 79 characters)
+.\lattice_mind\core\orchestrator.py:95:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\core\orchestrator.py:96:1: W293 blank line contains whitespace
+.\lattice_mind\core\orchestrator.py:97:80: E501 line too long (91 > 79 characters)
+.\lattice_mind\core\orchestrator.py:107:80: E501 line too long (109 > 79 characters)
+.\lattice_mind\core\orchestrator.py:137:80: E501 line too long (136 > 79 characters)
+.\lattice_mind\core\orchestrator.py:151:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\core\orchestrator.py:167:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\core\tree_loader.py:62:1: W293 blank line contains whitespace
+.\lattice_mind\core\tree_loader.py:69:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\core\tree_loader.py:70:80: E501 line too long (95 > 79 characters)
+.\lattice_mind\core\tree_loader.py:74:13: E128 continuation line under-indented for visual indent
+.\lattice_mind\core\tree_loader.py:84:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\core\tree_loader.py:89:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\core\tree_loader.py:96:13: E128 continuation line under-indented for visual indent
+.\lattice_mind\core\tree_loader.py:98:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\core\tree_loader.py:106:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\core\tree_loader.py:111:80: E501 line too long (97 > 79 characters)
+.\lattice_mind\core\tree_loader.py:113:1: W293 blank line contains whitespace
+.\lattice_mind\core\tree_loader.py:154:1: E302 expected 2 blank lines, found 1
+.\lattice_mind\engines\detection.py:10:1: W293 blank line contains whitespace
+.\lattice_mind\engines\detection.py:13:1: W293 blank line contains whitespace
+.\lattice_mind\engines\detection.py:17:1: W293 blank line contains whitespace
+.\lattice_mind\engines\detection.py:20:1: W293 blank line contains whitespace
+.\lattice_mind\engines\detection.py:29:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:7:1: F401 'typing.Optional' imported but unused
+.\lattice_mind\engines\exploitation.py:7:1: F401 'typing.List' imported but unused
+.\lattice_mind\engines\exploitation.py:14:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:17:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:21:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:24:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:33:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:40:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:48:80: E501 line too long (105 > 79 characters)
+.\lattice_mind\engines\exploitation.py:49:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:60:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\engines\exploitation.py:61:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:62:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\engines\exploitation.py:83:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:84:80: E501 line too long (101 > 79 characters)
+.\lattice_mind\engines\exploitation.py:104:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:110:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:115:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:117:80: E501 line too long (92 > 79 characters)
+.\lattice_mind\engines\exploitation.py:118:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:125:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:137:80: E501 line too long (105 > 79 characters)
+.\lattice_mind\engines\exploitation.py:145:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:151:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:156:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:158:80: E501 line too long (105 > 79 characters)
+.\lattice_mind\engines\exploitation.py:159:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:185:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:191:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:196:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:198:80: E501 line too long (93 > 79 characters)
+.\lattice_mind\engines\exploitation.py:199:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:221:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:227:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:233:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:235:80: E501 line too long (99 > 79 characters)
+.\lattice_mind\engines\exploitation.py:236:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:247:80: E501 line too long (102 > 79 characters)
+.\lattice_mind\engines\exploitation.py:256:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:262:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:268:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:270:80: E501 line too long (97 > 79 characters)
+.\lattice_mind\engines\exploitation.py:271:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:282:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\engines\exploitation.py:291:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:299:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:305:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:307:80: E501 line too long (97 > 79 characters)
+.\lattice_mind\engines\exploitation.py:308:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:348:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:356:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:360:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:362:80: E501 line too long (90 > 79 characters)
+.\lattice_mind\engines\exploitation.py:363:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:403:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:408:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:413:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:415:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\engines\exploitation.py:416:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:418:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:440:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:447:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:451:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:453:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\engines\exploitation.py:454:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:477:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:484:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:488:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:490:80: E501 line too long (101 > 79 characters)
+.\lattice_mind\engines\exploitation.py:491:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:510:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:516:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:520:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:522:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\engines\exploitation.py:523:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:548:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:554:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:558:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:560:80: E501 line too long (93 > 79 characters)
+.\lattice_mind\engines\exploitation.py:561:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:573:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\engines\exploitation.py:580:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:585:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:589:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:591:80: E501 line too long (93 > 79 characters)
+.\lattice_mind\engines\exploitation.py:592:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:610:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:616:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:621:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:623:80: E501 line too long (94 > 79 characters)
+.\lattice_mind\engines\exploitation.py:624:1: W293 blank line contains whitespace
+.\lattice_mind\engines\exploitation.py:632:80: E501 line too long (92 > 79 characters)
+.\lattice_mind\engines\exploitation.py:643:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:7:1: F401 'typing.Dict' imported but unused
+.\lattice_mind\mvp.py:7:1: F401 'typing.Any' imported but unused
+.\lattice_mind\mvp.py:32:1: E302 expected 2 blank lines, found 1
+.\lattice_mind\mvp.py:33:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\mvp.py:34:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:43:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:49:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:57:21: F541 f-string is missing placeholders
+.\lattice_mind\mvp.py:59:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:63:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:67:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:75:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:77:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:90:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:91:9: E303 too many blank lines (2)
+.\lattice_mind\mvp.py:93:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\mvp.py:100:80: E501 line too long (91 > 79 characters)
+.\lattice_mind\mvp.py:125:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\mvp.py:127:80: E501 line too long (102 > 79 characters)
+.\lattice_mind\mvp.py:128:80: E501 line too long (107 > 79 characters)
+.\lattice_mind\mvp.py:136:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\mvp.py:140:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:144:32: E701 multiple statements on one line (colon)
+.\lattice_mind\mvp.py:145:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:153:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:156:80: W291 trailing whitespace
+.\lattice_mind\mvp.py:160:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\mvp.py:164:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:169:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\mvp.py:170:80: E501 line too long (95 > 79 characters)
+.\lattice_mind\mvp.py:171:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:176:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:181:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\mvp.py:181:88: W291 trailing whitespace
+.\lattice_mind\mvp.py:182:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\mvp.py:183:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:185:80: E501 line too long (119 > 79 characters)
+.\lattice_mind\mvp.py:186:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\mvp.py:186:81: W291 trailing whitespace
+.\lattice_mind\mvp.py:187:77: W291 trailing whitespace
+.\lattice_mind\mvp.py:189:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:190:80: W291 trailing whitespace
+.\lattice_mind\mvp.py:191:43: W291 trailing whitespace
+.\lattice_mind\mvp.py:196:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:199:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:201:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:202:80: E501 line too long (89 > 79 characters)
+.\lattice_mind\mvp.py:206:13: F841 local variable 'flag' is assigned to but never used
+.\lattice_mind\mvp.py:207:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:209:80: E501 line too long (102 > 79 characters)
+.\lattice_mind\mvp.py:210:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:212:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:216:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:217:80: E501 line too long (110 > 79 characters)
+.\lattice_mind\mvp.py:219:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:222:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\mvp.py:224:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:226:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\mvp.py:228:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:232:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:236:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:238:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\mvp.py:240:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:244:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:245:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\mvp.py:246:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\mvp.py:250:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\mvp.py:256:80: E501 line too long (90 > 79 characters)
+.\lattice_mind\mvp.py:262:80: E501 line too long (89 > 79 characters)
+.\lattice_mind\mvp.py:267:77: W291 trailing whitespace
+.\lattice_mind\mvp.py:269:80: E501 line too long (108 > 79 characters)
+.\lattice_mind\mvp.py:274:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\mvp.py:278:80: E501 line too long (105 > 79 characters)
+.\lattice_mind\mvp.py:282:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\mvp.py:299:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\mvp.py:307:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\mvp.py:308:80: E501 line too long (93 > 79 characters)
+.\lattice_mind\mvp.py:310:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\mvp.py:311:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\mvp.py:326:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\mvp.py:327:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\mvp.py:336:80: E501 line too long (98 > 79 characters)
+.\lattice_mind\mvp.py:338:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\mvp.py:348:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\mvp.py:358:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:359:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\mvp.py:365:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:366:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\mvp.py:367:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:371:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:372:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\mvp.py:375:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\mvp.py:378:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:379:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\mvp.py:380:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:384:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:385:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\mvp.py:388:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\mvp.py:391:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:392:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\mvp.py:393:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:401:5: F401 'sys' imported but unused
+.\lattice_mind\mvp.py:402:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:408:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:417:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:426:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:435:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:444:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:447:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:451:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:458:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:462:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:464:1: W293 blank line contains whitespace
+.\lattice_mind\mvp.py:468:19: F541 f-string is missing placeholders
+.\lattice_mind\mvp.py:469:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:10:1: F401 'lattice_mind.core.types.ChallengeDescriptor' imported but unused
+.\lattice_mind\trees\asset\classify.py:20:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:23:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:26:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:30:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:36:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:43:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:49:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\asset\classify.py:58:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:67:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:70:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:74:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:78:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:85:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:89:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:91:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:93:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\trees\asset\classify.py:105:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:113:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:122:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:125:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:129:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:133:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:140:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:144:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:146:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:148:75: W291 trailing whitespace
+.\lattice_mind\trees\asset\classify.py:149:30: E128 continuation line under-indented for visual indent
+.\lattice_mind\trees\asset\classify.py:150:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:158:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:164:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:172:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:181:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:184:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:187:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:191:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:198:13: E722 do not use bare 'except'
+.\lattice_mind\trees\asset\classify.py:200:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:204:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:211:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:214:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:227:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:232:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:236:80: E501 line too long (123 > 79 characters)
+.\lattice_mind\trees\asset\classify.py:237:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\asset\classify.py:239:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:243:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:245:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:254:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:261:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:265:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:269:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:271:1: W293 blank line contains whitespace
+.\lattice_mind\trees\asset\classify.py:273:1: W293 blank line contains whitespace
+.\lattice_mind\trees\crypto\detect.py:10:1: F401 'typing.List' imported but unused
+.\lattice_mind\trees\crypto\detect.py:14:1: F401 'string' imported but unused
+.\lattice_mind\trees\crypto\detect.py:58:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:67:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:101:13: F841 local variable 'prev' is assigned to but never used
+.\lattice_mind\trees\crypto\detect.py:105:80: E501 line too long (89 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:107:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:116:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:118:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:129:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:144:80: E501 line too long (113 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:166:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:171:80: E501 line too long (89 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:179:80: E501 line too long (92 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:185:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:191:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:194:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:208:80: E501 line too long (93 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:221:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:231:80: E501 line too long (93 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:247:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:251:80: E501 line too long (120 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:256:80: E501 line too long (91 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:258:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:290:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:303:80: E501 line too long (90 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:352:17: F401 'math' imported but unused
+.\lattice_mind\trees\crypto\detect.py:384:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:390:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:396:80: E501 line too long (116 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:397:32: E741 ambiguous variable name 'l'
+.\lattice_mind\trees\crypto\detect.py:397:80: E501 line too long (114 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:398:58: E741 ambiguous variable name 'l'
+.\lattice_mind\trees\crypto\detect.py:407:46: E741 ambiguous variable name 'l'
+.\lattice_mind\trees\crypto\detect.py:411:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\crypto\detect.py:418:1: W391 blank line at end of file
+.\lattice_mind\trees\exploit\crypto.py:22:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:27:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:36:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:42:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:48:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:52:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:58:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:65:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:69:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:73:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:79:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:85:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:89:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:95:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:102:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:106:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:110:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:114:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\trees\exploit\crypto.py:116:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:120:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\trees\exploit\crypto.py:122:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:126:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:132:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:134:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\exploit\crypto.py:138:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:142:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:146:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:152:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:158:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\crypto.py:162:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:20:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:26:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:30:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:35:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:41:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:47:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:51:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:57:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:62:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:66:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:70:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:76:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:82:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:86:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:92:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:98:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:102:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:107:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:113:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:119:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\forensics.py:123:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:21:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:27:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:39:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:50:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:56:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:64:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:68:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:76:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:82:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:86:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:92:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:100:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:104:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:112:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:116:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:122:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:128:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:131:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:139:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:143:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\exploit\pwn.py:145:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:147:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\pwn.py:154:80: E501 line too long (89 > 79 characters)
+.\lattice_mind\trees\exploit\web.py:24:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:35:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:43:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:47:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:53:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:59:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:63:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:71:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:75:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:81:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:87:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:91:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:99:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:103:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:109:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:115:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:119:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:127:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:131:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:137:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:143:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:147:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:155:1: W293 blank line contains whitespace
+.\lattice_mind\trees\exploit\web.py:159:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:11:1: F401 'typing.List' imported but unused
+.\lattice_mind\trees\forensics\detect.py:13:1: F401 'os' imported but unused
+.\lattice_mind\trees\forensics\detect.py:19:80: E501 line too long (95 > 79 characters)
+.\lattice_mind\trees\forensics\detect.py:26:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:28:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\forensics\detect.py:30:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:34:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:40:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:41:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\forensics\detect.py:42:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:48:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:58:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\trees\forensics\detect.py:62:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:70:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:74:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:78:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:94:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:97:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:101:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:104:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:105:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\forensics\detect.py:106:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:112:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:114:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:118:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:125:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:127:29: F541 f-string is missing placeholders
+.\lattice_mind\trees\forensics\detect.py:129:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:132:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:134:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:136:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:148:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:150:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\forensics\detect.py:152:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:156:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:159:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:160:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\forensics\detect.py:161:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:164:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:170:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:173:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:175:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:183:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:191:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:193:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\forensics\detect.py:195:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:199:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:205:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:206:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\forensics\detect.py:207:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:210:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:212:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:218:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:220:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:228:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:239:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:242:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:246:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:249:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:250:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\forensics\detect.py:251:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:254:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:271:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:274:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:278:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:281:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:282:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\forensics\detect.py:283:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:289:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:306:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:309:1: W293 blank line contains whitespace
+.\lattice_mind\trees\forensics\detect.py:312:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\forensics\detect.py:313:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:12:1: F401 're' imported but unused
+.\lattice_mind\trees\pwn\detect.py:16:1: F401 'lattice_mind.core.types.VulnDescriptor' imported but unused
+.\lattice_mind\trees\pwn\detect.py:16:1: F401 'lattice_mind.core.types.VulnType' imported but unused
+.\lattice_mind\trees\pwn\detect.py:25:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:28:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:32:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:38:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:40:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:44:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:47:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:49:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\trees\pwn\detect.py:50:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:53:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:62:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:66:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:75:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:84:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:86:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\pwn\detect.py:87:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\pwn\detect.py:90:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:91:9: E722 do not use bare 'except'
+.\lattice_mind\trees\pwn\detect.py:100:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:101:80: E501 line too long (95 > 79 characters)
+.\lattice_mind\trees\pwn\detect.py:103:13: E722 do not use bare 'except'
+.\lattice_mind\trees\pwn\detect.py:105:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:107:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:111:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:119:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:125:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:126:9: E722 do not use bare 'except'
+.\lattice_mind\trees\pwn\detect.py:128:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:130:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:135:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:137:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:145:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:147:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:151:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:152:9: E722 do not use bare 'except'
+.\lattice_mind\trees\pwn\detect.py:154:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:156:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:165:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:168:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:172:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:175:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:176:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\pwn\detect.py:177:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:186:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:188:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:191:31: W291 trailing whitespace
+.\lattice_mind\trees\pwn\detect.py:194:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:202:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:204:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:207:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:209:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:220:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:224:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:233:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:236:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:240:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:243:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:244:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\pwn\detect.py:245:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:253:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:255:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:257:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\pwn\detect.py:258:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:260:39: W291 trailing whitespace
+.\lattice_mind\trees\pwn\detect.py:263:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:264:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\pwn\detect.py:265:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:272:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:276:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:285:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:288:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:292:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:295:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:296:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\pwn\detect.py:297:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:302:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:311:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:320:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:323:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:327:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:328:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\pwn\detect.py:329:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:332:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:336:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:339:1: W293 blank line contains whitespace
+.\lattice_mind\trees\pwn\detect.py:342:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:22:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:26:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:30:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:33:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:35:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:39:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:41:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:48:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\additional.py:55:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:59:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:65:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:67:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\additional.py:68:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:71:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:73:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:78:13: E722 do not use bare 'except'
+.\lattice_mind\trees\web\additional.py:80:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:84:13: F841 local variable 'base_len' is assigned to but never used
+.\lattice_mind\trees\web\additional.py:85:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:93:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:94:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\additional.py:101:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:106:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:114:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:118:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:122:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:125:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:127:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:128:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\additional.py:129:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:133:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:137:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:139:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:141:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:146:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:150:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:152:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\additional.py:159:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:163:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:167:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:170:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:171:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\additional.py:172:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:178:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:194:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:198:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:202:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:205:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:207:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:209:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\web\additional.py:211:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:213:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:218:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:220:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\web\additional.py:227:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:231:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:236:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:238:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\additional.py:239:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:241:9: F841 local variable 'endpoint' is assigned to but never used
+.\lattice_mind\trees\web\additional.py:242:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:244:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:250:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:266:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\additional.py:282:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\additional.py:334:80: E501 line too long (92 > 79 characters)
+.\lattice_mind\trees\web\additional.py:335:80: E501 line too long (105 > 79 characters)
+.\lattice_mind\trees\web\additional.py:343:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\web\additional.py:349:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\trees\web\additional.py:353:80: E501 line too long (103 > 79 characters)
+.\lattice_mind\trees\web\additional.py:354:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\web\additional.py:355:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\additional.py:371:80: E501 line too long (102 > 79 characters)
+.\lattice_mind\trees\web\additional.py:372:80: E501 line too long (105 > 79 characters)
+.\lattice_mind\trees\web\additional.py:374:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\web\additional.py:382:80: E501 line too long (116 > 79 characters)
+.\lattice_mind\trees\web\additional.py:386:80: E501 line too long (102 > 79 characters)
+.\lattice_mind\trees\web\additional.py:387:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\trees\web\additional.py:388:80: E501 line too long (103 > 79 characters)
+.\lattice_mind\trees\web\additional.py:395:80: E501 line too long (97 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:1:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:13:1: F401 'lattice_mind.core.types.VulnDescriptor' imported but unused
+.\lattice_mind\trees\web\cmd.py:13:1: F401 'lattice_mind.core.types.VulnType' imported but unused
+.\lattice_mind\trees\web\cmd.py:23:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:27:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:32:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:34:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:35:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:38:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:39:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:40:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:51:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:54:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:62:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:65:80: E501 line too long (93 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:74:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:79:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:83:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:95:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:99:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:101:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:104:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:106:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:107:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:110:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:112:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:116:13: F841 local variable 'result_baseline' is assigned to but never used
+.\lattice_mind\trees\web\cmd.py:117:13: F841 local variable 'baseline_time' is assigned to but never used
+.\lattice_mind\trees\web\cmd.py:118:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:121:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:126:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:128:17: F841 local variable 'result_sleep' is assigned to but never used
+.\lattice_mind\trees\web\cmd.py:130:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:133:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:142:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:147:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:151:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:161:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:165:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:169:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:171:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:172:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:173:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\cmd.py:174:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:177:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:189:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:193:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:197:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:199:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\cmd.py:200:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:201:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\cmd.py:202:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\cmd.py:207:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:1:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\trees\web\lfi.py:7:1: F401 'typing.List' imported but unused
+.\lattice_mind\trees\web\lfi.py:12:1: F401 'lattice_mind.core.types.VulnDescriptor' imported but unused
+.\lattice_mind\trees\web\lfi.py:12:1: F401 'lattice_mind.core.types.VulnType' imported but unused
+.\lattice_mind\trees\web\lfi.py:22:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:26:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:31:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:33:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\lfi.py:34:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:37:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:39:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:50:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:59:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:68:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:73:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:84:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\web\lfi.py:87:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:92:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:96:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:108:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:112:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:117:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:119:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\lfi.py:120:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:123:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:125:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:141:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:146:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:152:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:156:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\lfi.py:165:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:170:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:178:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:182:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:185:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\lfi.py:186:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\lfi.py:189:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\recon.py:58:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\web\recon.py:66:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\web\recon.py:74:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\recon.py:88:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\trees\web\recon.py:97:80: E501 line too long (84 > 79 characters)
+.\lattice_mind\trees\web\recon.py:102:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\web\recon.py:103:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\web\recon.py:104:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\web\recon.py:114:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\web\recon.py:152:9: F401 're' imported but unused
+.\lattice_mind\trees\web\recon.py:175:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\web\recon.py:186:80: E501 line too long (88 > 79 characters)
+.\lattice_mind\trees\web\recon.py:250:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\recon.py:254:80: E501 line too long (80 > 79 characters)
+.\lattice_mind\trees\web\recon.py:264:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\recon.py:266:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\web\recon.py:280:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\trees\web\recon.py:282:80: E501 line too long (85 > 79 characters)
+.\lattice_mind\trees\web\recon.py:296:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\recon.py:311:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\recon.py:349:80: E501 line too long (101 > 79 characters)
+.\lattice_mind\trees\web\recon.py:350:80: E501 line too long (97 > 79 characters)
+.\lattice_mind\trees\web\recon.py:354:80: E501 line too long (82 > 79 characters)
+.\lattice_mind\trees\web\recon.py:367:9: F841 local variable 'ssti_specific_paths' is assigned to but never used
+.\lattice_mind\trees\web\recon.py:400:80: E501 line too long (87 > 79 characters)
+.\lattice_mind\trees\web\sqli.py:1:80: E501 line too long (83 > 79 characters)
+.\lattice_mind\trees\web\sqli.py:9:1: F401 'typing.List' imported but unused
+.\lattice_mind\trees\web\sqli.py:12:1: F401 'time' imported but unused
+.\lattice_mind\trees\web\sqli.py:15:1: F401 'lattice_mind.core.types.VulnDescriptor' imported but unused
+.\lattice_mind\trees\web\sqli.py:15:1: F401 'lattice_mind.core.types.VulnType' imported but unused
+.\lattice_mind\trees\web\sqli.py:25:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:29:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:34:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:40:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:44:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:45:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\sqli.py:46:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:51:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:57:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:59:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:62:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:64:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:72:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:79:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:88:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:92:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:97:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:99:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\sqli.py:100:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:103:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:104:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\sqli.py:105:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:112:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:118:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:124:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:126:13: F841 local variable 'baseline_hash' is assigned to but never used
+.\lattice_mind\trees\web\sqli.py:129:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:132:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:134:80: E501 line too long (107 > 79 characters)
+.\lattice_mind\trees\web\sqli.py:135:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:143:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:147:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:159:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:163:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:168:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:170:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\sqli.py:171:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:174:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:175:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\sqli.py:176:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:188:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:194:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:200:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:202:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:206:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:214:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:218:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:230:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:234:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:239:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:241:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\sqli.py:242:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:245:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:246:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\sqli.py:247:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:254:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:258:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:260:80: E501 line too long (86 > 79 characters)
+.\lattice_mind\trees\web\sqli.py:262:21: F841 local variable 'result_union' is assigned to but never used
+.\lattice_mind\trees\web\sqli.py:263:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:271:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:276:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:284:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:288:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:291:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\sqli.py:292:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:295:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:304:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:308:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:311:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\sqli.py:312:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\sqli.py:315:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:10:1: F401 're' imported but unused
+.\lattice_mind\trees\web\xss.py:11:1: F401 'html' imported but unused
+.\lattice_mind\trees\web\xss.py:14:1: F401 'lattice_mind.core.types.VulnDescriptor' imported but unused
+.\lattice_mind\trees\web\xss.py:14:1: F401 'lattice_mind.core.types.VulnType' imported but unused
+.\lattice_mind\trees\web\xss.py:24:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:28:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:33:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:35:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\xss.py:36:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:39:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:41:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:51:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:57:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:60:33: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\xss.py:68:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:71:33: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\xss.py:79:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:84:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:88:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:100:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:104:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:109:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:111:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\xss.py:112:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:115:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:117:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:121:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:125:13: F841 local variable 'result_submit' is assigned to but never used
+.\lattice_mind\trees\web\xss.py:126:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:130:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:133:29: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\xss.py:138:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:143:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:151:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:155:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:160:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:162:80: E501 line too long (81 > 79 characters)
+.\lattice_mind\trees\web\xss.py:163:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:166:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:168:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:177:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:179:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:185:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:186:80: E501 line too long (90 > 79 characters)
+.\lattice_mind\trees\web\xss.py:191:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:199:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:207:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:211:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:214:21: F541 f-string is missing placeholders
+.\lattice_mind\trees\web\xss.py:215:1: W293 blank line contains whitespace
+.\lattice_mind\trees\web\xss.py:222:1: W293 blank line contains whitespace
+.\setup.py:7:80: E501 line too long (82 > 79 characters)
+.\tests\api\test_api.py:39:80: E501 line too long (86 > 79 characters)
+.\tests\conftest.py:3:1: F401 'unittest.mock.MagicMock' imported but unused
+.\tests\conftest.py:3:1: F401 'unittest.mock.patch' imported but unused
+.\tests\conftest.py:5:1: F401 'pytest' imported but unused
+.\tests\deployment\test_deployment.py:16:1: F401 'pathlib.Path' imported but unused
+.\tests\deployment\test_deployment.py:25:1: E302 expected 2 blank lines, found 1
+.\tests\deployment\test_deployment.py:30:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:32:9: F401 'lattice_mind.core.types.ChallengeDescriptor' imported but unused
+.\tests\deployment\test_deployment.py:32:9: F401 'lattice_mind.core.types.ChallengeType' imported but unused
+.\tests\deployment\test_deployment.py:32:9: F401 'lattice_mind.core.types.NodeStatus' imported but unused
+.\tests\deployment\test_deployment.py:32:80: E501 line too long (90 > 79 characters)
+.\tests\deployment\test_deployment.py:34:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:35:9: F401 'lattice_mind.core.nodes.DecisionNode' imported but unused
+.\tests\deployment\test_deployment.py:35:9: F401 'lattice_mind.core.nodes.SimpleNode' imported but unused
+.\tests\deployment\test_deployment.py:37:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:38:9: F401 'lattice_mind.core.orchestrator.Orchestrator' imported but unused
+.\tests\deployment\test_deployment.py:40:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:41:9: F401 'lattice_mind.core.flag_recognizer.get_flag_recognizer' imported but unused
+.\tests\deployment\test_deployment.py:43:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:44:9: F401 'lattice_mind.adapters.curl_adapter.CurlAdapter' imported but unused
+.\tests\deployment\test_deployment.py:46:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:47:9: F401 'lattice_mind.adapters.file_adapter.FileTypeAdapter' imported but unused
+.\tests\deployment\test_deployment.py:47:9: F401 'lattice_mind.adapters.file_adapter.BinwalkAdapter' imported but unused
+.\tests\deployment\test_deployment.py:47:9: F401 'lattice_mind.adapters.file_adapter.ExiftoolAdapter' imported but unused
+.\tests\deployment\test_deployment.py:47:80: E501 line too long (103 > 79 characters)
+.\tests\deployment\test_deployment.py:49:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:50:9: F401 'lattice_mind.trees.asset.classify.AssetClassifyNetworkNode' imported but unused
+.\tests\deployment\test_deployment.py:52:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:53:9: F401 'lattice_mind.trees.web.sqli.SQLiDetectReflectionNode' imported but unused
+.\tests\deployment\test_deployment.py:55:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:56:9: F401 'lattice_mind.trees.pwn.detect.PwnDetectMetadataNode' imported but unused
+.\tests\deployment\test_deployment.py:58:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:59:9: F401 'lattice_mind.trees.crypto.detect.CryptoDetectEncodingNode' imported but unused
+.\tests\deployment\test_deployment.py:61:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:62:9: F401 'lattice_mind.trees.forensics.detect.ForensicsDetectArtifactNode' imported but unused
+.\tests\deployment\test_deployment.py:62:80: E501 line too long (83 > 79 characters)
+.\tests\deployment\test_deployment.py:64:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:65:9: F401 'lattice_mind.mvp.MVPSolver' imported but unused
+.\tests\deployment\test_deployment.py:67:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:70:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:75:1: E302 expected 2 blank lines, found 1
+.\tests\deployment\test_deployment.py:80:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:85:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:89:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:97:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:101:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:105:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:112:28: F541 f-string is missing placeholders
+.\tests\deployment\test_deployment.py:113:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:116:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:123:1: E302 expected 2 blank lines, found 1
+.\tests\deployment\test_deployment.py:128:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:131:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:135:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:138:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:142:13: F841 local variable 'curl' is assigned to but never used
+.\tests\deployment\test_deployment.py:146:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:150:13: F841 local variable 'file_adapter' is assigned to but never used
+.\tests\deployment\test_deployment.py:154:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:157:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:164:1: E302 expected 2 blank lines, found 1
+.\tests\deployment\test_deployment.py:169:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:172:9: F401 'lattice_mind.core.types.NodeResult' imported but unused
+.\tests\deployment\test_deployment.py:173:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:177:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:183:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:186:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:189:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:192:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:195:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:202:1: E302 expected 2 blank lines, found 1
+.\tests\deployment\test_deployment.py:207:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:211:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:213:9: F841 local variable 'solver' is assigned to but never used
+.\tests\deployment\test_deployment.py:215:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:217:9: F841 local variable 'challenge' is assigned to but never used
+.\tests\deployment\test_deployment.py:223:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:226:80: E501 line too long (81 > 79 characters)
+.\tests\deployment\test_deployment.py:228:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:231:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:238:1: E302 expected 2 blank lines, found 1
+.\tests\deployment\test_deployment.py:243:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:245:80: E501 line too long (98 > 79 characters)
+.\tests\deployment\test_deployment.py:246:80: E501 line too long (90 > 79 characters)
+.\tests\deployment\test_deployment.py:247:80: E501 line too long (83 > 79 characters)
+.\tests\deployment\test_deployment.py:248:80: E501 line too long (86 > 79 characters)
+.\tests\deployment\test_deployment.py:249:80: E501 line too long (86 > 79 characters)
+.\tests\deployment\test_deployment.py:250:80: E501 line too long (90 > 79 characters)
+.\tests\deployment\test_deployment.py:251:80: E501 line too long (89 > 79 characters)
+.\tests\deployment\test_deployment.py:252:80: E501 line too long (92 > 79 characters)
+.\tests\deployment\test_deployment.py:254:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:260:13: F841 local variable 'node' is assigned to but never used
+.\tests\deployment\test_deployment.py:265:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:269:1: E302 expected 2 blank lines, found 1
+.\tests\deployment\test_deployment.py:274:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:276:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:284:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:289:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:292:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:296:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:298:1: W293 blank line contains whitespace
+.\tests\deployment\test_deployment.py:303:80: E501 line too long (84 > 79 characters)
+.\tests\deployment\test_deployment.py:306:1: E305 expected 2 blank lines after class or function definition, found 1
+.\tests\deployment\test_executor.py:23:80: E501 line too long (89 > 79 characters)
+.\tests\exploitation\test_exploitation_trees.py:40:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:69:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:81:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:90:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:116:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:128:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:137:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:156:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:168:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:177:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:192:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:204:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:213:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:215:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:219:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:222:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:225:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:228:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:233:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:236:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:242:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:244:1: W293 blank line contains whitespace
+.\tests\exploitation\test_exploitation_trees.py:248:80: E501 line too long (81 > 79 characters)
+.\tests\exploitation\test_exploitation_trees.py:249:1: W293 blank line contains whitespace
+.\tests\test_base_adapter.py:20:80: E501 line too long (87 > 79 characters)
+.\tests\test_base_adapter.py:26:1: E302 expected 2 blank lines, found 1
+.\tests\test_base_adapter.py:91:80: E501 line too long (80 > 79 characters)
+.\tests\test_base_adapter.py:97:80: E501 line too long (80 > 79 characters)
+.\tests\test_base_adapter.py:103:80: E501 line too long (97 > 79 characters)
+.\tests\test_base_adapter.py:108:80: E501 line too long (98 > 79 characters)
+.\tests\test_base_adapter.py:168:80: E501 line too long (84 > 79 characters)
+.\tests\test_base_adapter.py:199:80: E501 line too long (100 > 79 characters)
+.\tests\test_base_adapter.py:206:80: E501 line too long (80 > 79 characters)
+.\tests\test_base_adapter.py:237:80: E501 line too long (93 > 79 characters)
+.\tests\test_confidence.py:20:80: E501 line too long (84 > 79 characters)
+.\tests\test_confidence.py:26:1: E302 expected 2 blank lines, found 1
+.\tests\test_confidence.py:39:80: E501 line too long (80 > 79 characters)
+.\tests\test_confidence.py:51:80: E501 line too long (80 > 79 characters)
+.\tests\test_confidence.py:65:80: E501 line too long (80 > 79 characters)
+.\tests\test_confidence.py:80:80: E501 line too long (80 > 79 characters)
+.\tests\test_confidence.py:100:80: E501 line too long (80 > 79 characters)
+.\tests\test_confidence.py:113:80: E501 line too long (80 > 79 characters)
+.\tests\test_curl_adapter.py:13:1: F401 'unittest.mock.PropertyMock' imported but unused
+.\tests\test_curl_adapter.py:23:1: E302 expected 2 blank lines, found 1
+.\tests\test_curl_adapter.py:61:80: E501 line too long (82 > 79 characters)
+.\tests\test_curl_adapter.py:66:80: E501 line too long (84 > 79 characters)
+.\tests\test_curl_adapter.py:80:80: E501 line too long (84 > 79 characters)
+.\tests\test_curl_adapter.py:106:80: E501 line too long (90 > 79 characters)
+.\tests\test_curl_adapter.py:114:80: E501 line too long (83 > 79 characters)
+.\tests\test_curl_adapter.py:160:80: E501 line too long (92 > 79 characters)
+.\tests\test_curl_adapter.py:173:80: E501 line too long (86 > 79 characters)
+.\tests\test_curl_adapter.py:194:80: E501 line too long (97 > 79 characters)
+.\tests\test_curl_adapter.py:226:80: E501 line too long (82 > 79 characters)
+.\tests\test_curl_adapter.py:252:80: E501 line too long (91 > 79 characters)
+.\tests\test_curl_adapter.py:253:80: E501 line too long (95 > 79 characters)
+.\tests\test_curl_adapter.py:261:80: E501 line too long (82 > 79 characters)
+.\tests\test_curl_adapter.py:267:80: E501 line too long (95 > 79 characters)
+.\tests\test_curl_adapter.py:274:80: E501 line too long (95 > 79 characters)
+.\tests\test_curl_adapter.py:280:80: E501 line too long (93 > 79 characters)
+.\tests\test_curl_adapter.py:281:80: E501 line too long (82 > 79 characters)
+.\tests\test_curl_adapter.py:309:80: E501 line too long (80 > 79 characters)
+.\tests\test_curl_adapter.py:320:80: E501 line too long (80 > 79 characters)
+.\tests\test_curl_adapter.py:328:80: E501 line too long (92 > 79 characters)
+.\tests\test_curl_adapter.py:336:80: E501 line too long (82 > 79 characters)
+.\tests\test_curl_adapter.py:361:80: E501 line too long (82 > 79 characters)
+.\tests\test_curl_adapter.py:366:80: E501 line too long (80 > 79 characters)
+.\tests\test_curl_adapter.py:386:80: E501 line too long (80 > 79 characters)
+.\tests\test_curl_adapter.py:388:80: E501 line too long (82 > 79 characters)
+.\tests\test_curl_adapter.py:434:80: E501 line too long (84 > 79 characters)
+.\tests\test_curl_adapter.py:448:80: E501 line too long (87 > 79 characters)
+.\tests\test_curl_adapter.py:453:80: E501 line too long (95 > 79 characters)
+.\tests\test_curl_adapter.py:461:80: E501 line too long (90 > 79 characters)
+.\tests\test_curl_adapter.py:466:80: E501 line too long (80 > 79 characters)
+.\tests\test_curl_adapter.py:468:80: E501 line too long (169 > 79 characters)
+.\tests\test_curl_adapter.py:469:80: E501 line too long (97 > 79 characters)
+.\tests\test_expressions.py:25:80: E501 line too long (81 > 79 characters)
+.\tests\test_expressions.py:35:80: E501 line too long (87 > 79 characters)
+.\tests\test_expressions.py:100:80: E501 line too long (82 > 79 characters)
+.\tests\test_expressions.py:106:80: E501 line too long (80 > 79 characters)
+.\tests\test_expressions.py:109:80: E501 line too long (86 > 79 characters)
+.\tests\test_expressions.py:115:80: E501 line too long (82 > 79 characters)
+.\tests\test_expressions.py:121:80: E501 line too long (80 > 79 characters)
+.\tests\test_expressions.py:136:80: E501 line too long (84 > 79 characters)
+.\tests\test_expressions.py:177:80: E501 line too long (84 > 79 characters)
+.\tests\test_expressions.py:185:80: E501 line too long (88 > 79 characters)
+.\tests\test_expressions.py:200:80: E501 line too long (82 > 79 characters)
+.\tests\test_expressions.py:203:80: E501 line too long (82 > 79 characters)
+.\tests\test_expressions.py:206:80: E501 line too long (86 > 79 characters)
+.\tests\test_expressions.py:214:80: E501 line too long (81 > 79 characters)
+.\tests\test_expressions.py:239:80: E501 line too long (89 > 79 characters)
+.\tests\test_expressions.py:260:80: E501 line too long (81 > 79 characters)
+.\tests\test_expressions.py:267:80: E501 line too long (80 > 79 characters)
+.\tests\test_expressions.py:289:80: E501 line too long (83 > 79 characters)
+.\tests\test_expressions.py:299:80: E501 line too long (82 > 79 characters)
+.\tests\test_expressions.py:331:80: E501 line too long (82 > 79 characters)
+.\tests\test_expressions.py:335:80: E501 line too long (80 > 79 characters)
+.\tests\test_ffuf_adapter.py:24:1: F401 'os' imported but unused
+.\tests\test_ffuf_adapter.py:25:1: F401 'unittest.mock.MagicMock' imported but unused
+.\tests\test_ffuf_adapter.py:25:1: F401 'unittest.mock.mock_open' imported but unused
+.\tests\test_ffuf_adapter.py:27:1: F401 'pytest' imported but unused
+.\tests\test_ffuf_adapter.py:115:80: E501 line too long (87 > 79 characters)
+.\tests\test_ffuf_adapter.py:125:80: E501 line too long (85 > 79 characters)
+.\tests\test_ffuf_adapter.py:134:80: E501 line too long (84 > 79 characters)
+.\tests\test_ffuf_adapter.py:139:80: E501 line too long (85 > 79 characters)
+.\tests\test_ffuf_adapter.py:195:80: E501 line too long (85 > 79 characters)
+.\tests\test_ffuf_adapter.py:213:80: E501 line too long (83 > 79 characters)
+.\tests\test_ffuf_adapter.py:226:80: E501 line too long (82 > 79 characters)
+.\tests\test_ffuf_adapter.py:244:80: E501 line too long (82 > 79 characters)
+.\tests\test_ffuf_adapter.py:286:80: E501 line too long (82 > 79 characters)
+.\tests\test_ffuf_adapter.py:302:80: E501 line too long (87 > 79 characters)
+.\tests\test_ffuf_adapter.py:305:80: E501 line too long (86 > 79 characters)
+.\tests\test_ffuf_adapter.py:310:80: E501 line too long (81 > 79 characters)
+.\tests\test_ffuf_adapter.py:315:80: E501 line too long (81 > 79 characters)
+.\tests\test_ffuf_adapter.py:320:80: E501 line too long (84 > 79 characters)
+.\tests\test_ffuf_adapter.py:400:80: E501 line too long (85 > 79 characters)
+.\tests\test_ffuf_adapter.py:408:80: E501 line too long (87 > 79 characters)
+.\tests\test_file_adapter.py:6:80: E501 line too long (80 > 79 characters)
+.\tests\test_file_adapter.py:15:1: F401 'unittest.mock.patch' imported but unused
+.\tests\test_file_adapter.py:29:1: E302 expected 2 blank lines, found 1
+.\tests\test_file_adapter.py:82:80: E501 line too long (89 > 79 characters)
+.\tests\test_file_adapter.py:113:69: E202 whitespace before ')'
+.\tests\test_file_adapter.py:283:80: E501 line too long (87 > 79 characters)
+.\tests\test_file_adapter.py:303:80: E501 line too long (83 > 79 characters)
+.\tests\test_flag_recognizer.py:6:80: E501 line too long (85 > 79 characters)
+.\tests\test_flag_recognizer.py:21:80: E501 line too long (81 > 79 characters)
+.\tests\test_flag_recognizer.py:171:80: E501 line too long (88 > 79 characters)
+.\tests\test_knowledge_base.py:22:1: E302 expected 2 blank lines, found 1
+.\tests\test_knowledge_base.py:26:80: E501 line too long (81 > 79 characters)
+.\tests\test_knowledge_base.py:44:80: E501 line too long (86 > 79 characters)
+.\tests\test_knowledge_base.py:55:80: E501 line too long (83 > 79 characters)
+.\tests\test_knowledge_base.py:67:80: E501 line too long (87 > 79 characters)
+.\tests\test_knowledge_base.py:76:80: E501 line too long (85 > 79 characters)
+.\tests\test_knowledge_base.py:80:80: E501 line too long (83 > 79 characters)
+.\tests\test_knowledge_base.py:93:80: E501 line too long (84 > 79 characters)
+.\tests\test_knowledge_base.py:97:80: E501 line too long (87 > 79 characters)
+.\tests\test_knowledge_base.py:101:80: E501 line too long (91 > 79 characters)
+.\tests\test_knowledge_base.py:105:80: E501 line too long (93 > 79 characters)
+.\tests\test_knowledge_base.py:109:80: E501 line too long (97 > 79 characters)
+.\tests\test_knowledge_base.py:117:80: E501 line too long (85 > 79 characters)
+.\tests\test_knowledge_base.py:215:80: E501 line too long (83 > 79 characters)
+.\tests\test_mvp_logic.py:15:1: F401 'asyncio' imported but unused
+.\tests\test_mvp_logic.py:16:1: F401 'unittest.mock.AsyncMock' imported but unused
+.\tests\test_mvp_logic.py:16:1: F401 'unittest.mock.call' imported but unused
+.\tests\test_mvp_logic.py:18:1: F401 'pytest' imported but unused
+.\tests\test_mvp_logic.py:28:80: E501 line too long (80 > 79 characters)
+.\tests\test_mvp_logic.py:56:10: F841 local variable 'mock_fr' is assigned to but never used
+.\tests\test_mvp_logic.py:129:80: E501 line too long (83 > 79 characters)
+.\tests\test_mvp_logic.py:158:9: F841 local variable 'first_tree_arg' is assigned to but never used
+.\tests\test_mvp_logic.py:159:80: E501 line too long (87 > 79 characters)
+.\tests\test_mvp_logic.py:165:80: E501 line too long (83 > 79 characters)
+.\tests\test_mvp_logic.py:193:80: E501 line too long (83 > 79 characters)
+.\tests\test_mvp_logic.py:205:80: E501 line too long (86 > 79 characters)
+.\tests\test_mvp_logic.py:217:80: E501 line too long (83 > 79 characters)
+.\tests\test_mvp_logic.py:236:80: E501 line too long (83 > 79 characters)
+.\tests\test_mvp_logic.py:248:80: E501 line too long (83 > 79 characters)
+.\tests\test_mvp_logic.py:252:80: E501 line too long (80 > 79 characters)
+.\tests\test_mvp_logic.py:307:80: E501 line too long (81 > 79 characters)
+.\tests\test_mvp_logic.py:315:80: E501 line too long (85 > 79 characters)
+.\tests\test_mvp_logic.py:318:80: E501 line too long (81 > 79 characters)
+.\tests\test_mvp_logic.py:329:80: E501 line too long (81 > 79 characters)
+.\tests\test_mvp_logic.py:400:9: F841 local variable 'result' is assigned to but never used
+.\tests\test_mvp_logic.py:414:80: E501 line too long (83 > 79 characters)
+.\tests\test_nmap_adapter.py:16:80: E501 line too long (81 > 79 characters)
+.\tests\test_nmap_adapter.py:34:80: E501 line too long (80 > 79 characters)
+.\tests\test_nmap_adapter.py:103:80: E501 line too long (81 > 79 characters)
+.\tests\test_nmap_adapter.py:111:80: E501 line too long (85 > 79 characters)
+.\tests\test_nmap_adapter.py:139:80: E501 line too long (81 > 79 characters)
+.\tests\test_nmap_adapter.py:305:80: E501 line too long (82 > 79 characters)
+.\tests\test_nmap_adapter.py:315:80: E501 line too long (82 > 79 characters)
+.\tests\test_orchestrator.py:20:1: F401 'unittest.mock.patch' imported but unused
+.\tests\test_orchestrator.py:38:1: E302 expected 2 blank lines, found 1
+.\tests\test_tree_loader.py:6:80: E501 line too long (87 > 79 characters)
+.\tests\test_tree_loader.py:19:1: F401 'tempfile' imported but unused
+.\tests\test_tree_loader.py:86:33: W605 invalid escape sequence '\{'
+.\tests\test_tree_loader.py:86:42: W605 invalid escape sequence '\}'
+.\tests\test_tree_loader.py:122:80: E501 line too long (104 > 79 characters)
+.\tests\test_tree_loader.py:125:31: W605 invalid escape sequence '\{'
+.\tests\test_tree_loader.py:125:40: W605 invalid escape sequence '\}'
+.\tests\test_tree_loader.py:158:80: E501 line too long (80 > 79 characters)
+.\tests\test_tree_loader.py:204:80: E501 line too long (80 > 79 characters)
+.\tests\test_tree_loader.py:217:80: E501 line too long (86 > 79 characters)
+.\tests\test_tree_loader.py:231:80: E501 line too long (80 > 79 characters)
+.\tests\test_tree_loader.py:290:80: E501 line too long (80 > 79 characters)
+.\tests\test_tree_loader.py:305:80: E501 line too long (84 > 79 characters)
+.\tests\test_tree_loader.py:311:80: E501 line too long (80 > 79 characters)
+.\tests\test_tree_loader.py:410:80: E501 line too long (80 > 79 characters)
