@@ -772,10 +772,25 @@ async def mcp_info():
     }
 
 
-async def _mcp_dispatch(name: str, arguments: Dict[str, Any]) -> Any:
+_MCP_TERMINAL_STATES = {"success", "completed", "error"}
+
+
+async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optional[str] = None) -> Any:
     """Call server functions directly — no HTTP roundtrip, no deadlock."""
     if name == "health_check":
         return await healthcheck()
+
+    if name == "auth_login":
+        result = await auth_login(AuthRequest(
+            username=arguments["username"],
+            password=arguments["password"],
+        ))
+        return {
+            "access_token": result.access_token,
+            "username": result.username,
+            "role": result.role,
+            "note": "Store this token and include it as 'Authorization: Bearer <token>' in future MCP requests.",
+        }
 
     if name == "submit_scan":
         payload = SolveRequest(
@@ -788,6 +803,32 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any]) -> Any:
         )
         result = await solve_challenge(payload)
         return result.model_dump()
+
+    if name == "wait_for_run":
+        run_id = arguments["run_id"]
+        timeout = int(arguments.get("timeout_seconds", 300))
+        interval = int(arguments.get("poll_interval_seconds", 3))
+        deadline = asyncio.get_event_loop().time() + timeout
+        while True:
+            state = get_run_state(run_id)
+            if not state:
+                raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+            if state.status in _MCP_TERMINAL_STATES:
+                return _run_summary(state)
+            if asyncio.get_event_loop().time() >= deadline:
+                return {
+                    "run_id": run_id,
+                    "status": state.status,
+                    "flag": None,
+                    "error": f"Timed out after {timeout}s — run still in state '{state.status}'",
+                }
+            await asyncio.sleep(interval)
+
+    if name == "get_run_summary":
+        state = get_run_state(arguments["run_id"])
+        if not state:
+            raise HTTPException(status_code=404, detail="Run not found")
+        return _run_summary(state)
 
     if name == "get_run_status":
         result = await get_run_status(arguments["run_id"])
@@ -803,6 +844,19 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any]) -> Any:
         return await get_rule(arguments["rule_id"])
 
     raise ValueError(f"Unknown tool: {name}")
+
+
+def _run_summary(state: "RunState") -> Dict[str, Any]:
+    """Concise run result — status, flag, error, timing."""
+    return {
+        "run_id": state.run_id,
+        "status": state.status,
+        "flag": state.flag,
+        "error": state.error,
+        "challenge": (state.challenge or {}).get("name", ""),
+        "started_at": state.started_at,
+        "finished_at": state.finished_at,
+    }
 
 
 @app.post("/mcp")
@@ -843,6 +897,19 @@ async def mcp_rpc(request: Request):
     if method == "tools/call":
         tool_name = params.get("name", "")
         arguments = params.get("arguments") or {}
+
+        # auth_login is unauthenticated by design; all other tools require a valid token
+        if tool_name != "auth_login":
+            auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer ") or not _decode_token(auth_header[7:]):
+                return _ok({
+                    "content": [{
+                        "type": "text",
+                        "text": "Invalid or expired token. Call auth_login with your credentials to get a fresh token.",
+                    }],
+                    "isError": True,
+                })
+
         try:
             result = await _mcp_dispatch(tool_name, arguments)
             return _ok({"content": [{"type": "text", "text": json.dumps(result, indent=2)}], "isError": False})

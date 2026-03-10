@@ -37,6 +37,21 @@ class LatticeMindMCPServer:
                 "inputSchema": {"type": "object", "properties": {}},
             },
             {
+                "name": "auth_login",
+                "description": (
+                    "Authenticate and obtain a fresh JWT token. Use this to recover "
+                    "from 'Invalid or expired token' errors without leaving the agent session."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "username": {"type": "string"},
+                        "password": {"type": "string"},
+                    },
+                    "required": ["username", "password"],
+                },
+            },
+            {
                 "name": "submit_scan",
                 "description": "Queue a solver run (scan + decision-tree execution).",
                 "inputSchema": {
@@ -53,8 +68,46 @@ class LatticeMindMCPServer:
                 },
             },
             {
+                "name": "wait_for_run",
+                "description": (
+                    "Poll a run until it reaches a terminal state (success, completed, error) "
+                    "then return a summary. Avoids writing external polling loops."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "timeout_seconds": {
+                            "type": "integer",
+                            "description": "Max seconds to wait (default 300).",
+                            "minimum": 5,
+                            "maximum": 600,
+                        },
+                        "poll_interval_seconds": {
+                            "type": "integer",
+                            "description": "Seconds between polls (default 3).",
+                            "minimum": 1,
+                            "maximum": 30,
+                        },
+                    },
+                    "required": ["run_id"],
+                },
+            },
+            {
+                "name": "get_run_summary",
+                "description": (
+                    "Return a concise summary of a run: status, flag (if found), and error "
+                    "(if any). Much smaller than get_run_status — use this to check results."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"run_id": {"type": "string"}},
+                    "required": ["run_id"],
+                },
+            },
+            {
                 "name": "get_run_status",
-                "description": "Get full run status including scan/tree steps and observations.",
+                "description": "Get full run status including every scan/tree step and observation. Prefer get_run_summary unless you need the detailed step log.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {"run_id": {"type": "string"}},
@@ -123,6 +176,16 @@ class LatticeMindMCPServer:
     def _call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
         if name == "health_check":
             return self._request("GET", "/health")
+        if name == "auth_login":
+            result = self._request("POST", "/auth/login", {
+                "username": arguments["username"],
+                "password": arguments["password"],
+            })
+            result["note"] = (
+                "Store this token and include it as 'Authorization: Bearer <token>' "
+                "in future MCP requests."
+            )
+            return result
         if name == "submit_scan":
             payload = {
                 "name": arguments.get("name", "Untitled Challenge"),
@@ -133,6 +196,28 @@ class LatticeMindMCPServer:
                 "metadata": arguments.get("metadata", {}),
             }
             return self._request("POST", "/solve", payload)
+        if name == "wait_for_run":
+            import time
+            run_id = arguments["run_id"]
+            timeout = int(arguments.get("timeout_seconds", 300))
+            interval = int(arguments.get("poll_interval_seconds", 3))
+            terminal = {"success", "completed", "error"}
+            deadline = time.monotonic() + timeout
+            while True:
+                data = self._request("GET", f"/runs/{run_id}")
+                if data.get("status") in terminal:
+                    return self._run_summary(data)
+                if time.monotonic() >= deadline:
+                    return {
+                        "run_id": run_id,
+                        "status": data.get("status"),
+                        "flag": None,
+                        "error": f"Timed out after {timeout}s — run still in state '{data.get('status')}'",
+                    }
+                time.sleep(interval)
+        if name == "get_run_summary":
+            data = self._request("GET", f"/runs/{arguments['run_id']}")
+            return self._run_summary(data)
         if name == "get_run_status":
             run_id = arguments["run_id"]
             return self._request("GET", f"/runs/{run_id}")
@@ -145,6 +230,19 @@ class LatticeMindMCPServer:
             rule_id = arguments["rule_id"]
             return self._request("GET", f"/rules/{rule_id}")
         raise MCPRequestError(f"Unknown tool: {name}")
+
+    @staticmethod
+    def _run_summary(data: Dict[str, Any]) -> Dict[str, Any]:
+        challenge = data.get("challenge") or {}
+        return {
+            "run_id": data.get("run_id"),
+            "status": data.get("status"),
+            "flag": data.get("flag"),
+            "error": data.get("error"),
+            "challenge": challenge.get("name", ""),
+            "started_at": data.get("started_at"),
+            "finished_at": data.get("finished_at"),
+        }
 
     def _ok(self, request_id: Any, result: Dict[str, Any]) -> Dict[str, Any]:
         return {"jsonrpc": "2.0", "id": request_id, "result": result}
