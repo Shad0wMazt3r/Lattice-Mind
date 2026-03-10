@@ -29,6 +29,7 @@ setup(
         "console_scripts": [
             "Lattice-Mind=lattice_mind.cli:main",
             "Lattice-Mind-api=lattice_mind.api.server:main",
+            "Lattice-Mind-mcp=lattice_mind.mcp.server:main",
         ],
     },
     classifiers=[

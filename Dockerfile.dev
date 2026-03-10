@@ -28,11 +28,8 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -e ".[dev]"
 
 EXPOSE 8000
 
-# --reload watches /app for file changes — .py AND .yaml trigger a reload
-CMD ["uvicorn", "lattice_mind.api.server:app", \
-    "--host", "0.0.0.0", \
-    "--port", "8000", \
-    "--reload", \
-    "--reload-dir", "/app", \
-    "--reload-include", "*.yaml", \
-    "--reload-include", "*.yml"]
+ENV LATTICE_MIND_RELOAD=true
+ENV LATTICE_MIND_RELOAD_DIR=/app
+ENV LATTICE_MIND_RELOAD_INCLUDE=*.yaml,*.yml
+
+CMD ["python", "-m", "lattice_mind.api.serve_with_mcp"]

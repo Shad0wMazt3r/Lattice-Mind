@@ -213,6 +213,35 @@ function doLogout() {
   showLogin();
 }
 
+function showTokenModal() {
+  if (!_authToken) {
+    alert("No active token found. Please log in first.");
+    return;
+  }
+  const tokenEl = document.getElementById("token-modal-value");
+  const configEl = document.getElementById("token-modal-config");
+  if (tokenEl) tokenEl.value = _authToken;
+  if (configEl) {
+    const base = window.location.origin;
+    configEl.textContent = JSON.stringify({
+      mcpServers: {
+        "lattice-mind": {
+          serverUrl: `${base}/mcp`,
+          headers: {
+            Authorization: `Bearer ${_authToken}`,
+            "Content-Type": "application/json"
+          }
+        }
+      }
+    }, null, 2);
+  }
+  document.getElementById("token-modal").classList.remove("hidden");
+}
+
+function closeTokenModal() {
+  document.getElementById("token-modal").classList.add("hidden");
+}
+
 function showAuthTab(tab) {
   const forms = ["login", "register", "forgot", "reset"];
   forms.forEach((f) => {

@@ -25,4 +25,4 @@ RUN pip install --upgrade pip && pip install --no-cache-dir .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "lattice_mind.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "lattice_mind.api.serve_with_mcp"]

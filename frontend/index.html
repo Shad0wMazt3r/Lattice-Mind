@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&family=Fira+Code:wght@400;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/style.css?v=2" />
   </head>
 
   <body>
@@ -220,6 +220,14 @@
           title="Change Password"
         >
           CHANGE PW
+        </button>
+        <button
+          class="btn btn-sm"
+          id="hdr-toggle-token"
+          onclick="showTokenModal()"
+          title="Show API token for MCP setup"
+        >
+          API TOKEN
         </button>
         <button
           class="btn btn-sm btn-danger"
@@ -612,6 +620,68 @@
         </div>
       </div>
 
+      <!-- API TOKEN MODAL -->
+      <div id="token-modal" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width: 520px; height: auto">
+          <div class="modal-hdr">
+            <span class="modal-title-text">API TOKEN</span>
+            <button class="btn btn-sm" onclick="closeTokenModal()">
+              &#x2715; CLOSE
+            </button>
+          </div>
+          <div style="padding: 16px">
+            <div style="margin-bottom: 10px; color: var(--fg-dim); font-size: 10px; letter-spacing: 1px">
+              USE THIS TOKEN TO CONNECT AI AGENTS VIA MCP
+            </div>
+            <textarea
+              id="token-modal-value"
+              readonly
+              onclick="this.select()"
+              rows="4"
+              style="
+                width: 100%;
+                box-sizing: border-box;
+                resize: none;
+                background: var(--panel-deep);
+                color: var(--amber);
+                border: 1px solid var(--border-hi);
+                border-radius: var(--radius);
+                font-family: var(--font-mono);
+                font-size: 10px;
+                padding: 8px;
+                outline: none;
+                word-break: break-all;
+              "
+            ></textarea>
+            <div style="margin-top: 12px; font-size: 10px; color: var(--fg-dim); letter-spacing: 1px">
+              MCP CONFIG SNIPPET
+            </div>
+            <pre
+              id="token-modal-config"
+              onclick="this.ownerDocument.getSelection().selectAllChildren(this)"
+              style="
+                margin-top: 6px;
+                background: var(--panel-deep);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 8px;
+                font-size: 9px;
+                color: var(--cyan);
+                font-family: var(--font-mono);
+                overflow-x: auto;
+                white-space: pre;
+                cursor: pointer;
+              "
+            ></pre>
+            <div style="margin-top: 12px; text-align: right">
+              <button class="btn btn-sm" onclick="closeTokenModal()">
+                &#x2715; CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- RUN DETAIL MODAL -->
       <div id="run-detail-modal" class="modal-overlay hidden">
         <div class="modal-box">
@@ -647,7 +717,7 @@
         </div>
       </div>
 
-      <script src="/static/script.js"></script>
+      <script src="/static/script.js?v=2"></script>
     </div>
     <!-- /app-root -->
   </body>

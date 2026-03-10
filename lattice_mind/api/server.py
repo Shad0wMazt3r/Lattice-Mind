@@ -349,6 +349,7 @@ app = FastAPI(
 _PUBLIC_PATHS = {
     "/",
     "/health",
+    "/mcp",
     "/auth/login",
     "/auth/register",
     "/auth/forgot-password",
@@ -557,19 +558,10 @@ async def auth_login(payload: AuthRequest):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     token = _make_token({"sub": user["username"], "role": user["role"]})
 
-    must_change_password = False
-    admin_user = os.environ.get("LATTICE_MIND_ADMIN_USER", "admin")
-    admin_pass = os.environ.get("LATTICE_MIND_ADMIN_PASS", "admin")
-    if user["username"] == admin_user and _verify_pw(
-        admin_pass, user["hashed_password"]
-    ):
-        must_change_password = True
-
     return TokenResponse(
         access_token=token,
         username=user["username"],
         role=user["role"],
-        must_change_password=must_change_password,
     )
 
 
@@ -645,18 +637,10 @@ async def auth_me(request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    must_change_password = False
-    admin_user = os.environ.get("LATTICE_MIND_ADMIN_USER", "admin")
-    admin_pass = os.environ.get("LATTICE_MIND_ADMIN_PASS", "admin")
-    if user["username"] == admin_user and _verify_pw(
-        admin_pass, user["hashed_password"]
-    ):
-        must_change_password = True
-
     return {
         "username": username,
         "role": user["role"],
-        "must_change_password": must_change_password,
+        "must_change_password": False,
     }
 
 
@@ -767,11 +751,109 @@ async def patch_rule(rule_id: str, payload: dict):
     return {"id": tree.id, "enabled": tree.enabled}
 
 
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+
+from lattice_mind.mcp.server import LatticeMindMCPServer
 
 BASE_DIR = pathlib.Path(__file__).parent.parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
+
+
+@app.get("/mcp")
+async def mcp_info():
+    """MCP server discovery / health endpoint."""
+    return {
+        "name": "lattice-mind-mcp",
+        "version": "0.1.0",
+        "protocol": "2024-11-05",
+        "transport": "http",
+        "tools": [t["name"] for t in LatticeMindMCPServer._tool_definitions()],
+    }
+
+
+async def _mcp_dispatch(name: str, arguments: Dict[str, Any]) -> Any:
+    """Call server functions directly — no HTTP roundtrip, no deadlock."""
+    if name == "health_check":
+        return await healthcheck()
+
+    if name == "submit_scan":
+        payload = SolveRequest(
+            name=arguments.get("name", "Untitled Challenge"),
+            challenge_type=arguments["challenge_type"],
+            url=arguments.get("url"),
+            file_path=arguments.get("file_path"),
+            flag_format=arguments.get("flag_format", "flag{"),
+            metadata=arguments.get("metadata", {}),
+        )
+        result = await solve_challenge(payload)
+        return result.model_dump()
+
+    if name == "get_run_status":
+        result = await get_run_status(arguments["run_id"])
+        return result.model_dump() if hasattr(result, "model_dump") else dict(result)
+
+    if name == "list_runs":
+        return await list_runs(limit=int(arguments.get("limit", 50)))
+
+    if name == "list_rules":
+        return await list_rules()
+
+    if name == "get_rule":
+        return await get_rule(arguments["rule_id"])
+
+    raise ValueError(f"Unknown tool: {name}")
+
+
+@app.post("/mcp")
+async def mcp_rpc(request: Request):
+    """Handle MCP JSON-RPC over HTTP — dispatches to server functions directly."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
+        )
+
+    method = body.get("method")
+    req_id = body.get("id")
+    params = body.get("params") or {}
+
+    def _ok(result: Any) -> JSONResponse:
+        return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": result})
+
+    def _err(code: int, msg: str) -> JSONResponse:
+        return JSONResponse({"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": msg}})
+
+    # Notifications have no id and expect no response body
+    if req_id is None and method != "initialize":
+        return Response(status_code=202)
+
+    if method == "initialize":
+        return _ok({
+            "protocolVersion": "2024-11-05",
+            "serverInfo": {"name": "lattice-mind-mcp", "version": "0.1.0"},
+            "capabilities": {"tools": {}},
+        })
+
+    if method == "tools/list":
+        return _ok({"tools": LatticeMindMCPServer._tool_definitions()})
+
+    if method == "tools/call":
+        tool_name = params.get("name", "")
+        arguments = params.get("arguments") or {}
+        try:
+            result = await _mcp_dispatch(tool_name, arguments)
+            return _ok({"content": [{"type": "text", "text": json.dumps(result, indent=2)}], "isError": False})
+        except HTTPException as exc:
+            return _ok({"content": [{"type": "text", "text": f"Error {exc.status_code}: {exc.detail}"}], "isError": True})
+        except (KeyError, ValueError) as exc:
+            return _ok({"content": [{"type": "text", "text": f"Invalid arguments: {exc}"}], "isError": True})
+        except Exception as exc:
+            return _ok({"content": [{"type": "text", "text": str(exc)}], "isError": True})
+
+    return _err(-32601, f"Method not found: {method}")
 
 
 @app.websocket("/ws/{run_id}")

@@ -64,6 +64,40 @@ When deploying to DigitalOcean, build the same Docker image and push it to your 
 
 3. Open `http://localhost:8000` to interact with the dashboard or issue `Lattice-Mind` CLI commands.
 
+## MCP integration (for AI tools)
+
+Lattice Mind now ships a stdio MCP server so any MCP-compatible AI client can queue scans and read decision-tree results.
+
+1. Start the API service (local or Docker) and ensure authentication token access if your API is protected.
+2. Launch MCP server:
+
+   ```powershell
+   Lattice-Mind-mcp
+   ```
+
+3. Configure your MCP client to run that command and pass environment variables as needed:
+
+   - `LATTICE_MIND_API_BASE_URL` (default `http://127.0.0.1:8000`)
+   - `LATTICE_MIND_MCP_TOKEN` (Bearer token for protected API routes)
+   - `LATTICE_MIND_MCP_TIMEOUT` (HTTP timeout in seconds, default `30`)
+
+When using Docker Compose, MCP now starts automatically with the API:
+
+- Default dev (hot reload): `docker compose up -d`
+- Production profile: `docker compose --profile prod up -d`
+
+The `lattice-mind-api` / `lattice-mind-dev` containers run both processes together (web UI/API + MCP) and preconfigure `LATTICE_MIND_API_BASE_URL` to `http://127.0.0.1:8000` inside the container.
+
+In the web UI header, use **SHOW TOKEN** after login to reveal/hide the current JWT for `LATTICE_MIND_MCP_TOKEN`.
+
+### Exposed MCP tools
+
+- `health_check` — checks API readiness.
+- `submit_scan` — queues a challenge solve run (`challenge_type`, optional `url`/`file_path`, metadata).
+- `get_run_status` — retrieves full run status, node timeline, observations, and flag.
+- `list_runs` — returns recent runs.
+- `list_rules` and `get_rule` — inspect loaded decision-tree rules.
+
 ## Architecture
 
 Lattice Mind is composed of the following layers:
