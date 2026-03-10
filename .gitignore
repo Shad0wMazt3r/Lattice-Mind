@@ -41,3 +41,9 @@ htmlcov/
 artifacts/
 *.log
 .DS_Store
+
+# Prompt files
+prompt.md
+
+# YAML trees
+lattice_mind/trees/yaml/*

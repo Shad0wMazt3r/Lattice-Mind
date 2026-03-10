@@ -17,30 +17,41 @@ description: >
 applies_when:
   - "context.challenge.type == 'web'"
 
-min_confidence: 0.10
+min_confidence: 0.15
 
 stop_on_flag: true
 
 # ============================================================
 # Confidence seeds
 # ============================================================
+# NOTE: Seeds are intentionally conservative. SSTI is a relatively
+# rare vulnerability that should only score high when there is strong
+# evidence of BOTH a template engine AND a user-controlled param that
+# is likely reflected into the template.
 confidence_seeds:
-  - if: "'python' in context.tech_stack or 'jinja2' in context.tech_stack or 'flask' in context.tech_stack or 'django' in context.tech_stack"
-    boost: 0.30
-    label: "Python template engine detected"
-  - if: "'ruby' in context.tech_stack or 'rails' in context.tech_stack or 'erb' in context.tech_stack"
-    boost: 0.20
-    label: "Ruby template engine detected"
-  - if: "'php' in context.tech_stack or 'twig' in context.tech_stack or 'smarty' in context.tech_stack"
-    boost: 0.20
-    label: "PHP template engine detected"
-  - if: "'java' in context.tech_stack or 'freemarker' in context.tech_stack or 'velocity' in context.tech_stack"
-    boost: 0.20
-    label: "Java template engine detected"
-  - if: "any(p in context.params for p in ['name','template','msg','message','content','text','render','greeting','title'])"
+  # Strong signal: confirmed template engine in stack (inherently renders user input)
+  - if: "'jinja2' in context.tech_stack or 'twig' in context.tech_stack or 'smarty' in context.tech_stack or 'freemarker' in context.tech_stack or 'velocity' in context.tech_stack or 'erb' in context.tech_stack"
+    boost: 0.25
+    label: "Named template engine explicitly detected"
+  # Weaker signal: language that *may* use a template engine (needs corroboration)
+  - if: "'flask' in context.tech_stack or 'django' in context.tech_stack or 'rails' in context.tech_stack"
     boost: 0.15
-    label: "Reflection-style parameter found"
-  - if: "any(p in context.found_paths for p in ['/render', '/preview', '/template', '/report', '/generate'])"
+    label: "Template-friendly framework detected"
+  - if: "'python' in context.tech_stack or 'ruby' in context.tech_stack"
+    boost: 0.05
+    label: "Scripting language present (weak signal)"
+  - if: "'php' in context.tech_stack"
+    boost: 0.05
+    label: "PHP detected (weak SSTI signal on its own)"
+  - if: "'java' in context.tech_stack"
+    boost: 0.05
+    label: "Java detected (weak SSTI signal on its own)"
+  # Template-specific params: narrow list — only names strongly indicative of template rendering
+  - if: "any(p in context.params for p in ['template', 'render', 'greeting', 'tpl', 'view', 'layout'])"
+    boost: 0.20
+    label: "Template-rendering parameter found"
+  # Template-related endpoints: strong evidence of a template-serving path
+  - if: "any(p in context.found_paths for p in ['/render', '/template', '/generate', '/report', '/preview'])"
     boost: 0.15
     label: "Template-related path found"
 

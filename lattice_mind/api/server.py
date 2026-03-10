@@ -1,32 +1,96 @@
-"""FastAPI server exposing the Lattice Mind solver along with a simple UI."""
 from __future__ import annotations
 
 import asyncio
+import base64 as _b64
 import json
 import logging
 import os
+import pathlib
+import re as _re
+import secrets as _secrets
+import shutil
+import smtplib
 import sqlite3
 import threading
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
+from email.message import EmailMessage
 from typing import Any, Dict, List, Optional, Tuple
 
-import base64 as _b64
-import pathlib
-import re as _re
-import shutil
-
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from jose import JWTError
+from jose import jwt as _jwt
+from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, Field
 
-from lattice_mind.mvp import MVPSolver
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
+from lattice_mind.mvp import MVPSolver
 
 logger = logging.getLogger(__name__)
+
+
+def _now() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
+_ALGORITHM = "HS256"
+_TOKEN_HOURS = int(os.environ.get("LATTICE_MIND_TOKEN_HOURS", "24"))
+_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY: str = ""  # populated after _init_db()
+
+
+def _hash_pw(pw: str) -> str:
+    return _pwd_ctx.hash(pw)
+
+
+def _verify_pw(plain: str, hashed: str) -> bool:
+    return _pwd_ctx.verify(plain, hashed)
+
+
+def _make_token(data: dict) -> str:
+    from datetime import timedelta
+
+    payload = {**data, "exp": datetime.utcnow() + timedelta(hours=_TOKEN_HOURS)}
+    return _jwt.encode(payload, SECRET_KEY, algorithm=_ALGORITHM)
+
+
+def _decode_token(token: str) -> Optional[dict]:
+    try:
+        return _jwt.decode(token, SECRET_KEY, algorithms=[_ALGORITHM])
+    except Exception:
+        return None
+
+
+def _send_email(to_email: str, subject: str, content: str):
+    import smtplib
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg.set_content(content)
+    msg["Subject"] = subject
+    msg["From"] = "noreply@latticemind.local"
+    msg["To"] = to_email
+    try:
+        host = os.environ.get("SMTP_HOST", "mailpit")
+        port = int(os.environ.get("SMTP_PORT", "1025"))
+        with smtplib.SMTP(host, port) as server:
+            server.send_message(msg)
+    except Exception as e:
+        logger.error(f"Failed to send email to {to_email}: {e}")
+
 
 # ── WebSocket Management ─────────────────────────────────────────────────────
 class ConnectionManager:
@@ -57,16 +121,19 @@ class ConnectionManager:
                 except Exception:
                     pass
 
+
 manager = ConnectionManager()
 
 # ── SQLite persistence ────────────────────────────────────────────────────────
 DB_PATH = os.environ.get("LATTICE_MIND_DB", "/data/runs.db")
+
 
 def _db_connect() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 @contextmanager
 def _db():
@@ -76,6 +143,7 @@ def _db():
         conn.commit()
     finally:
         conn.close()
+
 
 def _init_db():
     with _db() as conn:
@@ -112,21 +180,96 @@ def _init_db():
             )
         """)
         # seed default if missing
-        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('dir_scan_enabled', 'false')")
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('dir_scan_enabled', 'false')"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                username        TEXT PRIMARY KEY,
+                hashed_password TEXT NOT NULL,
+                role            TEXT NOT NULL DEFAULT 'operator',
+                email           TEXT UNIQUE,
+                created_at      TEXT NOT NULL
+            )
+        """)
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        except Exception:
+            pass
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('secret_key', ?)",
+            (_secrets.token_hex(32),),
+        )
+
 
 def _load_settings():
     """Load persisted settings into FEATURE_FLAGS on startup."""
     from lattice_mind.config import FEATURE_FLAGS
+
     with _db() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key='dir_scan_enabled'").fetchone()
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key='dir_scan_enabled'"
+        ).fetchone()
         if row:
             FEATURE_FLAGS.dir_scan_enabled = row["value"].lower() == "true"
+
+
+def _get_secret_key() -> str:
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key='secret_key'"
+        ).fetchone()
+    return row["value"] if row else _secrets.token_hex(32)
+
+
+def _db_get_user(username: str) -> Optional[dict]:
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE username = ?", (username,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def _db_get_user_by_email(email: str) -> Optional[dict]:
+    with _db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    return dict(row) if row else None
+
+
+def _db_user_count() -> int:
+    with _db() as conn:
+        return conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()["cnt"]
+
+
+def _db_create_user(
+    username: str, password: str, email: str = None, role: str = "operator"
+) -> dict:
+    hashed = _hash_pw(password)
+    with _db() as conn:
+        conn.execute(
+            "INSERT INTO users (username, hashed_password, role, email, created_at) VALUES (?,?,?,?,?)",
+            (username, hashed, role, email, _now()),
+        )
+    return {"username": username, "role": role, "email": email}
+
+
+def _seed_admin():
+    """Create default admin account if no users exist yet."""
+    if _db_user_count() > 0:
+        return
+    admin_user = os.environ.get("LATTICE_MIND_ADMIN_USER", "admin")
+    admin_pass = os.environ.get("LATTICE_MIND_ADMIN_PASS", "admin")
+    admin_email = os.environ.get("LATTICE_MIND_ADMIN_EMAIL", "admin@latticemind.local")
+    _db_create_user(admin_user, admin_pass, admin_email, "admin")
+    logger.info("Seeded default admin user: %s", admin_user)
+
 
 def _db_save(state: RunState):
     """Upsert a RunState to SQLite."""
     d = state.to_dict()
     with _db() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO runs
                 (run_id, status, challenge, steps, flag, error, log, observations, confidence,
                  started_at, finished_at, created_at, updated_at)
@@ -142,25 +285,30 @@ def _db_save(state: RunState):
                 started_at   = excluded.started_at,
                 finished_at  = excluded.finished_at,
                 updated_at   = excluded.updated_at
-        """, (
-            d["run_id"], d["status"],
-            json.dumps(d["challenge"]),
-            json.dumps(d["steps"]),
-            d["flag"], d["error"],
-            json.dumps(d["log"]) if d["log"] else None,
-            json.dumps(d["observations"]) if d["observations"] else None,
-            json.dumps(d["confidence"]) if d["confidence"] else None,
-            d["started_at"], d["finished_at"],
-            d["created_at"], d["updated_at"],
-        ))
+        """,
+            (
+                d["run_id"],
+                d["status"],
+                json.dumps(d["challenge"]),
+                json.dumps(d["steps"]),
+                d["flag"],
+                d["error"],
+                json.dumps(d["log"]) if d["log"] else None,
+                json.dumps(d["observations"]) if d["observations"] else None,
+                json.dumps(d["confidence"]) if d["confidence"] else None,
+                d["started_at"],
+                d["finished_at"],
+                d["created_at"],
+                d["updated_at"],
+            ),
+        )
+
 
 def _db_load(run_id: str) -> Optional[Dict[str, Any]]:
     """Load a run row by full or partial UUID prefix."""
     with _db() as conn:
         # exact match first
-        row = conn.execute(
-            "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
         if not row:
             # prefix match (supports 8-char dashboard IDs)
             row = conn.execute(
@@ -169,18 +317,20 @@ def _db_load(run_id: str) -> Optional[Dict[str, Any]]:
     if not row:
         return None
     d = dict(row)
-    d["challenge"]    = json.loads(d["challenge"])
-    d["steps"]        = json.loads(d["steps"])
-    d["log"]          = json.loads(d["log"]) if d["log"] else None
+    d["challenge"] = json.loads(d["challenge"])
+    d["steps"] = json.loads(d["steps"])
+    d["log"] = json.loads(d["log"]) if d["log"] else None
     d["observations"] = json.loads(d["observations"]) if d["observations"] else None
-    d["confidence"]   = json.loads(d["confidence"]) if d.get("confidence") else None
+    d["confidence"] = json.loads(d["confidence"]) if d.get("confidence") else None
     return d
+
 
 def _db_list(limit: int = 50) -> List[Dict[str, Any]]:
     with _db() as conn:
         rows = conn.execute(
             "SELECT run_id, status, flag, error, created_at, finished_at, challenge "
-            "FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)
+            "FROM runs ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
     out = []
     for row in rows:
@@ -189,21 +339,48 @@ def _db_list(limit: int = 50) -> List[Dict[str, Any]]:
         out.append(d)
     return out
 
+
 app = FastAPI(
     title="Lattice Mind API",
     description="REST API + web UI for the autonomous CTF solver",
     version="0.1.0",
 )
 
+_PUBLIC_PATHS = {
+    "/",
+    "/health",
+    "/auth/login",
+    "/auth/register",
+    "/auth/forgot-password",
+    "/auth/reset-password",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+}
+
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/static/") or path.startswith("/ws/") or path in _PUBLIC_PATHS:
+        return await call_next(request)
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    if not _decode_token(auth[7:]):
+        return JSONResponse(
+            status_code=401, content={"detail": "Invalid or expired token"}
+        )
+    return await call_next(request)
+
+
 _init_db()  # ensure schema exists at import time
 _load_settings()  # restore persisted feature flags
+SECRET_KEY = _get_secret_key()  # load or create persistent JWT secret
+_seed_admin()  # seed default admin if no users
 
 solver = MVPSolver()
 solver_lock = asyncio.Lock()
-
-
-def _now() -> str:
-    return datetime.utcnow().isoformat() + "Z"
 
 
 @dataclass
@@ -253,8 +430,8 @@ class RunState:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 asyncio.run_coroutine_threadsafe(
-                    manager.broadcast(self.run_id, {"type": "step", "data": payload}), 
-                    loop
+                    manager.broadcast(self.run_id, {"type": "step", "data": payload}),
+                    loop,
                 )
         except Exception:
             pass
@@ -270,8 +447,10 @@ class RunState:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 asyncio.run_coroutine_threadsafe(
-                    manager.broadcast(self.run_id, {"type": "update", "data": self.to_dict()}), 
-                    loop
+                    manager.broadcast(
+                        self.run_id, {"type": "update", "data": self.to_dict()}
+                    ),
+                    loop,
                 )
         except Exception:
             pass
@@ -280,6 +459,7 @@ class RunState:
 _runs: Dict[str, RunState] = {}
 _runs_lock = threading.Lock()
 _tasks: Dict[str, asyncio.Task] = {}
+
 
 def _register_run(state: RunState):
     with _runs_lock:
@@ -350,6 +530,167 @@ class RunStatusResponse(BaseModel):
     finished_at: Optional[str] = None
 
 
+# ── Auth endpoints ───────────────────────────────────────────────────────────
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    email: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+    role: str
+    must_change_password: bool = False
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def auth_login(payload: AuthRequest):
+    user = _db_get_user(payload.username)
+    if not user or not _verify_pw(payload.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = _make_token({"sub": user["username"], "role": user["role"]})
+
+    must_change_password = False
+    admin_user = os.environ.get("LATTICE_MIND_ADMIN_USER", "admin")
+    admin_pass = os.environ.get("LATTICE_MIND_ADMIN_PASS", "admin")
+    if user["username"] == admin_user and _verify_pw(
+        admin_pass, user["hashed_password"]
+    ):
+        must_change_password = True
+
+    return TokenResponse(
+        access_token=token,
+        username=user["username"],
+        role=user["role"],
+        must_change_password=must_change_password,
+    )
+
+
+@app.post("/auth/register", response_model=TokenResponse)
+async def auth_register(payload: RegisterRequest):
+    if len(payload.username) < 2 or len(payload.password) < 6:
+        raise HTTPException(
+            status_code=422, detail="Username ≥ 2 chars and password ≥ 6 chars required"
+        )
+    if _db_get_user(payload.username):
+        raise HTTPException(status_code=409, detail="Username already exists")
+    if _db_get_user_by_email(payload.email):
+        raise HTTPException(status_code=409, detail="Email already exists")
+    role = "admin" if _db_user_count() == 0 else "operator"
+    user = _db_create_user(payload.username, payload.password, payload.email, role)
+    token = _make_token({"sub": user["username"], "role": user["role"]})
+    return TokenResponse(
+        access_token=token, username=user["username"], role=user["role"]
+    )
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+@app.post("/auth/forgot-password")
+async def auth_forgot_password(payload: ForgotPasswordRequest):
+    user = _db_get_user_by_email(payload.email)
+    if user:
+        token = base64.b64encode(urllib.parse.quote(payload.email).encode()).decode()
+        reset_link = f"/#reset={token}"
+        _send_email(
+            payload.email,
+            "Password Reset",
+            f"Please use this link to reset your password: {reset_link}",
+        )
+    return {"detail": "If that email exists, a reset link was sent."}
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@app.post("/auth/reset-password")
+async def auth_reset_password(payload: ResetPasswordRequest):
+    try:
+        email = urllib.parse.unquote(base64.b64decode(payload.token).decode())
+    except:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    user = _db_get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    hashed = _hash_pw(payload.new_password)
+    with _db() as conn:
+        conn.execute(
+            "UPDATE users SET hashed_password = ? WHERE email = ?", (hashed, email)
+        )
+    return {"detail": "Password reset successfully"}
+
+
+@app.get("/auth/me")
+async def auth_me(request: Request):
+    auth = request.headers.get("Authorization", "")
+    payload = _decode_token(auth[7:]) if auth.startswith("Bearer ") else None
+    if not payload:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    username = payload.get("sub")
+    user = _db_get_user(username)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    must_change_password = False
+    admin_user = os.environ.get("LATTICE_MIND_ADMIN_USER", "admin")
+    admin_pass = os.environ.get("LATTICE_MIND_ADMIN_PASS", "admin")
+    if user["username"] == admin_user and _verify_pw(
+        admin_pass, user["hashed_password"]
+    ):
+        must_change_password = True
+
+    return {
+        "username": username,
+        "role": user["role"],
+        "must_change_password": must_change_password,
+    }
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.post("/auth/change-password")
+async def auth_change_password(request: Request, payload: ChangePasswordRequest):
+    auth = request.headers.get("Authorization", "")
+    token_payload = _decode_token(auth[7:]) if auth.startswith("Bearer ") else None
+    if not token_payload:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    username = token_payload.get("sub")
+    user = _db_get_user(username)
+    if not user or not _verify_pw(payload.current_password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Invalid current password")
+
+    if len(payload.new_password) < 6:
+        raise HTTPException(
+            status_code=400, detail="New password must be at least 6 characters"
+        )
+
+    hashed = _hash_pw(payload.new_password)
+    with _db() as conn:
+        conn.execute(
+            "UPDATE users SET hashed_password = ? WHERE username = ?",
+            (hashed, username),
+        )
+    return {"detail": "Password changed successfully"}
+
+
 @app.get("/rules")
 async def list_rules():
     """List all loaded YAML decision trees."""
@@ -362,10 +703,11 @@ async def list_rules():
             "enabled": t.enabled,
             "description": t.description,
             "detection_paths": len(t.detection_paths),
-            "exploitation_paths": len(t.exploitation_paths)
+            "exploitation_paths": len(t.exploitation_paths),
         }
         for t in solver.registry.list_trees()
     ]
+
 
 @app.get("/rules/{rule_id}")
 async def get_rule(rule_id: str):
@@ -375,33 +717,44 @@ async def get_rule(rule_id: str):
         raise HTTPException(status_code=404, detail="Rule not found")
     return tree
 
+
 @app.post("/rules/reload")
 async def reload_rules():
     """Rescan the YAML trees directory and hot-reload rules."""
     import pathlib
+
     base_path = pathlib.Path(solver.__file__).parent / "trees" / "yaml"
     solver.registry.load_from_directory(str(base_path))
     return {"status": "ok", "count": len(solver.registry.list_trees())}
+
 
 @app.get("/settings")
 async def get_settings():
     """Return current feature flag settings."""
     from lattice_mind.config import FEATURE_FLAGS
+
     return {"dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled}
+
 
 @app.put("/settings")
 async def put_settings(payload: dict):
     """Update feature flag settings and persist to DB."""
     from lattice_mind.config import FEATURE_FLAGS
+
     changed = {}
     if "dir_scan_enabled" in payload:
         val = bool(payload["dir_scan_enabled"])
         FEATURE_FLAGS.dir_scan_enabled = val
         with _db() as conn:
-            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('dir_scan_enabled', ?)",
-                         ("true" if val else "false",))
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('dir_scan_enabled', ?)",
+                ("true" if val else "false",),
+            )
         changed["dir_scan_enabled"] = val
-    return {"updated": changed, "settings": {"dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled}}
+    return {
+        "updated": changed,
+        "settings": {"dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled},
+    }
 
 
 async def patch_rule(rule_id: str, payload: dict):
@@ -420,28 +773,32 @@ from fastapi.staticfiles import StaticFiles
 BASE_DIR = pathlib.Path(__file__).parent.parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 
+
 @app.websocket("/ws/{run_id}")
-async def websocket_endpoint(websocket: WebSocket, run_id: str):
+async def websocket_endpoint(websocket: WebSocket, run_id: str, token: str = ""):
+    if not _decode_token(token):
+        await websocket.close(code=4001)
+        return
     await manager.connect(websocket, run_id)
     try:
-        # Send current state immediately
         state = get_run_state(run_id)
         if state:
             await websocket.send_json({"type": "init", "data": state.to_dict()})
-        
         while True:
-            # Keep connection alive
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, run_id)
     except Exception:
         manager.disconnect(websocket, run_id)
 
+
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
 
 @app.get("/")
 async def read_index():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
+
 
 @app.get("/health")
 async def healthcheck() -> Dict[str, str]:
@@ -449,11 +806,12 @@ async def healthcheck() -> Dict[str, str]:
     return {"status": "ok"}
 
 
-
 @app.get("/challenge-types")
 async def challenge_types() -> Dict[str, List[str]]:
     """Expose available challenge types for clients."""
-    return {"challenge_types": [challenge_type.value for challenge_type in ChallengeType]}
+    return {
+        "challenge_types": [challenge_type.value for challenge_type in ChallengeType]
+    }
 
 
 @app.post("/solve", response_model=SolveSubmissionResponse)
@@ -535,7 +893,9 @@ async def _run_solver(run_id: str, descriptor: ChallengeDescriptor):
         _tasks.pop(run_id, None)
 
 
-def _execute_solver(challenge: ChallengeDescriptor) -> Tuple[Optional[str], Dict[str, Any]]:
+def _execute_solver(
+    challenge: ChallengeDescriptor,
+) -> Tuple[Optional[str], Dict[str, Any]]:
     """Run MVPSolver synchronously for use inside asyncio executors."""
     flag = solver.solve(challenge)
     log = solver.orchestrator.get_execution_log()
@@ -555,7 +915,9 @@ def _serialize_log(log: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _serialize_challenge(challenge: Optional[ChallengeDescriptor]) -> Optional[Dict[str, Any]]:
+def _serialize_challenge(
+    challenge: Optional[ChallengeDescriptor],
+) -> Optional[Dict[str, Any]]:
     """Convert ChallengeDescriptor objects to JSON."""
     if not challenge:
         return None
@@ -599,7 +961,9 @@ async def rerun_challenge(run_id: str):
         metadata=ch.get("metadata", {}),
     )
     new_id = str(uuid.uuid4())
-    new_state = RunState(run_id=new_id, challenge=_serialize_challenge(descriptor) or {})
+    new_state = RunState(
+        run_id=new_id, challenge=_serialize_challenge(descriptor) or {}
+    )
     _register_run(new_state)
     _start_solver_task(new_id, descriptor)
     return SolveSubmissionResponse(run_id=new_id, status=new_state.status)
@@ -609,6 +973,7 @@ async def rerun_challenge(run_id: str):
 async def hitl_pending():
     """Return pending human-in-the-loop questions."""
     from lattice_mind.core.human_loop import get_human_loop_manager
+
     mgr = get_human_loop_manager()
     return {"questions": mgr.get_pending()}
 
@@ -617,11 +982,14 @@ async def hitl_pending():
 async def hitl_answer(question_id: str, payload: dict):
     """Submit an answer to a pending HITL question."""
     from lattice_mind.core.human_loop import get_human_loop_manager
+
     mgr = get_human_loop_manager()
     answer = payload.get("answer", "")
     ok = mgr.answer(question_id, answer)
     if not ok:
-        raise HTTPException(status_code=404, detail="Question not found or already answered")
+        raise HTTPException(
+            status_code=404, detail="Question not found or already answered"
+        )
     return {"ok": True}
 
 
@@ -635,78 +1003,145 @@ async def crypto_solve(payload: dict):
     ctype = payload.get("type", "auto")
     params = payload.get("params", {})
     results = []
-    flag_pattern = _re.compile(r'flag\{[^}]+\}|ctf\{[^}]+\}|HTB\{[^}]+\}', _re.IGNORECASE)
+    flag_pattern = _re.compile(
+        r"flag\{[^}]+\}|ctf\{[^}]+\}|HTB\{[^}]+\}", _re.IGNORECASE
+    )
 
     def add(method, output, note=""):
         flag = flag_pattern.search(str(output))
-        results.append({"method": method, "output": str(output)[:2000], "note": note, "flag": flag.group(0) if flag else None})
+        results.append(
+            {
+                "method": method,
+                "output": str(output)[:2000],
+                "note": note,
+                "flag": flag.group(0) if flag else None,
+            }
+        )
 
     if ctype in ("auto", "base64"):
         try:
-            add("base64_decode", _b64.b64decode(text).decode('utf-8', errors='replace'))
+            add("base64_decode", _b64.b64decode(text).decode("utf-8", errors="replace"))
         except Exception as ex:
-            if ctype == "base64": add("base64_decode", f"Error: {ex}")
+            if ctype == "base64":
+                add("base64_decode", f"Error: {ex}")
 
     if ctype in ("auto", "hex"):
         try:
-            stripped = text.replace(' ', '').replace('\n', '')
-            add("hex_decode", bytes.fromhex(stripped).decode('utf-8', errors='replace'))
+            stripped = text.replace(" ", "").replace("\n", "")
+            add("hex_decode", bytes.fromhex(stripped).decode("utf-8", errors="replace"))
         except Exception as ex:
-            if ctype == "hex": add("hex_decode", f"Error: {ex}")
+            if ctype == "hex":
+                add("hex_decode", f"Error: {ex}")
 
     if ctype in ("auto", "url"):
         import urllib.parse
+
         add("url_decode", urllib.parse.unquote(text))
 
     if ctype in ("auto", "caesar", "rot13"):
         shift = int(params.get("shift", 13)) if ctype != "auto" else None
         shifts = [shift] if shift is not None else range(26)
         for s in shifts:
-            out = ''.join(
-                chr((ord(c) - ord('A') + s) % 26 + ord('A')) if c.isupper() else
-                chr((ord(c) - ord('a') + s) % 26 + ord('a')) if c.islower() else c
-                for c in text)
+            out = "".join(
+                (
+                    chr((ord(c) - ord("A") + s) % 26 + ord("A"))
+                    if c.isupper()
+                    else (
+                        chr((ord(c) - ord("a") + s) % 26 + ord("a"))
+                        if c.islower()
+                        else c
+                    )
+                )
+                for c in text
+            )
             add(f"caesar_{s}", out, f"ROT{s}")
-            if flag_pattern.search(out): break
+            if flag_pattern.search(out):
+                break
 
     if ctype in ("auto", "xor"):
         key_param = params.get("key")
         if key_param is not None:
-            key_bytes = key_param.encode() if isinstance(key_param, str) else bytes([int(key_param)])
-            raw = text.encode('latin-1', errors='replace')
-            xored = bytes(raw[i] ^ key_bytes[i % len(key_bytes)] for i in range(len(raw)))
-            add("xor_key", xored.decode('utf-8', errors='replace'))
+            key_bytes = (
+                key_param.encode()
+                if isinstance(key_param, str)
+                else bytes([int(key_param)])
+            )
+            raw = text.encode("latin-1", errors="replace")
+            xored = bytes(
+                raw[i] ^ key_bytes[i % len(key_bytes)] for i in range(len(raw))
+            )
+            add("xor_key", xored.decode("utf-8", errors="replace"))
         else:
-            raw = text.encode('latin-1', errors='replace')
+            raw = text.encode("latin-1", errors="replace")
             best = []
             for k in range(256):
                 out_bytes = bytes(b ^ k for b in raw)
-                out_str = out_bytes.decode('utf-8', errors='replace')
-                score = sum({'e': 13, 't': 9, 'a': 8, 'o': 8, 'i': 7, 'n': 7, 's': 6}.get(c.lower(), 0) for c in out_str)
+                out_str = out_bytes.decode("utf-8", errors="replace")
+                score = sum(
+                    {"e": 13, "t": 9, "a": 8, "o": 8, "i": 7, "n": 7, "s": 6}.get(
+                        c.lower(), 0
+                    )
+                    for c in out_str
+                )
                 best.append((score, k, out_str))
             best.sort(reverse=True)
             for score, k, out_str in best[:5]:
                 add(f"xor_0x{k:02x}", out_str, f"key=0x{k:02x}")
-                if flag_pattern.search(out_str): break
+                if flag_pattern.search(out_str):
+                    break
 
     if ctype in ("auto", "binary"):
         try:
-            clean = text.replace(' ', '')
-            if all(c in '01' for c in clean) and len(clean) % 8 == 0:
-                out = ''.join(chr(int(clean[i:i + 8], 2)) for i in range(0, len(clean), 8))
+            clean = text.replace(" ", "")
+            if all(c in "01" for c in clean) and len(clean) % 8 == 0:
+                out = "".join(
+                    chr(int(clean[i : i + 8], 2)) for i in range(0, len(clean), 8)
+                )
                 add("binary_decode", out)
         except Exception:
             pass
 
     if ctype in ("auto", "morse"):
-        morse = {'.-': 'A', '-...': 'B', '-.-.': 'C', '-..': 'D', '.': 'E', '..-.': 'F', '--.': 'G',
-                 '....': 'H', '..': 'I', '.---': 'J', '-.-': 'K', '.-..': 'L', '--': 'M', '-.': 'N',
-                 '---': 'O', '.--.': 'P', '--.-': 'Q', '.-.': 'R', '...': 'S', '-': 'T', '..-': 'U',
-                 '...-': 'V', '.--': 'W', '-..-': 'X', '-.--': 'Y', '--..': 'Z',
-                 '-----': '0', '.----': '1', '..---': '2', '...--': '3', '....-': '4',
-                 '.....': '5', '-....': '6', '--...': '7', '---..': '8', '----.': '9'}
+        morse = {
+            ".-": "A",
+            "-...": "B",
+            "-.-.": "C",
+            "-..": "D",
+            ".": "E",
+            "..-.": "F",
+            "--.": "G",
+            "....": "H",
+            "..": "I",
+            ".---": "J",
+            "-.-": "K",
+            ".-..": "L",
+            "--": "M",
+            "-.": "N",
+            "---": "O",
+            ".--.": "P",
+            "--.-": "Q",
+            ".-.": "R",
+            "...": "S",
+            "-": "T",
+            "..-": "U",
+            "...-": "V",
+            ".--": "W",
+            "-..-": "X",
+            "-.--": "Y",
+            "--..": "Z",
+            "-----": "0",
+            ".----": "1",
+            "..---": "2",
+            "...--": "3",
+            "....-": "4",
+            ".....": "5",
+            "-....": "6",
+            "--...": "7",
+            "---..": "8",
+            "----.": "9",
+        }
         try:
-            decoded = ' '.join(morse.get(w, '?') for w in text.strip().split())
+            decoded = " ".join(morse.get(w, "?") for w in text.strip().split())
             add("morse_decode", decoded)
         except Exception:
             pass
@@ -722,12 +1157,18 @@ async def crypto_solve(payload: dict):
                 d = pow(e, -1, phi)
                 m = pow(c, d, n)
                 length = (m.bit_length() + 7) // 8
-                add("rsa_pq_decrypt", m.to_bytes(length, 'big').decode('utf-8', errors='replace'))
+                add(
+                    "rsa_pq_decrypt",
+                    m.to_bytes(length, "big").decode("utf-8", errors="replace"),
+                )
             elif params.get("d"):
                 d = int(params["d"])
                 m = pow(c, d, n)
                 length = (m.bit_length() + 7) // 8
-                add("rsa_known_d", m.to_bytes(length, 'big').decode('utf-8', errors='replace'))
+                add(
+                    "rsa_known_d",
+                    m.to_bytes(length, "big").decode("utf-8", errors="replace"),
+                )
             else:
                 add("rsa_no_key", "Need p,q or d to decrypt. Try factoring n.")
         except Exception as ex:
@@ -742,4 +1183,3 @@ def main():
     import uvicorn
 
     uvicorn.run("lattice_mind.api.server:app", host="0.0.0.0", port=8000, reload=False)
-

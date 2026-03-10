@@ -13,6 +13,9 @@ setup(
         "uvicorn[standard]>=0.27.0",
         "requests>=2.31.0",
         "python-multipart>=0.0.9",
+        "passlib[bcrypt]>=1.7.4",
+        "bcrypt>=3.2.0,<4.0.0",
+        "python-jose[cryptography]>=3.3.0",
     ],
     extras_require={
         "dev": [

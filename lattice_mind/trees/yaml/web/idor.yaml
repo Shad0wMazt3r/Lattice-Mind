@@ -1,4 +1,4 @@
-# ============================================================
+  # ============================================================
 # Tree metadata
 # ============================================================
 id: web_idor
@@ -17,23 +17,33 @@ description: >
 applies_when:
   - "context.challenge.type == 'web'"
 
-min_confidence: 0.10
+min_confidence: 0.15
 
 stop_on_flag: true
 
 # ============================================================
 # Confidence seeds
 # ============================================================
+# NOTE: IDOR should only score high when there is explicit evidence of
+# direct object references with user-controlled IDs. Generic params like
+# 'id' alone are insufficient — they appear in virtually every web app.
 confidence_seeds:
-  - if: "any(p in context.params for p in ['id','user_id','uid','order_id','doc_id','file_id','key','invoice','account'])"
-    boost: 0.40
-    label: "Direct object reference parameter found"
-  - if: "any(p in context.found_paths for p in ['/user', '/profile', '/document', '/file', '/order', '/account', '/invoice'])"
-    boost: 0.25
-    label: "Object reference endpoint found"
-  - if: "any(p in context.params for p in ['file','document','doc','attachment','download'])"
+  # Strong signal: very specific object-reference param names
+  - if: "any(p in context.params for p in ['user_id','uid','order_id','doc_id','file_id','invoice','account_id','record_id','object_id'])"
+    boost: 0.35
+    label: "Explicit object-reference parameter found"
+  # Weaker signal: generic 'id' that could be anything
+  - if: "any(p in context.params for p in ['id']) and any(p in context.found_paths for p in ['/user', '/profile', '/document', '/file', '/order', '/account', '/invoice', '/api'])"
     boost: 0.20
-    label: "File reference parameter found"
+    label: "ID parameter with object-serving endpoint found"
+  # Strong path signal: resource endpoints that serve per-object data
+  - if: "any(p in context.found_paths for p in ['/user', '/profile', '/document', '/order', '/account', '/invoice'])"
+    boost: 0.15
+    label: "Object-serving endpoint found"
+  # File reference params — only meaningful when also serving files
+  - if: "any(p in context.params for p in ['file','document','doc','attachment','download']) and any(p in context.found_paths for p in ['/download', '/file', '/attachment', '/view'])"
+    boost: 0.20
+    label: "File reference parameter with download endpoint found"
 
 # ============================================================
 # Detection paths
