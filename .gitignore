@@ -47,4 +47,6 @@ prompt.md
 
 # YAML trees
 lattice_mind/trees/yaml/*
-.gemini/settings.json
+
+# Models
+.gemini/*
