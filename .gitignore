@@ -53,3 +53,7 @@ lattice_mind/trees/yaml/*
 
 # Cursor architecture knowledge
 .cursor/rules/*
+
+
+# Github
+.github/
