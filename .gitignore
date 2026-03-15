@@ -49,11 +49,11 @@ prompt.md
 lattice_mind/trees/yaml/*
 
 # Models
-.gemini/*
+.gemini/
 
 # Cursor architecture knowledge
 .cursor/rules/*
-
+.cursor/
 
 # Github
 .github/
