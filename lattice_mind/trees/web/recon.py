@@ -86,65 +86,75 @@ class WebReconProbeNode(DecisionNode):
 
     def _crawl_links(self, base_url: str, body: str) -> dict:
         """Extract internal links, form params, and form metadata from an HTML page."""
-        import re
-        from urllib.parse import urljoin, urlparse
+        from html.parser import HTMLParser
+        from urllib.parse import parse_qsl, urljoin, urlparse, urlunparse
 
         base = urlparse(base_url)
-        endpoints = []
-        params = []
-        forms = []
 
-        # Extract form metadata (action + method) and collect endpoints from actions
-        for form_match in re.finditer(
-            r"<form([^>]*)>", body, re.IGNORECASE | re.DOTALL
-        ):
-            attrs = form_match.group(1)
-            action = re.search(r'action=["\']([^"\']+)["\']', attrs, re.IGNORECASE)
-            method = re.search(r'method=["\']([^"\']+)["\']', attrs, re.IGNORECASE)
-            action_url = urljoin(base_url, action.group(1)) if action else base_url
-            form_method = method.group(1).upper() if method else "GET"
-            forms.append({"action": action_url, "method": form_method})
-            p = urlparse(action_url)
-            if p.netloc == base.netloc or not p.netloc:
-                endpoints.append(action_url.rstrip("/"))
+        def _is_internal(url: str) -> bool:
+            parsed = urlparse(url)
+            return not parsed.netloc or parsed.netloc == base.netloc
 
-        # Extract href and non-form action links
-        for pattern in [r'href=["\']([^"\'#?]+)["\']']:
-            for match in re.findall(pattern, body, re.IGNORECASE):
-                if not match or match.startswith(("javascript:", "mailto:", "#")):
-                    continue
-                full = urljoin(base_url, match)
-                p = urlparse(full)
-                if p.netloc == base.netloc or not p.netloc:
-                    endpoints.append(full.rstrip("/"))
+        def _normalize_url(raw_url: str) -> Optional[str]:
+            if not raw_url:
+                return None
+            raw_url = raw_url.strip()
+            if raw_url.startswith(("#", "javascript:", "mailto:", "tel:")):
+                return None
+            full = urljoin(base_url, raw_url)
+            parsed = urlparse(full)
+            if parsed.scheme and parsed.scheme not in {"http", "https"}:
+                return None
+            if not _is_internal(full):
+                return None
+            return urlunparse(parsed._replace(fragment=""))
 
-        # Extract form input/select/textarea names as potential params
-        for name in re.findall(
-            r'<input[^>]+name=["\']([^"\']+)["\']', body, re.IGNORECASE
-        ):
-            params.append(name)
-        for name in re.findall(
-            r'<select[^>]+name=["\']([^"\']+)["\']', body, re.IGNORECASE
-        ):
-            params.append(name)
-        for name in re.findall(
-            r'<textarea[^>]+name=["\']([^"\']+)["\']', body, re.IGNORECASE
-        ):
-            params.append(name)
+        class CrawlParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.endpoints = []
+                self.params = []
+                self.forms = []
 
-        # Extract query params already present in links
-        for href in re.findall(
-            r'href=["\'][^"\']*\?([^"\']+)["\']', body, re.IGNORECASE
-        ):
-            for part in href.split("&"):
-                key = part.split("=")[0]
-                if key:
-                    params.append(key)
+            def _add_endpoint(self, raw_url: str):
+                normalized = _normalize_url(raw_url)
+                if not normalized:
+                    return
+                self.endpoints.append(normalized.rstrip("/"))
+                parsed = urlparse(normalized)
+                for key, _ in parse_qsl(parsed.query, keep_blank_values=True):
+                    if key:
+                        self.params.append(key)
+
+            def handle_starttag(self, tag: str, attrs):
+                attr_map = {k.lower(): v for k, v in attrs if k}
+                tag = tag.lower()
+
+                if tag == "form":
+                    action = attr_map.get("action") or base_url
+                    method = (attr_map.get("method") or "GET").upper()
+                    normalized = _normalize_url(action) or base_url
+                    self.forms.append({"action": normalized, "method": method})
+                    self._add_endpoint(action)
+                    return
+
+                if tag in {"a", "area"}:
+                    self._add_endpoint(attr_map.get("href", ""))
+
+                if tag in {"input", "select", "textarea", "button"}:
+                    name = attr_map.get("name")
+                    if name:
+                        self.params.append(name)
+                    if tag == "button" and attr_map.get("formaction"):
+                        self._add_endpoint(attr_map.get("formaction", ""))
+
+        parser = CrawlParser()
+        parser.feed(body or "")
 
         return {
-            "endpoints": list(dict.fromkeys(endpoints))[:30],
-            "params": list(dict.fromkeys(params))[:20],
-            "forms": forms,
+            "endpoints": list(dict.fromkeys(parser.endpoints))[:30],
+            "params": list(dict.fromkeys(parser.params))[:20],
+            "forms": parser.forms,
         }
 
     def _identify_technologies(self, http_result: dict) -> dict:

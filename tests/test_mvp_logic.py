@@ -6,7 +6,6 @@ Covers:
 - Stop-on-flag: stops executing after first flag found
 - No flag: returns None when no trees produce a flag
 - _classify_asset exception is caught and returns None
-- Asset type routing (web, pwn, crypto, forensics) for _run_detection_tree
 - solve() resets confidence pool each call
 
 All tests use full mocking of external I/O and asyncio.run to prevent hangs.
@@ -144,9 +143,7 @@ class TestMVPSolverPrioritization:
 
         # asyncio.run returns None for each tree (no flag)
         with patch("asyncio.run", return_value=None) as mock_run:
-            # Also short-circuit classify and fallback
             solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-            solver._run_detection_tree = MagicMock(return_value=None)
             # Skip web recon
             mock_orch.run_tree.return_value = None
 
@@ -174,7 +171,6 @@ class TestMVPSolverPrioritization:
 
         with patch("asyncio.run", return_value=None):
             solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-            solver._run_detection_tree = MagicMock(return_value=None)
             mock_orch.run_tree.return_value = None
             solver.solve(_make_challenge())
 
@@ -215,7 +211,6 @@ class TestMVPSolverDynamicReranking:
 
         with patch("asyncio.run", side_effect=asyncio_run_side_effect):
             solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-            solver._run_detection_tree = MagicMock(return_value=None)
             mock_orch.run_tree.return_value = None
 
             solver.solve(_make_challenge())
@@ -246,7 +241,6 @@ class TestMVPSolverStopOnFlag:
         # tree1 returns a flag, tree2 should NOT be executed
         with patch("asyncio.run", side_effect=["flag{tree1_flag}", None]) as mock_run:
             solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-            solver._run_detection_tree = MagicMock(return_value=None)
             mock_orch.run_tree.return_value = None
 
             result = solver.solve(_make_challenge())
@@ -267,7 +261,6 @@ class TestMVPSolverStopOnFlag:
 
         with patch("asyncio.run", return_value="flag{from_yaml_tree}"):
             solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-            solver._run_detection_tree = MagicMock(return_value=None)
             mock_orch.run_tree.return_value = None
 
             result = solver.solve(_make_challenge())
@@ -279,30 +272,17 @@ class TestMVPSolverStopOnFlag:
         mock_registry.list_trees.return_value = []
 
         solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-        solver._run_detection_tree = MagicMock(return_value=None)
         mock_orch.run_tree.return_value = None
         mock_orch.execution_context["flag_found"] = None
 
         result = solver.solve(_make_challenge())
         assert result is None
 
-    def test_legacy_fallback_flag_returned(self):
-        solver, mock_registry, mock_executor, mock_orch = _make_solver_with_mocks()
-        mock_registry.list_trees.return_value = []  # No YAML trees
-
-        solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-        solver._run_detection_tree = MagicMock(return_value="flag{legacy_flag}")
-        mock_orch.run_tree.return_value = None
-
-        result = solver.solve(_make_challenge())
-        assert result == "flag{legacy_flag}"
-
     def test_flag_from_orchestrator_context_returned(self):
         solver, mock_registry, _, mock_orch = _make_solver_with_mocks()
         mock_registry.list_trees.return_value = []
 
         solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-        solver._run_detection_tree = MagicMock(return_value=None)
         mock_orch.run_tree.return_value = None
         mock_orch.execution_context["flag_found"] = "flag{ctx_flag}"
 
@@ -325,7 +305,6 @@ class TestMVPSolverConfidenceReset:
         solver.confidence_pool.clear = clear_mock
 
         solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-        solver._run_detection_tree = MagicMock(return_value=None)
         mock_orch.run_tree.return_value = None
 
         solver.solve(_make_challenge())
@@ -375,55 +354,6 @@ class TestMVPSolverClassifyAsset:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# _run_detection_tree routing
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-class TestMVPSolverDetectionTreeRouting:
-
-    def test_web_routes_to_detect_web_vulns(self):
-        solver, _, _, _ = _make_solver_with_mocks()
-        challenge = _make_challenge(ChallengeType.WEB)
-        solver._detect_web_vulns = MagicMock(return_value=None)
-        solver._run_detection_tree(ChallengeType.WEB, challenge)
-        solver._detect_web_vulns.assert_called_once_with(challenge)
-
-    def test_pwn_routes_to_detect_binary_vulns(self):
-        solver, _, _, _ = _make_solver_with_mocks()
-        challenge = _make_challenge(ChallengeType.PWN)
-        solver._detect_binary_vulns = MagicMock(return_value=None)
-        solver._run_detection_tree(ChallengeType.PWN, challenge)
-        solver._detect_binary_vulns.assert_called_once_with(challenge)
-
-    def test_crypto_routes_to_detect_crypto(self):
-        solver, _, _, _ = _make_solver_with_mocks()
-        challenge = _make_challenge(ChallengeType.CRYPTO)
-        solver._detect_crypto_vulns = MagicMock(return_value=None)
-        solver._run_detection_tree(ChallengeType.CRYPTO, challenge)
-        solver._detect_crypto_vulns.assert_called_once_with(challenge)
-
-    def test_forensics_routes_to_detect_forensics(self):
-        solver, _, _, _ = _make_solver_with_mocks()
-        challenge = _make_challenge(ChallengeType.FORENSICS)
-        solver._detect_forensics = MagicMock(return_value=None)
-        solver._run_detection_tree(ChallengeType.FORENSICS, challenge)
-        solver._detect_forensics.assert_called_once_with(challenge)
-
-    def test_unknown_type_returns_none(self):
-        solver, _, _, _ = _make_solver_with_mocks()
-        challenge = _make_challenge(ChallengeType.MISC)
-        result = solver._run_detection_tree(ChallengeType.MISC, challenge)
-        assert result is None
-
-    def test_exception_in_sub_method_returns_none(self):
-        solver, _, _, _ = _make_solver_with_mocks()
-        challenge = _make_challenge(ChallengeType.WEB)
-        solver._detect_web_vulns = MagicMock(side_effect=RuntimeError("boom"))
-        result = solver._run_detection_tree(ChallengeType.WEB, challenge)
-        assert result is None
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # solve() — asset classification fallback
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -435,12 +365,11 @@ class TestMVPSolverSolveEdgeCases:
         mock_registry.list_trees.return_value = []
 
         solver._classify_asset = MagicMock(return_value=None)
-        solver._run_detection_tree = MagicMock(return_value=None)
         mock_orch.run_tree.return_value = None
 
         # Should not raise; continues with WEB type
         result = solver.solve(_make_challenge(url="http://example.com"))
-        solver._run_detection_tree.assert_called_once()
+        assert result is None
 
     def test_classify_fail_no_url_returns_none(self):
         solver, mock_registry, _, mock_orch = _make_solver_with_mocks()
@@ -466,7 +395,6 @@ class TestMVPSolverSolveEdgeCases:
 
         with patch("asyncio.run", return_value=None):
             solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
-            solver._run_detection_tree = MagicMock(return_value=None)
             mock_orch.run_tree.return_value = None
             solver.solve(_make_challenge())
 

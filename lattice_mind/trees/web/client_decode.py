@@ -41,7 +41,7 @@ class WebClientDecodeNode(DecisionNode):
         if not body:
             return NodeResult(status=NodeStatus.FAILURE, error="No response body to analyze")
 
-        decoded_candidates = self._decode_candidates(body)
+        decoded_candidates = decode_client_side(body)
         for candidate in decoded_candidates:
             flag = self.flag_recognizer.recognize(candidate)
             if flag:
@@ -63,134 +63,137 @@ class WebClientDecodeNode(DecisionNode):
             },
         )
 
-    def _decode_candidates(self, body: str) -> List[str]:
-        candidates: List[str] = []
-        text = html.unescape(body)
+        # Note: decoding logic lives in decode_client_side for YAML executor reuse.
 
-        scripts = [text]
-        scripts.extend(self._extract_bookmarklet_scripts(text))
 
-        for script in scripts:
-            sub = self._decode_subtractive_charcode(script)
-            if sub:
-                candidates.append(sub)
+def decode_client_side(body: str) -> List[str]:
+    candidates: List[str] = []
+    text = html.unescape(body or "")
 
-            xor = self._decode_xor_charcode(script)
-            if xor:
-                candidates.append(xor)
+    scripts = [text]
+    scripts.extend(_extract_bookmarklet_scripts(text))
 
-            candidates.extend(self._decode_base64_literals(script))
+    for script in scripts:
+        sub = _decode_subtractive_charcode(script)
+        if sub:
+            candidates.append(sub)
 
-        # Deduplicate while preserving order
-        return list(dict.fromkeys([c for c in candidates if c]))
+        xor = _decode_xor_charcode(script)
+        if xor:
+            candidates.append(xor)
 
-    @staticmethod
-    def _extract_bookmarklet_scripts(text: str) -> List[str]:
-        scripts: List[str] = []
-        for quoted in re.findall(r"javascript:\(function\(\)\s*\{.*?\}\)\(\);?", text, re.IGNORECASE | re.DOTALL):
-            scripts.append(quoted)
-        return scripts
+        candidates.extend(_decode_base64_literals(script))
 
-    @staticmethod
-    def _decode_subtractive_charcode(script: str) -> Optional[str]:
-        # Common pattern:
-        # (encrypted.charCodeAt(i) - key.charCodeAt(i % key.length) + 256) % 256
-        if "charCodeAt" not in script or "% 256" not in script:
-            return None
-        if "-" not in script:
-            return None
+    # Deduplicate while preserving order
+    return list(dict.fromkeys([c for c in candidates if c]))
 
-        enc_match = re.search(r'var\s+encrypted\w*\s*=\s*"([^"]+)"', script, re.IGNORECASE)
-        key_match = re.search(r'var\s+key\s*=\s*"([^"]+)"', script, re.IGNORECASE)
-        if not enc_match or not key_match:
-            return None
 
-        enc = enc_match.group(1)
-        key = key_match.group(1)
-        if not key:
-            return None
+def _extract_bookmarklet_scripts(text: str) -> List[str]:
+    scripts: List[str] = []
+    for quoted in re.findall(r"javascript:\(function\(\)\s*\{.*?\}\)\(\);?", text, re.IGNORECASE | re.DOTALL):
+        scripts.append(quoted)
+    return scripts
 
-        best_printable: Optional[str] = None
-        for enc_variant in WebClientDecodeNode._string_variants(enc):
-            for key_variant in WebClientDecodeNode._string_variants(key):
-                if not key_variant:
-                    continue
-                decoded = "".join(
-                    chr((ord(ch) - ord(key_variant[i % len(key_variant)]) + 256) % 256)
-                    for i, ch in enumerate(enc_variant)
-                )
-                low = decoded.lower()
-                if "flag{" in low or "picoctf{" in low or "ctf{" in low:
-                    return decoded
-                if WebClientDecodeNode._is_mostly_printable(decoded):
-                    best_printable = best_printable or decoded
 
-        return best_printable
+def _decode_subtractive_charcode(script: str) -> Optional[str]:
+    # Common pattern:
+    # (encrypted.charCodeAt(i) - key.charCodeAt(i % key.length) + 256) % 256
+    if "charCodeAt" not in script or "% 256" not in script:
+        return None
+    if "-" not in script:
+        return None
 
-    @staticmethod
-    def _decode_xor_charcode(script: str) -> Optional[str]:
-        # Pattern example:
-        # encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length)
-        if "charCodeAt" not in script or "^" not in script:
-            return None
+    enc_match = re.search(r'var\s+encrypted\w*\s*=\s*"([^"]+)"', script, re.IGNORECASE)
+    key_match = re.search(r'var\s+key\s*=\s*"([^"]+)"', script, re.IGNORECASE)
+    if not enc_match or not key_match:
+        return None
 
-        enc_match = re.search(r'var\s+encrypted\w*\s*=\s*"([^"]+)"', script, re.IGNORECASE)
-        key_match = re.search(r'var\s+key\s*=\s*"([^"]+)"', script, re.IGNORECASE)
-        if not enc_match or not key_match:
-            return None
+    enc = enc_match.group(1)
+    key = key_match.group(1)
+    if not key:
+        return None
 
-        enc = enc_match.group(1)
-        key = key_match.group(1)
-        if not key:
-            return None
+    best_printable: Optional[str] = None
+    for enc_variant in _string_variants(enc):
+        for key_variant in _string_variants(key):
+            if not key_variant:
+                continue
+            decoded = "".join(
+                chr((ord(ch) - ord(key_variant[i % len(key_variant)]) + 256) % 256)
+                for i, ch in enumerate(enc_variant)
+            )
+            low = decoded.lower()
+            if "flag{" in low or "picoctf{" in low or "ctf{" in low:
+                return decoded
+            if _is_mostly_printable(decoded):
+                best_printable = best_printable or decoded
 
-        best_printable: Optional[str] = None
-        for enc_variant in WebClientDecodeNode._string_variants(enc):
-            for key_variant in WebClientDecodeNode._string_variants(key):
-                if not key_variant:
-                    continue
-                decoded = "".join(
-                    chr(ord(ch) ^ ord(key_variant[i % len(key_variant)]))
-                    for i, ch in enumerate(enc_variant)
-                )
-                low = decoded.lower()
-                if "flag{" in low or "picoctf{" in low or "ctf{" in low:
-                    return decoded
-                if WebClientDecodeNode._is_mostly_printable(decoded):
-                    best_printable = best_printable or decoded
+    return best_printable
 
-        return best_printable
 
-    @staticmethod
-    def _decode_base64_literals(script: str) -> List[str]:
-        out: List[str] = []
+def _decode_xor_charcode(script: str) -> Optional[str]:
+    # Pattern example:
+    # encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+    if "charCodeAt" not in script or "^" not in script:
+        return None
 
-        # Target explicit atob("...") first.
-        for m in re.finditer(r'atob\(\s*["\']([A-Za-z0-9+/=]{8,})["\']\s*\)', script):
-            raw = m.group(1)
-            try:
-                out.append(base64.b64decode(raw).decode("utf-8", errors="ignore"))
-            except Exception:
-                pass
+    enc_match = re.search(r'var\s+encrypted\w*\s*=\s*"([^"]+)"', script, re.IGNORECASE)
+    key_match = re.search(r'var\s+key\s*=\s*"([^"]+)"', script, re.IGNORECASE)
+    if not enc_match or not key_match:
+        return None
 
-        return out
+    enc = enc_match.group(1)
+    key = key_match.group(1)
+    if not key:
+        return None
 
-    @staticmethod
-    def _string_variants(value: str) -> List[str]:
-        variants: List[str] = [value]
-        # Repair common mojibake: UTF-8 bytes decoded as latin1/cp1252.
-        for src_enc in ("latin1", "cp1252"):
-            try:
-                repaired = value.encode(src_enc, errors="ignore").decode("utf-8", errors="ignore")
-                if repaired:
-                    variants.append(repaired)
-            except Exception:
-                pass
-        return list(dict.fromkeys(variants))
+    best_printable: Optional[str] = None
+    for enc_variant in _string_variants(enc):
+        for key_variant in _string_variants(key):
+            if not key_variant:
+                continue
+            decoded = "".join(
+                chr(ord(ch) ^ ord(key_variant[i % len(key_variant)]))
+                for i, ch in enumerate(enc_variant)
+            )
+            low = decoded.lower()
+            if "flag{" in low or "picoctf{" in low or "ctf{" in low:
+                return decoded
+            if _is_mostly_printable(decoded):
+                best_printable = best_printable or decoded
 
-    @staticmethod
-    def _is_mostly_printable(value: str) -> bool:
-        if not value:
-            return False
-        printable = sum(1 for c in value if 32 <= ord(c) <= 126 or c in "\r\n\t")
-        return printable / max(1, len(value)) >= 0.85
+    return best_printable
+
+
+def _decode_base64_literals(script: str) -> List[str]:
+    out: List[str] = []
+
+    # Target explicit atob("...") first.
+    for m in re.finditer(r'atob\(\s*["\']([A-Za-z0-9+/=]{8,})["\']\s*\)', script):
+        raw = m.group(1)
+        try:
+            out.append(base64.b64decode(raw).decode("utf-8", errors="ignore"))
+        except Exception:
+            pass
+
+    return out
+
+
+def _string_variants(value: str) -> List[str]:
+    variants: List[str] = [value]
+    # Repair common mojibake: UTF-8 bytes decoded as latin1/cp1252.
+    for src_enc in ("latin1", "cp1252"):
+        try:
+            repaired = value.encode(src_enc, errors="ignore").decode("utf-8", errors="ignore")
+            if repaired:
+                variants.append(repaired)
+        except Exception:
+            pass
+    return list(dict.fromkeys(variants))
+
+
+def _is_mostly_printable(value: str) -> bool:
+    if not value:
+        return False
+    printable = sum(1 for c in value if 32 <= ord(c) <= 126 or c in "\r\n\t")
+    return printable / max(1, len(value)) >= 0.85

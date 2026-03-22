@@ -4,7 +4,7 @@ Demonstrates autonomous vulnerability detection and exploitation
 across all challenge categories using integrated decision trees.
 """
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
 from lattice_mind.core.orchestrator import Orchestrator
@@ -18,15 +18,6 @@ from lattice_mind.core.executor import TreeExecutor
 
 from lattice_mind.trees.asset.classify import AssetClassifyNetworkNode
 from lattice_mind.trees.web.recon import WebReconProbeNode
-from lattice_mind.trees.web.sqli import SQLiDetectReflectionNode
-from lattice_mind.trees.web.lfi import LFIDetectTraversalNode
-from lattice_mind.trees.web.xss import XSSDetectReflectedNode
-from lattice_mind.trees.web.cmd import CMDDetectOutputNode
-from lattice_mind.trees.web.additional import AuthBypassDetectNode
-from lattice_mind.trees.web.client_decode import WebClientDecodeNode
-from lattice_mind.trees.pwn.detect import PwnDetectMetadataNode
-from lattice_mind.trees.crypto.detect import CryptoDetectEncodingNode
-from lattice_mind.trees.forensics.detect import ForensicsDetectArtifactNode
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +42,7 @@ class MVPSolver:
         Steps:
         1. Classify asset type (web, binary, crypto, forensics)
         2. Evaluate and run declarative YAML trees
-        3. Fallback to legacy Python trees if needed
-        4. Monitor for flag detection throughout
+        3. Monitor for flag detection throughout
         """
         logger.info(f"\n{'='*70}")
         logger.info(f"[MVP] Starting autonomous challenge solve")
@@ -191,15 +181,6 @@ class MVPSolver:
             if flag:
                 return flag
 
-        self.confidence_pool.unfreeze()
-
-        # Step 3: Fallback to Legacy Trees
-        logger.info("\n[Step 3] Running legacy detection trees...")
-        flag = self._run_detection_tree(asset_type, challenge)
-        
-        if flag:
-            return flag
-        
         return self.orchestrator.execution_context.get("flag_found")
     
     def _classify_asset(self, challenge: ChallengeDescriptor) -> Optional[ChallengeType]:
@@ -217,189 +198,6 @@ class MVPSolver:
             logger.error(f"[asset] Classification failed: {str(e)}")
             return None
     
-    def _run_detection_tree(self, asset_type: ChallengeType, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Route to specialized detection tree based on asset type."""
-        
-        try:
-            if asset_type == ChallengeType.WEB:
-                logger.info("[detection] Running WEB vulnerability detection...")
-                return self._detect_web_vulns(challenge)
-            
-            elif asset_type == ChallengeType.PWN:
-                logger.info("[detection] Running BINARY exploitation detection...")
-                return self._detect_binary_vulns(challenge)
-            
-            elif asset_type == ChallengeType.CRYPTO:
-                logger.info("[detection] Running CRYPTO detection...")
-                return self._detect_crypto_vulns(challenge)
-            
-            elif asset_type == ChallengeType.FORENSICS:
-                logger.info("[detection] Running FORENSICS detection...")
-                return self._detect_forensics(challenge)
-            
-            else:
-                logger.warning(f"[detection] No tree for asset type: {asset_type}")
-                return None
-        
-        except Exception as e:
-            logger.error(f"[detection] Tree execution failed: {str(e)}")
-            return None
-    
-    def _detect_web_vulns(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run web vulnerability detection, then dispatch exploitation trees."""
-        try:
-            # Phase 1: Recon (probe + dir scan + vuln analysis)
-            # Skip if the Step 2 pre-pass already populated observations.
-            observations = self.orchestrator.execution_context.get("observations", {})
-            if not observations.get("directories"):
-                root_node = WebReconProbeNode()
-                flag = self.orchestrator.run_tree(root_node)
-                if flag:
-                    return flag
-                observations = self.orchestrator.execution_context.get("observations", {})
-
-            # Phase 2: Read candidates written by WebReconAnalyzeVulnsNode
-            vuln_candidates = observations.get("vuln_candidates", {})
-
-            if not vuln_candidates:
-                logger.warning("[web] No vulnerability candidates identified — stopping")
-                return self.orchestrator.execution_context.get("flag_found")
-
-            # Apply initial confidence boosts to the pool for legacy types
-            for vuln_type in vuln_candidates:
-                # Map legacy names to potential YAML tree IDs if they exist, 
-                # or just use them to track confidence in the pool.
-                self.confidence_pool.apply_boost(vuln_type, 0.4, "recon_analysis", phase="legacy_detection")
-
-            # Sort legacy candidates by their current confidence in the pool
-            sorted_candidates = sorted(
-                vuln_candidates.items(),
-                key=lambda x: self.confidence_pool.get_tree_confidence(x[0]).score,
-                reverse=True
-            )
-
-            logger.info(f"[web] Phase 2 — dispatching sorted trees: {[c[0] for c in sorted_candidates]}")
-
-            # Phase 3: Dispatch exploitation trees per candidate
-            for vuln_type, evidence in sorted_candidates:
-                flag = self._dispatch_web_exploit(vuln_type, evidence, challenge)
-                if flag:
-                    return flag
-
-            return self.orchestrator.execution_context.get("flag_found")
-
-        except Exception as e:
-            logger.error(f"[web] Detection failed: {str(e)}")
-            return None
-
-    def _dispatch_web_exploit(
-        self, vuln_type: str, evidence: list, challenge: ChallengeDescriptor
-    ) -> Optional[str]:
-        """Run the exploitation tree for a single vuln type."""
-        ctx = self.orchestrator.execution_context
-        logger.info(f"[web] Running {vuln_type} tree (evidence={evidence})")
-
-        # Pin all exploitation trees as branches of the analysis node in the UI tree
-        self.orchestrator.set_branch_parent("web_recon_analyze_vulns")
-
-        try:
-            if vuln_type == "auth_bypass":
-                return self.orchestrator.run_tree(AuthBypassDetectNode())
-
-            if vuln_type == "sql_injection":
-                # evidence entries are either "parameter" (generic) or param names
-                params = [e for e in evidence if e != "parameter"] or ["id", "page", "query"]
-                for param in params[:3]:
-                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
-                    flag = self.orchestrator.run_tree(SQLiDetectReflectionNode())
-                    if flag:
-                        return flag
-                return None
-
-            if vuln_type == "lfi":
-                for entry in evidence[:3]:
-                    if entry == "parameter":
-                        test_params = ["file", "path", "include", "page"]
-                    else:
-                        # entry is a directory path containing upload/file
-                        test_params = ["file"]
-                        challenge_url_orig = challenge.url
-                        challenge.url = f"{challenge.url.rstrip('/')}/{entry}"
-                    for param in test_params:
-                        ctx["target_param"] = {"name": param, "endpoint": challenge.url}
-                        flag = self.orchestrator.run_tree(LFIDetectTraversalNode())
-                        if flag:
-                            return flag
-                    if entry != "parameter":
-                        challenge.url = challenge_url_orig
-                return None
-
-            if vuln_type == "xss":
-                obs = ctx.get("observations", {})
-                params = list(obs.get("potential_params", [])) or ["search", "q", "query", "name"]
-                for param in params[:3]:
-                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
-                    flag = self.orchestrator.run_tree(XSSDetectReflectedNode())
-                    if flag:
-                        return flag
-                return None
-
-            if vuln_type == "command_injection":
-                for param in evidence[:3]:
-                    if param == "parameter":
-                        continue
-                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
-                    flag = self.orchestrator.run_tree(CMDDetectOutputNode())
-                    if flag:
-                        return flag
-                return None
-
-            if vuln_type == "client_side_decode":
-                return self.orchestrator.run_tree(WebClientDecodeNode())
-
-        except Exception as e:
-            logger.error(f"[web] {vuln_type} dispatch error: {str(e)}")
-
-        return None
-    
-    def _detect_binary_vulns(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run binary exploitation detection (P-Detect)."""
-        try:
-            # Use PwnDetectMetadataNode as entry point to binary detection tree
-            root_node = PwnDetectMetadataNode()
-            flag = self.orchestrator.run_tree(root_node)
-            
-            return flag or self.orchestrator.execution_context.get("flag_found")
-        
-        except Exception as e:
-            logger.error(f"[pwn] Detection failed: {str(e)}")
-            return None
-    
-    def _detect_crypto_vulns(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run cryptography detection (C-Detect)."""
-        try:
-            # Use CryptoDetectEncodingNode as entry point to crypto detection tree
-            root_node = CryptoDetectEncodingNode()
-            flag = self.orchestrator.run_tree(root_node)
-            
-            return flag or self.orchestrator.execution_context.get("flag_found")
-        
-        except Exception as e:
-            logger.error(f"[crypto] Detection failed: {str(e)}")
-            return None
-    
-    def _detect_forensics(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run forensics/steganography detection (F-Detect)."""
-        try:
-            # Use ForensicsDetectArtifactNode as entry point to forensics detection tree
-            root_node = ForensicsDetectArtifactNode()
-            flag = self.orchestrator.run_tree(root_node)
-            
-            return flag or self.orchestrator.execution_context.get("flag_found")
-        
-        except Exception as e:
-            logger.error(f"[forensics] Detection failed: {str(e)}")
-            return None
 
 
 def main():

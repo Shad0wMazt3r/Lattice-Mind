@@ -233,9 +233,36 @@ class TreeExecutor:
     async def _run_step(self, tree: DecisionTree, step: Any, context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Execute a single step action, possibly with multiple payloads."""
         from lattice_mind.adapters.curl_adapter import RequestsAdapter
+        from lattice_mind.trees.web.client_decode import decode_client_side
         
         action = step.action
         params = step.params
+
+        if action == "client_decode":
+            obs = context.get("observations", {})
+            body = obs.get("http_response", {}).get("body", "")
+            if not body:
+                challenge = context.get("challenge")
+                url = challenge.url if challenge else ""
+                if url:
+                    try:
+                        adapter = RequestsAdapter()
+                        resp = adapter.run(url, {"follow_redirects": True})
+                        body = resp.get("body", "")
+                        obs.setdefault("http_response", resp)
+                    except Exception as e:
+                        logger.error(f"Client decode fetch failed: {e}")
+                        body = ""
+
+            decoded = decode_client_side(body or "")
+            return [{
+                "status": 200,
+                "body": "\n".join(decoded),
+                "decoded_candidates": decoded,
+                "response_time": 0,
+                "injected_param": None,
+                "injected_payload": None,
+            }]
         
         payloads = params.get("payloads", [])
         if "payload" in params:

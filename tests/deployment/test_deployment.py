@@ -50,17 +50,8 @@ def test_imports():
         from lattice_mind.trees.asset.classify import AssetClassifyNetworkNode
         logger.info("✓ Asset classification tree imported")
         
-        from lattice_mind.trees.web.sqli import SQLiDetectReflectionNode
-        logger.info("✓ Web SQLi tree imported")
-        
-        from lattice_mind.trees.pwn.detect import PwnDetectMetadataNode
-        logger.info("✓ Binary exploitation tree imported")
-        
-        from lattice_mind.trees.crypto.detect import CryptoDetectEncodingNode
-        logger.info("✓ Crypto tree imported")
-        
-        from lattice_mind.trees.forensics.detect import ForensicsDetectArtifactNode
-        logger.info("✓ Forensics tree imported")
+        from lattice_mind.trees.web.recon import WebReconProbeNode
+        logger.info("✓ Web recon tree imported")
         
         from lattice_mind.mvp import MVPSolver
         logger.info("✓ MVP solver imported")
@@ -243,13 +234,7 @@ def test_tree_nodes():
     
     tests = [
         ("Asset Classification", "lattice_mind.trees.asset.classify", "AssetClassifyNetworkNode"),
-        ("Web SQLi Detection", "lattice_mind.trees.web.sqli", "SQLiDetectReflectionNode"),
-        ("Web CMD Detection", "lattice_mind.trees.web.cmd", "CMDDetectOutputNode"),
-        ("Web LFI Detection", "lattice_mind.trees.web.lfi", "LFIDetectTraversalNode"),
-        ("Web XSS Detection", "lattice_mind.trees.web.xss", "XSSDetectReflectedNode"),
-        ("Binary Exploitation", "lattice_mind.trees.pwn.detect", "PwnDetectMetadataNode"),
-        ("Cryptography", "lattice_mind.trees.crypto.detect", "CryptoDetectEncodingNode"),
-        ("Forensics", "lattice_mind.trees.forensics.detect", "ForensicsDetectArtifactNode"),
+        ("Web Recon", "lattice_mind.trees.web.recon", "WebReconProbeNode"),
     ]
     
     success = 0
