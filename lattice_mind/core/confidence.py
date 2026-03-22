@@ -81,6 +81,10 @@ class ConfidencePool:
         """Freeze the pool before the exploitation phase."""
         self.frozen = True
 
+    def unfreeze(self):
+        """Allow boosts again after YAML exploitation when reusing the pool for another phase."""
+        self.frozen = False
+
     def get_scores(self) -> Dict[str, float]:
         return {tid: c.score for tid, c in self.tree_confidences.items()}
 

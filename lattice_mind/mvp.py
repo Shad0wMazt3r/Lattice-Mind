@@ -190,6 +190,8 @@ class MVPSolver:
             # If we just finished a tree and it failed, but another tree is now 
             # very likely, we'll continue. 
 
+        self.confidence_pool.unfreeze()
+
         # Step 3: Fallback to Legacy Trees
         logger.info("\n[Step 3] Running legacy detection trees...")
         flag = self._run_detection_tree(asset_type, challenge)

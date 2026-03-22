@@ -231,3 +231,12 @@ class TestConfidencePool:
         pool = self.mk()
         pool.freeze()
         assert pool.frozen is True
+
+    def test_unfreeze_allows_boosts_after_freeze(self):
+        pool = self.mk()
+        pool.freeze()
+        assert pool.apply_boost("tree_x", 0.5, "blocked") == 0.0
+        pool.unfreeze()
+        applied = pool.apply_boost("tree_x", 0.4, "after")
+        assert applied > 0.0
+        assert abs(pool.get_tree_confidence("tree_x").score - 0.4) < 1e-9
