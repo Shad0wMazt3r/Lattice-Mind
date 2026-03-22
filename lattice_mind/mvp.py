@@ -23,6 +23,7 @@ from lattice_mind.trees.web.lfi import LFIDetectTraversalNode
 from lattice_mind.trees.web.xss import XSSDetectReflectedNode
 from lattice_mind.trees.web.cmd import CMDDetectOutputNode
 from lattice_mind.trees.web.additional import AuthBypassDetectNode
+from lattice_mind.trees.web.client_decode import WebClientDecodeNode
 from lattice_mind.trees.pwn.detect import PwnDetectMetadataNode
 from lattice_mind.trees.crypto.detect import CryptoDetectEncodingNode
 from lattice_mind.trees.forensics.detect import ForensicsDetectArtifactNode
@@ -162,33 +163,33 @@ class MVPSolver:
             score = self.confidence_pool.get_tree_confidence(t.id).score
             logger.info(f"  - {t.id} (initial confidence: {score:.2f})")
         
-        # Execute each tree
+        # Execute trees by repeatedly picking the highest-confidence unexecuted tree
+        # (scores may change after each run, e.g. detection boosts on the active tree).
+        id_to_tree = {t.id: t for t in candidate_trees}
+        remaining = set(id_to_tree.keys())
+        tie_rank = {t.id: i for i, t in enumerate(candidate_trees)}
+
         import asyncio
-        COMMITMENT_THRESHOLD = 0.8
-        for tree in candidate_trees:
+
+        def _next_tree_id() -> str:
+            return max(
+                remaining,
+                key=lambda tid: (
+                    self.confidence_pool.get_tree_confidence(tid).score,
+                    -tie_rank[tid],
+                ),
+            )
+
+        while remaining:
+            tid = _next_tree_id()
+            tree = id_to_tree[tid]
+            remaining.remove(tid)
             current_score = self.confidence_pool.get_tree_confidence(tree.id).score
             logger.info(f"\n[MVP] Executing tree: {tree.id} (confidence: {current_score:.2f})")
-            
-            # We need to bridge sync solve() with async executor
+
             flag = asyncio.run(self.executor.execute_tree(tree, context))
             if flag:
                 return flag
-            
-            # Commitment logic: if another tree already reached high confidence
-            # during its detection phase, we might want to prioritize it or
-            # re-evaluate. For now, if any tree has score > threshold, we
-            # can be "decisive".
-            max_other_score = max([self.confidence_pool.get_tree_confidence(t.id).score 
-                                  for t in candidate_trees if t.id != tree.id] + [0])
-            
-            if max_other_score >= COMMITMENT_THRESHOLD:
-                logger.info(f"[MVP] High confidence ({max_other_score:.2f}) reached for another tree, prioritizing...")
-                # We could re-sort here, but for now we'll just continue and the 
-                # next iteration will pick the highest one anyway because we 
-                # should re-sort or just pick the max.
-                
-            # If we just finished a tree and it failed, but another tree is now 
-            # very likely, we'll continue. 
 
         self.confidence_pool.unfreeze()
 
@@ -352,6 +353,9 @@ class MVPSolver:
                     if flag:
                         return flag
                 return None
+
+            if vuln_type == "client_side_decode":
+                return self.orchestrator.run_tree(WebClientDecodeNode())
 
         except Exception as e:
             logger.error(f"[web] {vuln_type} dispatch error: {str(e)}")

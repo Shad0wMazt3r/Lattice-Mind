@@ -182,6 +182,48 @@ class TestMVPSolverPrioritization:
         mock_executor.execute_tree.assert_called_once()
 
 
+class TestMVPSolverDynamicReranking:
+
+    def test_reranks_to_highest_unexecuted_after_score_change(self):
+        """After each tree run, the next pick uses fresh scores (not fixed list order)."""
+        solver, mock_registry, mock_executor, mock_orch = _make_solver_with_mocks()
+
+        tree_a = _make_tree("tree_a")
+        tree_b = _make_tree("tree_b")
+        tree_c = _make_tree("tree_c")
+        mock_registry.list_trees.return_value = [tree_a, tree_b, tree_c]
+
+        runs_done = [0]
+
+        def get_tree_confidence(tid):
+            mc = MagicMock()
+            if runs_done[0] == 0:
+                scores = {"tree_a": 0.35, "tree_b": 0.30, "tree_c": 0.25}
+            else:
+                scores = {"tree_a": 0.35, "tree_b": 0.30, "tree_c": 0.90}
+            mc.score = scores.get(tid, 0.0)
+            return mc
+
+        solver.confidence_pool.get_tree_confidence = MagicMock(
+            side_effect=get_tree_confidence
+        )
+        mock_executor.evaluate_seeds.return_value = None
+
+        def asyncio_run_side_effect(_coro):
+            runs_done[0] += 1
+            return None
+
+        with patch("asyncio.run", side_effect=asyncio_run_side_effect):
+            solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
+            solver._run_detection_tree = MagicMock(return_value=None)
+            mock_orch.run_tree.return_value = None
+
+            solver.solve(_make_challenge())
+
+        ids = [c[0][0].id for c in mock_executor.execute_tree.call_args_list]
+        assert ids == ["tree_a", "tree_c", "tree_b"]
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Stop-on-flag behaviour
 # ──────────────────────────────────────────────────────────────────────────────

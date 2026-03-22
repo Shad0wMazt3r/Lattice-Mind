@@ -336,6 +336,7 @@ class WebReconAnalyzeVulnsNode(DecisionNode):
             "xss": [],
             "auth_bypass": [],
             "ssti": [],
+            "client_side_decode": [],
         }
 
         # SQL Injection candidates
@@ -383,6 +384,20 @@ class WebReconAnalyzeVulnsNode(DecisionNode):
             template_frameworks_detected and (has_ssti_param or has_ssti_path)
         ):
             candidates["ssti"].append("parameter")
+
+        # Client-side encoded/obfuscated flag logic (bookmarklet, JS decoder loops, atob)
+        body = str(observations.get("http_response", {}).get("body", ""))
+        lower_body = body.lower()
+        has_js_decoder_pattern = (
+            "charcodeat(" in lower_body
+            and "string.fromcharcode" in lower_body
+            and ("encrypted" in lower_body or "cipher" in lower_body)
+            and ("var key" in lower_body or "key.charcodeat" in lower_body)
+        )
+        has_bookmarklet_hint = "javascript:(function()" in lower_body
+        has_base64_hint = "atob(" in lower_body and ("decode" in lower_body or "flag" in lower_body)
+        if has_js_decoder_pattern or has_bookmarklet_hint or has_base64_hint:
+            candidates["client_side_decode"].append("js_obfuscation")
 
         # Check paths
         for dir_info in directories:
