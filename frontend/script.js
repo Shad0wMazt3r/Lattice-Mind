@@ -1219,32 +1219,58 @@ async function pollHITL() {
   } catch (e) {}
 }
 
+function renderHITLQuestion(q) {
+  const d = q.details || {};
+  const form = d.form || d;
+  const reasons = Array.isArray(form.reasons) ? form.reasons : [];
+  const risks = Array.isArray(form.risks) ? form.risks : [];
+  const score = form.score != null ? Number(form.score) : null;
+  const summary = form.form_summary || form.summary || "";
+  const pageUrl = d.page_url || q.page_url || "";
+  const opts = Array.isArray(q.options) && q.options.length ? q.options : ["submit", "skip"];
+  const meta = [
+    q.kind ? `<span class="hitl-chip">${esc(q.kind)}</span>` : "",
+    score != null ? `<span class="hitl-chip">score ${score.toFixed(2)}</span>` : "",
+    summary ? `<span class="hitl-chip">${esc(summary)}</span>` : "",
+    pageUrl ? `<span class="hitl-chip">${esc(pageUrl)}</span>` : "",
+  ].join("");
+  const reasonList = reasons.length
+    ? `<ul class="hitl-q-list">${reasons.slice(0, 4).map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`
+    : "";
+  const riskList = risks.length
+    ? `<ul class="hitl-q-list">${risks.slice(0, 3).map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`
+    : "";
+  const buttons = opts
+    .map((opt) => `<button class="btn btn-sm" onclick="answerHITL('${esc(q.id)}', '${esc(opt)}')">${esc(opt)}</button>`)
+    .join("");
+  return `
+    <div class="hitl-q" id="hitl-q-${esc(q.id)}">
+      <div class="hitl-q-node">${esc(q.node_id || "unknown")}</div>
+      <div class="hitl-q-text">${esc(q.question || q.text || "")}</div>
+      <div class="hitl-q-meta">${meta}</div>
+      ${reasonList}
+      ${riskList}
+      <div class="hitl-q-actions">${buttons}</div>
+      <div class="hitl-q-input">
+        <input type="text" id="hitl-ans-${esc(q.id)}" placeholder="Custom answer..." onkeydown="if(event.key==='Enter')answerHITL('${esc(q.id)}')"/>
+        <button class="btn btn-sm" onclick="answerHITL('${esc(q.id)}')">SEND</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderHITL(qs) {
   const el = $("hitl-questions");
   if (!qs.length) {
     el.innerHTML = '<div class="hitl-empty">No pending questions.</div>';
     return;
   }
-  el.innerHTML = qs
-    .map(
-      (q) => `
-    <div class="hitl-q" id="hitl-q-${esc(q.id)}">
-      <div class="hitl-q-node">${esc(q.node_id || "unknown")}</div>
-      <div class="hitl-q-text">${esc(q.question || q.text || "")}</div>
-      <div class="hitl-q-input">
-        <input type="text" id="hitl-ans-${esc(q.id)}" placeholder="Your answer..." onkeydown="if(event.key==='Enter')answerHITL('${esc(q.id)}')"/>
-        <button class="btn btn-sm" onclick="answerHITL('${esc(q.id)}')">ANSWER</button>
-      </div>
-    </div>
-  `,
-    )
-    .join("");
+  el.innerHTML = qs.map((q) => renderHITLQuestion(q)).join("");
 }
 
-async function answerHITL(qid) {
+async function answerHITL(qid, choice = null) {
   const inp = $("hitl-ans-" + qid);
-  if (!inp) return;
-  const answer = inp.value.trim();
+  const answer = choice != null ? String(choice).trim() : inp ? inp.value.trim() : "";
   try {
     const r = await apiFetch("/hitl/" + qid + "/answer", {
       method: "POST",
@@ -1254,6 +1280,7 @@ async function answerHITL(qid) {
     if (!r.ok) throw new Error(await r.text());
     const el = $("hitl-q-" + qid);
     if (el) el.style.opacity = "0.4";
+    if (inp) inp.value = "";
     setTimeout(pollHITL, 500);
   } catch (e) {
     alert("HITL answer error: " + e.message);

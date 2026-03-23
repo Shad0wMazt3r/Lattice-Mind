@@ -131,6 +131,7 @@ class Orchestrator:
             "challenge": self.challenge,
             "tree_history": self.tree_history,
             "observations": self.execution_context.get("observations", {}),
+            "evidence_records": self.execution_context.get("evidence_records", []),
             "flag_found": self.execution_context.get("flag_found"),
         }
 

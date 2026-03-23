@@ -13,6 +13,11 @@ from lattice_mind.core.flag_recognizer import get_flag_recognizer
 from lattice_mind.core.tree_loader import get_tree_registry
 from lattice_mind.core.confidence import ConfidencePool
 from lattice_mind.core.executor import TreeExecutor
+from lattice_mind.web.strategy_memory import (
+    endpoint_pattern_from_url,
+    host_fingerprint_from_url,
+    record_strategy_outcomes,
+)
 
 # ... (imports)
 
@@ -122,6 +127,10 @@ class MVPSolver:
         obs.setdefault("tech_stack", [])
         obs.setdefault("found_paths", [])
         obs.setdefault("params", [])
+        obs.setdefault("request_candidates", [])
+        obs.setdefault("form_reviews", [])
+        obs.setdefault("crawl_graph", [])
+        obs.setdefault("crawl_stats", {})
 
         # Mirror to top-level context so ExpressionEvaluator can resolve
         # "context.found_paths" (seeds use top-level keys, not nested observations).
@@ -179,9 +188,51 @@ class MVPSolver:
 
             flag = asyncio.run(self.executor.execute_tree(tree, context))
             if flag:
+                self._record_strategy_memory(context, challenge, flag)
                 return flag
 
+        self._record_strategy_memory(
+            context,
+            challenge,
+            self.orchestrator.execution_context.get("flag_found"),
+        )
         return self.orchestrator.execution_context.get("flag_found")
+
+    def _record_strategy_memory(
+        self,
+        context: dict,
+        challenge: ChallengeDescriptor,
+        found_flag: Optional[str],
+    ) -> None:
+        obs = context.get("observations", {})
+        outcomes_raw = obs.get("strategy_outcomes") or []
+        outcomes = []
+        chall_type = challenge.type.value if challenge and challenge.type else "web"
+        for row in outcomes_raw:
+            if not isinstance(row, dict):
+                continue
+            mk = row.get("mutation_kind")
+            if not mk or mk == "baseline":
+                continue
+            url = str(row.get("request_url") or challenge.url or "")
+            outcomes.append(
+                {
+                    "challenge_type": chall_type,
+                    "host_fingerprint": str(row.get("host_fingerprint") or host_fingerprint_from_url(url)),
+                    "endpoint_pattern": str(row.get("endpoint_pattern") or endpoint_pattern_from_url(url)),
+                    "mutation_kind": str(mk),
+                    "meaningful_delta": bool(row.get("meaningful_delta")),
+                    "strong_candidate": bool(row.get("strong_candidate")),
+                    "led_to_flag": bool(found_flag),
+                    "notes": str(row.get("notes") or "")[:200],
+                }
+            )
+        if outcomes:
+            try:
+                count = record_strategy_outcomes(outcomes)
+                obs["strategy_memory_updates"] = count
+            except Exception as e:
+                logger.warning("[MVP] strategy memory write failed: %s", e)
     
     def _classify_asset(self, challenge: ChallengeDescriptor) -> Optional[ChallengeType]:
         """Run asset classification tree (D-0)."""

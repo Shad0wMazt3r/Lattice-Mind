@@ -86,3 +86,66 @@ def test_solve_endpoint(monkeypatch):
     assert body["log"]["flag_found"] == expected_flag
     assert body["log"]["tree_history"] == ["asset_classify"]
     assert len(body["steps"]) == 2
+
+
+def test_serialize_log_includes_evidence_records():
+    challenge = ChallengeDescriptor(
+        type=ChallengeType.WEB,
+        name="Demo",
+        url="http://example.com",
+    )
+    raw_log = {
+        "challenge": challenge,
+        "tree_history": ["tree:a"],
+        "observations": {"k": "v"},
+        "evidence_records": [{"kind": "response_delta", "severity": "high"}],
+        "flag_found": None,
+    }
+    out = server._serialize_log(raw_log)
+    assert out["evidence_records"] == [{"kind": "response_delta", "severity": "high"}]
+
+
+def test_strategy_memory_endpoints(monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "list_strategy_memory",
+        lambda limit=200: [{"mutation_kind": "param_remove", "score": 0.8}],
+    )
+    monkeypatch.setattr(server, "reset_strategy_memory", lambda scope_type=None, scope_value=None: 3)
+
+    headers = {"Authorization": "Bearer fake_token"}
+    monkeypatch.setattr(server, "_decode_token", lambda token: {"sub": "admin", "role": "admin"})
+
+    r1 = client.get("/strategy-memory", headers=headers)
+    assert r1.status_code == 200
+    assert r1.json()["items"][0]["mutation_kind"] == "param_remove"
+
+    r2 = client.request("DELETE", "/strategy-memory", headers=headers, json={})
+    assert r2.status_code == 200
+    assert r2.json()["deleted"] == 3
+
+
+def test_settings_include_and_update_form_submission_budget(monkeypatch):
+    monkeypatch.setattr(server, "_decode_token", lambda token: {"sub": "admin", "role": "admin"})
+    headers = {"Authorization": "Bearer fake_token"}
+    current = client.get("/settings", headers=headers)
+    assert current.status_code == 200
+    original = current.json().get("crawl_max_form_submissions", 10)
+    assert "crawl_max_form_submissions" in current.json()
+
+    try:
+        updated = client.put(
+            "/settings",
+            headers=headers,
+            json={"crawl_max_form_submissions": 0},
+        )
+        assert updated.status_code == 200
+        body = updated.json()
+        assert body["updated"]["crawl_max_form_submissions"] == 0
+        assert body["settings"]["crawl_max_form_submissions"] == 0
+    finally:
+        client.put(
+            "/settings",
+            headers=headers,
+            json={"crawl_max_form_submissions": original},
+        )

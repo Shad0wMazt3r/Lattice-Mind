@@ -295,6 +295,13 @@ class TestOrchestratorGetExecutionLog:
         log = orch.get_execution_log()
         assert "flag_found" in log
 
+    def test_log_has_evidence_records(self):
+        orch = self.mk()
+        orch.execution_context["evidence_records"] = [{"kind": "response_delta"}]
+        log = orch.get_execution_log()
+        assert "evidence_records" in log
+        assert log["evidence_records"] == [{"kind": "response_delta"}]
+
     def test_flag_found_none_initially(self):
         orch = self.mk()
         log = orch.get_execution_log()

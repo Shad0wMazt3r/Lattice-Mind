@@ -37,6 +37,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
 from lattice_mind.mvp import MVPSolver
+from lattice_mind.web.strategy_memory import (
+    ensure_schema as ensure_strategy_memory_schema,
+    list_strategy_memory,
+    reset_strategy_memory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +188,28 @@ def _init_db():
         conn.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES ('dir_scan_enabled', 'false')"
         )
+        from lattice_mind.config import (
+            CRAWL_MAX_DEPTH,
+            CRAWL_MAX_ENDPOINTS,
+            CRAWL_MAX_PAGES,
+            CRAWL_MAX_PARAMS,
+            CRAWL_MAX_QUEUE_SIZE,
+            CRAWL_MAX_REQUEST_CANDIDATES,
+            MAX_PROBE_BASE_SPECS,
+        )
+
+        for key, val in (
+            ("crawl_max_depth", str(CRAWL_MAX_DEPTH)),
+            ("crawl_max_pages", str(CRAWL_MAX_PAGES)),
+            ("crawl_max_request_candidates", str(CRAWL_MAX_REQUEST_CANDIDATES)),
+            ("crawl_max_queue_size", str(CRAWL_MAX_QUEUE_SIZE)),
+            ("crawl_max_endpoints", str(CRAWL_MAX_ENDPOINTS)),
+            ("crawl_max_params", str(CRAWL_MAX_PARAMS)),
+            ("max_probe_base_specs", str(MAX_PROBE_BASE_SPECS)),
+        ):
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, val)
+            )
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 username        TEXT PRIMARY KEY,
@@ -204,7 +231,17 @@ def _init_db():
 
 def _load_settings():
     """Load persisted settings into FEATURE_FLAGS on startup."""
-    from lattice_mind.config import FEATURE_FLAGS
+    from lattice_mind.config import (
+        CRAWL_MAX_DEPTH,
+        CRAWL_MAX_ENDPOINTS,
+        CRAWL_MAX_FORM_SUBMISSIONS,
+        CRAWL_MAX_PAGES,
+        CRAWL_MAX_PARAMS,
+        CRAWL_MAX_QUEUE_SIZE,
+        CRAWL_MAX_REQUEST_CANDIDATES,
+        FEATURE_FLAGS,
+        MAX_PROBE_BASE_SPECS,
+    )
 
     with _db() as conn:
         row = conn.execute(
@@ -212,6 +249,36 @@ def _load_settings():
         ).fetchone()
         if row:
             FEATURE_FLAGS.dir_scan_enabled = row["value"].lower() == "true"
+
+        def _iget(key: str, default: int) -> int:
+            r = conn.execute(
+                "SELECT value FROM settings WHERE key=?", (key,)
+            ).fetchone()
+            if not r:
+                return default
+            try:
+                return int(r["value"])
+            except ValueError:
+                return default
+
+        FEATURE_FLAGS.crawl_max_depth = _iget("crawl_max_depth", CRAWL_MAX_DEPTH)
+        FEATURE_FLAGS.crawl_max_pages = _iget("crawl_max_pages", CRAWL_MAX_PAGES)
+        FEATURE_FLAGS.crawl_max_request_candidates = _iget(
+            "crawl_max_request_candidates", CRAWL_MAX_REQUEST_CANDIDATES
+        )
+        FEATURE_FLAGS.crawl_max_queue_size = _iget(
+            "crawl_max_queue_size", CRAWL_MAX_QUEUE_SIZE
+        )
+        FEATURE_FLAGS.crawl_max_endpoints = _iget(
+            "crawl_max_endpoints", CRAWL_MAX_ENDPOINTS
+        )
+        FEATURE_FLAGS.crawl_max_params = _iget("crawl_max_params", CRAWL_MAX_PARAMS)
+        FEATURE_FLAGS.crawl_max_form_submissions = _iget(
+            "crawl_max_form_submissions", CRAWL_MAX_FORM_SUBMISSIONS
+        )
+        FEATURE_FLAGS.max_probe_base_specs = _iget(
+            "max_probe_base_specs", MAX_PROBE_BASE_SPECS
+        )
 
 
 def _get_secret_key() -> str:
@@ -377,6 +444,7 @@ async def _auth_middleware(request: Request, call_next):
 
 _init_db()  # ensure schema exists at import time
 _load_settings()  # restore persisted feature flags
+ensure_strategy_memory_schema()
 SECRET_KEY = _get_secret_key()  # load or create persistent JWT secret
 # _seed_admin()  # seed default admin if no users
 
@@ -529,6 +597,11 @@ class RunStatusResponse(BaseModel):
     challenge: Dict[str, Any]
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
+
+
+class StrategyResetRequest(BaseModel):
+    scope_type: Optional[str] = None
+    scope_value: Optional[str] = None
 
 
 # ── Auth endpoints ───────────────────────────────────────────────────────────
@@ -717,7 +790,17 @@ async def get_settings():
     """Return current feature flag settings."""
     from lattice_mind.config import FEATURE_FLAGS
 
-    return {"dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled}
+    return {
+        "dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled,
+        "crawl_max_depth": FEATURE_FLAGS.crawl_max_depth,
+        "crawl_max_pages": FEATURE_FLAGS.crawl_max_pages,
+        "crawl_max_request_candidates": FEATURE_FLAGS.crawl_max_request_candidates,
+        "crawl_max_queue_size": FEATURE_FLAGS.crawl_max_queue_size,
+        "crawl_max_endpoints": FEATURE_FLAGS.crawl_max_endpoints,
+        "crawl_max_params": FEATURE_FLAGS.crawl_max_params,
+        "crawl_max_form_submissions": FEATURE_FLAGS.crawl_max_form_submissions,
+        "max_probe_base_specs": FEATURE_FLAGS.max_probe_base_specs,
+    }
 
 
 @app.put("/settings")
@@ -726,18 +809,82 @@ async def put_settings(payload: dict):
     from lattice_mind.config import FEATURE_FLAGS
 
     changed = {}
-    if "dir_scan_enabled" in payload:
-        val = bool(payload["dir_scan_enabled"])
-        FEATURE_FLAGS.dir_scan_enabled = val
-        with _db() as conn:
+    with _db() as conn:
+        if "dir_scan_enabled" in payload:
+            val = bool(payload["dir_scan_enabled"])
+            FEATURE_FLAGS.dir_scan_enabled = val
             conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES ('dir_scan_enabled', ?)",
                 ("true" if val else "false",),
             )
-        changed["dir_scan_enabled"] = val
+            changed["dir_scan_enabled"] = val
+
+        def _put_int(flag_attr: str, key: str, lo: int, hi: int):
+            if key not in payload:
+                return
+            raw = payload[key]
+            try:
+                v = int(raw)
+            except (TypeError, ValueError):
+                return
+            v = max(lo, min(hi, v))
+            setattr(FEATURE_FLAGS, flag_attr, v)
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (key, str(v)),
+            )
+            changed[key] = v
+
+        _put_int("crawl_max_depth", "crawl_max_depth", 1, 32)
+        _put_int("crawl_max_pages", "crawl_max_pages", 1, 2000)
+        _put_int(
+            "crawl_max_request_candidates",
+            "crawl_max_request_candidates",
+            1,
+            5000,
+        )
+        _put_int("crawl_max_queue_size", "crawl_max_queue_size", 10, 100_000)
+        _put_int("crawl_max_endpoints", "crawl_max_endpoints", 10, 10_000)
+        _put_int("crawl_max_params", "crawl_max_params", 10, 10_000)
+        _put_int(
+            "crawl_max_form_submissions",
+            "crawl_max_form_submissions",
+            0,
+            1_000,
+        )
+        _put_int("max_probe_base_specs", "max_probe_base_specs", 1, 200)
+
     return {
         "updated": changed,
-        "settings": {"dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled},
+        "settings": {
+            "dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled,
+            "crawl_max_depth": FEATURE_FLAGS.crawl_max_depth,
+            "crawl_max_pages": FEATURE_FLAGS.crawl_max_pages,
+            "crawl_max_request_candidates": FEATURE_FLAGS.crawl_max_request_candidates,
+            "crawl_max_queue_size": FEATURE_FLAGS.crawl_max_queue_size,
+            "crawl_max_endpoints": FEATURE_FLAGS.crawl_max_endpoints,
+            "crawl_max_params": FEATURE_FLAGS.crawl_max_params,
+            "crawl_max_form_submissions": FEATURE_FLAGS.crawl_max_form_submissions,
+            "max_probe_base_specs": FEATURE_FLAGS.max_probe_base_specs,
+        },
+    }
+
+
+@app.get("/strategy-memory")
+async def get_strategy_memory(limit: int = 200):
+    return {"items": list_strategy_memory(limit=limit)}
+
+
+@app.delete("/strategy-memory")
+async def delete_strategy_memory(payload: Optional[StrategyResetRequest] = None):
+    if payload is None:
+        deleted = reset_strategy_memory()
+        return {"deleted": deleted, "scope_type": None, "scope_value": None}
+    deleted = reset_strategy_memory(payload.scope_type, payload.scope_value)
+    return {
+        "deleted": deleted,
+        "scope_type": payload.scope_type,
+        "scope_value": payload.scope_value,
     }
 
 
@@ -1055,11 +1202,13 @@ def _serialize_log(log: Dict[str, Any]) -> Dict[str, Any]:
     """Convert orchestrator logs into JSON-serializable data."""
     challenge = log.get("challenge")
     observations = log.get("observations", {})
+    evidence_records = log.get("evidence_records", [])
 
     return {
         "challenge": _serialize_challenge(challenge),
         "tree_history": list(log.get("tree_history", [])),
         "observations": jsonable_encoder(observations),
+        "evidence_records": jsonable_encoder(evidence_records),
         "flag_found": log.get("flag_found"),
     }
 

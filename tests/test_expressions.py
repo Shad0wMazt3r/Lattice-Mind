@@ -377,6 +377,13 @@ class TestExpressionErrors:
 
 class TestEvaluateConditionWrapper:
 
+    def test_extra_roots_request_workflow_step(self):
+        assert evaluate_condition(
+            "request.workflow_step == 'otp'",
+            {"observations": {}},
+            extra_roots={"request": {"workflow_step": "otp"}},
+        )
+
     def test_simple_condition(self):
         ctx = {"x": 10}
         assert evaluate_condition("context.x == 10", ctx) is True
@@ -394,3 +401,30 @@ class TestEvaluateConditionWrapper:
             "context.status == 200 and 'admin' in context.open", ctx
         )
         assert result is True
+
+
+class TestRuntimeSeedCompatibility:
+
+    def test_re_search_generator_expression(self):
+        ctx = {"responses": ["padding error: bad block", "ok"]}
+        expr = "any(re.search(r'(?i)padding error|mac invalid|invalid signature', r) for r in context.responses)"
+        assert ExpressionEvaluator(ctx).evaluate(expr) is True
+
+    def test_lowercase_boolean_literals(self):
+        ctx = {"data_properties": {"multiple_ciphertexts_available": True}}
+        assert ExpressionEvaluator(ctx).evaluate(
+            "context.data_properties.multiple_ciphertexts_available == true"
+        )
+
+    def test_string_lower_in_generator(self):
+        ctx = {"params": ["SessionID", "x"]}
+        expr = "any('cookie' in p.lower() or 'session' in p.lower() for p in context.params)"
+        assert ExpressionEvaluator(ctx).evaluate(expr) is True
+
+    def test_contains_method(self):
+        ctx = {"challenge": {"name": "Robot challenge"}}
+        expr = "context.challenge.name.lower().contains('robot')"
+        assert ExpressionEvaluator(ctx).evaluate(expr) is True
+
+    def test_true_literal_lowercase(self):
+        assert ExpressionEvaluator({}).evaluate("true")

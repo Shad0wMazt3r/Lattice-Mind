@@ -1,7 +1,9 @@
 """HTTP request adapter using curl."""
 from typing import Dict, Any, Optional
+import json
 import re
 import logging
+from urllib.parse import urlencode
 
 from lattice_mind.adapters.base import CommandToolAdapter
 
@@ -45,20 +47,43 @@ class CurlAdapter(CommandToolAdapter):
         if method != "GET":
             cmd.extend(["-X", method])
         
-        # Headers
-        headers = args.get("headers", {})
+        headers = dict(args.get("headers", {}))
+        post_body: Optional[str] = None
+        if "json" in args and args["json"] is not None:
+            post_body = json.dumps(args["json"], separators=(",", ":"))
+            if not any(k.lower() == "content-type" for k in headers):
+                headers["Content-Type"] = "application/json"
+        elif "data" in args:
+            data = args["data"]
+            if isinstance(data, dict):
+                post_body = urlencode(data)
+                if not any(k.lower() == "content-type" for k in headers):
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
+            elif isinstance(data, list):
+                post_body = urlencode(data)
+                if not any(k.lower() == "content-type" for k in headers):
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
+            else:
+                post_body = str(data)
+
         for key, value in headers.items():
             cmd.extend(["-H", f"{key}: {value}"])
+
+        cookies = args.get("cookies")
+        if cookies:
+            cookie_hdr = "; ".join(f"{k}={v}" for k, v in cookies.items())
+            cmd.extend(["-b", cookie_hdr])
+
+        if post_body is not None:
+            cmd.extend(["-d", post_body])
         
-        # Data (POST body)
-        if "data" in args:
-            cmd.extend(["-d", args["data"]])
-        
-        # Query parameters
+        # Query parameters (dict or list of (key, value) for duplicate keys)
         if "params" in args:
-            params_str = "&".join(
-                f"{k}={v}" for k, v in args["params"].items()
-            )
+            p = args["params"]
+            if isinstance(p, list):
+                params_str = urlencode(p)
+            else:
+                params_str = "&".join(f"{k}={v}" for k, v in p.items())
             target = f"{target}?{params_str}"
         
         # Redirects
@@ -157,6 +182,7 @@ class RequestsAdapter(CommandToolAdapter):
         try:
             import requests
             self.requests = requests
+            self._session = self.requests.Session()
             self._use_requests = True
         except ImportError:
             logger.warning("[requests] requests module not available, falling back to curl")
@@ -177,28 +203,43 @@ class RequestsAdapter(CommandToolAdapter):
         
         try:
             method = args.get("method", "GET").upper()
-            headers = args.get("headers", {})
+            headers = dict(args.get("headers", {}))
             data = args.get("data", None)
-            params = args.get("params", {})
+            json_body = args.get("json")
+            params = args.get("params", {}) or {}
+            cookies = args.get("cookies")
             allow_redirects = args.get("follow_redirects", False)
             verify = not args.get("insecure", False)
-            
-            request_func = getattr(self.requests, method.lower())
-            response = request_func(
-                target,
-                headers=headers,
-                data=data,
-                params=params,
-                allow_redirects=allow_redirects,
-                verify=verify,
-                timeout=self.timeout
-            )
-            
+
+            if json_body is not None and data is not None:
+                raise ValueError("Pass only one of 'json' or 'data' to RequestsAdapter.run")
+
+            request_func = getattr(self._session, method.lower())
+            req_kw: Dict[str, Any] = {
+                "headers": headers,
+                "params": params,
+                "allow_redirects": allow_redirects,
+                "verify": verify,
+                "timeout": self.timeout,
+            }
+            if cookies:
+                req_kw["cookies"] = cookies
+            if json_body is not None:
+                req_kw["json"] = json_body
+            else:
+                req_kw["data"] = data
+
+            response = request_func(target, **req_kw)
+
+            redirect_chain = [str(r.url) for r in response.history]
+            redirect_chain.append(str(response.url))
+
             result = {
                 "status": response.status_code,
                 "headers": dict(response.headers),
                 "body": response.text,
                 "error": None,
+                "redirect_chain": redirect_chain,
             }
             
             self.last_result = result
@@ -211,4 +252,11 @@ class RequestsAdapter(CommandToolAdapter):
                 "headers": {},
                 "body": "",
                 "error": str(e),
+                "redirect_chain": [],
             }
+
+    def get_session_cookies(self) -> Dict[str, str]:
+        """Return current requests-session cookies as a plain dict."""
+        if not self._use_requests:
+            return {}
+        return {str(k): str(v) for k, v in self._session.cookies.get_dict().items()}

@@ -32,6 +32,11 @@ detection:
           with:
             payloads: ["'", "''", '"', '`']
             inject_into: all_params
+            mutation_families: [param_remove, value_empty]
+            target_selector: all_inputs
+            mutation_budget:
+              max_total_variants: 12
+              max_per_family: 4
           signals:
             - match: "SQL syntax|mysql_fetch_array|ORA-[0-9]+|sqlite.*error|pg_query"
               on_match:

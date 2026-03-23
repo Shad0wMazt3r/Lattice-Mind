@@ -978,6 +978,17 @@ a {
   flex: 1
 }
 
+.hitl-intro {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .02), rgba(255, 255, 255, 0));
+}
+
 .hitl-q {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1003,6 +1014,39 @@ a {
   line-height: 1.5
 }
 
+.hitl-q-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.hitl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-hi);
+  background: var(--panel-alt);
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.hitl-q-list {
+  margin: 0 0 10px;
+  padding-left: 16px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.hitl-q-list li {
+  margin-bottom: 3px;
+}
+
 .hitl-q-input {
   display: flex;
   gap: 6px;
@@ -1024,6 +1068,17 @@ a {
 
 .hitl-q-input input:focus {
   border-color: var(--amber)
+}
+
+.hitl-q-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.hitl-q-actions .btn {
+  min-width: 90px;
 }
 
 .hitl-empty {

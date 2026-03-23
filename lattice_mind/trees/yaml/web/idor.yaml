@@ -60,6 +60,9 @@ detection_paths:
         action: http_probe
         params:
           inject_into: all_params
+          mutation_families: [param_remove, value_empty]
+          target_selector: all_inputs
+          max_variants: 10
           payloads:
             - '1'
             - '2'

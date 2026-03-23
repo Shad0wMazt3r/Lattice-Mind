@@ -14,6 +14,7 @@ class ConfidenceSeed:
 
 @dataclass
 class DetectionStep:
+    """params holds the full step ``with`` / ``params`` mapping (F5 keys pass through)."""
     id: str
     action: str
     params: Dict[str, Any]

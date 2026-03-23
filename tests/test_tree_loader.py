@@ -308,6 +308,38 @@ class TestDecisionTreeParsing:
         assert "payloads" in step.params
         assert "{{7*7}}" in step.params["payloads"]
 
+    def test_f5_optional_keys_preserved_in_with(self):
+        y = textwrap.dedent(
+            """\
+            id: f5_tree
+            name: F5
+            category: web
+            confidence_seeds: []
+            detection_paths:
+              - id: dp
+                name: D
+                description: ''
+                steps:
+                  - id: st
+                    action: http_probe
+                    with:
+                      inject_into: all_params
+                      request_source: discovered_forms
+                      candidate_filter: "request.workflow_step == 'otp'"
+                      mutation_families: [param_remove]
+                      max_variants: 6
+                      payloads: ["x"]
+                    signals: []
+            exploitation_paths: []
+        """
+        )
+        tree = _load_tree(y)
+        p = tree.detection_paths[0].steps[0].params
+        assert p["request_source"] == "discovered_forms"
+        assert "otp" in p["candidate_filter"]
+        assert p["mutation_families"] == ["param_remove"]
+        assert p["max_variants"] == 6
+
     # ── exploitation_paths ────────────────────────────────────────────────────
 
     def test_exploitation_paths_count_schema_a(self):

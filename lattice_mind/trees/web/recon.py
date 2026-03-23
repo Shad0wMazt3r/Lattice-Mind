@@ -15,18 +15,21 @@ from typing import Any, Dict, List, Optional
 
 from lattice_mind.adapters.curl_adapter import RequestsAdapter
 from lattice_mind.adapters.ffuf_adapter import FFUFAdapter
+from lattice_mind.config import FEATURE_FLAGS, TIMEOUTS
 from lattice_mind.core.nodes import DecisionNode
 from lattice_mind.core.types import NodeResult, NodeStatus
+from lattice_mind.web.crawl_frontier import CrawlFrontier
+from lattice_mind.web.request_models import spec_to_adapter_args
+from lattice_mind.web.run_budget import CrawlBudget
 
 logger = logging.getLogger(__name__)
-
 
 class WebReconProbeNode(DecisionNode):
     """Initial HTTP probe to get basic information about the web service."""
 
     def __init__(self):
         super().__init__("web_recon_probe", "Web Reconnaissance Probe")
-        self.http = RequestsAdapter()
+        self.http = RequestsAdapter(timeout=TIMEOUTS.get("http_request", 10.0))
 
     def run(self, context: Dict[str, Any]) -> NodeResult:
         """Probe the web target."""
@@ -55,12 +58,37 @@ class WebReconProbeNode(DecisionNode):
                 "potential_params": self._extract_potential_params(result),
             }
 
-            # Crawl the page for internal links + forms to enrich params/endpoints
-            crawled = self._crawl_links(challenge.url, result.get("body", ""))
+            budget = CrawlBudget(
+                max_depth=FEATURE_FLAGS.crawl_max_depth,
+                max_pages=FEATURE_FLAGS.crawl_max_pages,
+                max_request_candidates=FEATURE_FLAGS.crawl_max_request_candidates,
+                max_queue_size=FEATURE_FLAGS.crawl_max_queue_size,
+                max_endpoints=FEATURE_FLAGS.crawl_max_endpoints,
+                max_params=FEATURE_FLAGS.crawl_max_params,
+                max_form_submissions=FEATURE_FLAGS.crawl_max_form_submissions,
+            )
+            frontier = CrawlFrontier(
+                budget,
+                lambda u: self.http.run(u, {"follow_redirects": True}),
+                lambda spec: self.http.run(spec.url, spec_to_adapter_args(spec)),
+            )
+            crawled = frontier.run(
+                challenge.url, result.get("body", ""), result
+            )
             observations["crawled_endpoints"] = crawled["endpoints"]
             observations["potential_params"] = list(
                 set(observations["potential_params"] + crawled["params"])
             )
+            observations["forms"] = crawled["forms"]
+            observations["request_candidates"] = crawled["request_candidates"]
+            observations["form_reviews"] = crawled.get("form_reviews", [])
+            observations["crawl_graph"] = crawled["crawl_graph"]
+            observations["crawl_stats"] = crawled["crawl_stats"]
+            observations["flags"] = crawled.get("flags", [])
+            observations["session_cookies"] = self.http.get_session_cookies()
+            if observations["flags"]:
+                observations["detected_flag"] = observations["flags"][0]
+                context["flag_found"] = observations["detected_flag"]
 
             context["observations"]["http_response"] = result
             context["observations"]["technologies"] = observations["technologies"]
@@ -68,7 +96,17 @@ class WebReconProbeNode(DecisionNode):
             context["observations"]["potential_params"] = observations[
                 "potential_params"
             ]
-            context["observations"]["forms"] = crawled["forms"]
+            context["observations"]["forms"] = observations["forms"]
+            context["observations"]["request_candidates"] = observations[
+                "request_candidates"
+            ]
+            context["observations"]["form_reviews"] = observations["form_reviews"]
+            context["observations"]["crawl_graph"] = observations["crawl_graph"]
+            context["observations"]["crawl_stats"] = observations["crawl_stats"]
+            context["observations"]["flags"] = observations["flags"]
+            context["observations"]["session_cookies"] = observations["session_cookies"]
+            if observations.get("detected_flag"):
+                context["observations"]["detected_flag"] = observations["detected_flag"]
 
             logger.info(
                 f"[web-recon] Identified technologies: {observations['technologies']}"
@@ -83,79 +121,6 @@ class WebReconProbeNode(DecisionNode):
         except Exception as e:
             logger.error(f"[web-recon] Probe failed: {str(e)}")
             return NodeResult(status=NodeStatus.FAILURE, error=str(e))
-
-    def _crawl_links(self, base_url: str, body: str) -> dict:
-        """Extract internal links, form params, and form metadata from an HTML page."""
-        from html.parser import HTMLParser
-        from urllib.parse import parse_qsl, urljoin, urlparse, urlunparse
-
-        base = urlparse(base_url)
-
-        def _is_internal(url: str) -> bool:
-            parsed = urlparse(url)
-            return not parsed.netloc or parsed.netloc == base.netloc
-
-        def _normalize_url(raw_url: str) -> Optional[str]:
-            if not raw_url:
-                return None
-            raw_url = raw_url.strip()
-            if raw_url.startswith(("#", "javascript:", "mailto:", "tel:")):
-                return None
-            full = urljoin(base_url, raw_url)
-            parsed = urlparse(full)
-            if parsed.scheme and parsed.scheme not in {"http", "https"}:
-                return None
-            if not _is_internal(full):
-                return None
-            return urlunparse(parsed._replace(fragment=""))
-
-        class CrawlParser(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.endpoints = []
-                self.params = []
-                self.forms = []
-
-            def _add_endpoint(self, raw_url: str):
-                normalized = _normalize_url(raw_url)
-                if not normalized:
-                    return
-                self.endpoints.append(normalized.rstrip("/"))
-                parsed = urlparse(normalized)
-                for key, _ in parse_qsl(parsed.query, keep_blank_values=True):
-                    if key:
-                        self.params.append(key)
-
-            def handle_starttag(self, tag: str, attrs):
-                attr_map = {k.lower(): v for k, v in attrs if k}
-                tag = tag.lower()
-
-                if tag == "form":
-                    action = attr_map.get("action") or base_url
-                    method = (attr_map.get("method") or "GET").upper()
-                    normalized = _normalize_url(action) or base_url
-                    self.forms.append({"action": normalized, "method": method})
-                    self._add_endpoint(action)
-                    return
-
-                if tag in {"a", "area"}:
-                    self._add_endpoint(attr_map.get("href", ""))
-
-                if tag in {"input", "select", "textarea", "button"}:
-                    name = attr_map.get("name")
-                    if name:
-                        self.params.append(name)
-                    if tag == "button" and attr_map.get("formaction"):
-                        self._add_endpoint(attr_map.get("formaction", ""))
-
-        parser = CrawlParser()
-        parser.feed(body or "")
-
-        return {
-            "endpoints": list(dict.fromkeys(parser.endpoints))[:30],
-            "params": list(dict.fromkeys(parser.params))[:20],
-            "forms": parser.forms,
-        }
 
     def _identify_technologies(self, http_result: dict) -> dict:
         """Extract technology hints from HTTP response."""
