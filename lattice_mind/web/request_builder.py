@@ -21,7 +21,22 @@ logger = logging.getLogger(__name__)
 def merge_session_cookies_from_context(spec: HTTPRequestSpec, context: Dict[str, Any]) -> HTTPRequestSpec:
     """Attach observations.session_cookies to a spec (used for inject_into: none paths)."""
     obs = context.get("observations", {})
-    session_cookies = obs.get("session_cookies") if isinstance(obs.get("session_cookies"), dict) else {}
+    session_cookies = (
+        obs.get("session_cookies") if isinstance(obs.get("session_cookies"), dict) else {}
+    )
+    run_id = context.get("run_id")
+    if run_id:
+        try:
+            from lattice_mind.core.session_epoch import get_session_epoch_manager
+
+            epoch = get_session_epoch_manager().read(str(run_id))
+            if epoch and epoch.cookies:
+                merged_epoch = dict(session_cookies)
+                merged_epoch.update(epoch.cookies)
+                session_cookies = merged_epoch
+        except Exception:
+            # Keep builder fail-open; caller handles run-level errors.
+            pass
     if not session_cookies:
         return spec
     if spec.cookies:

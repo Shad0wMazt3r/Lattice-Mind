@@ -13,6 +13,7 @@ from lattice_mind.core.tree_loader import DecisionTree, DetectionPath, Exploitat
 from lattice_mind.core.confidence import ConfidencePool
 from lattice_mind.core.expressions import ExpressionEvaluator, evaluate_condition
 from lattice_mind.core.flag_recognizer import get_flag_recognizer
+from lattice_mind.core.request_reconstruction import RequestReconstructionEngine
 from lattice_mind.web.request_models import (
     HTTPRequestSpec,
     apply_param_payload,
@@ -91,6 +92,8 @@ class TreeExecutor:
         self.signal_bus = SignalBus()
         self.captures: Dict[str, Any] = {}
         self.flag_recognizer = get_flag_recognizer()
+        self.request_reconstructor = RequestReconstructionEngine()
+        self._signal_regex_cache: Dict[str, re.Pattern[str]] = {}
         self._progress_callback = None
         self._last_learning_hints: List[Dict[str, Any]] = []
 
@@ -171,8 +174,8 @@ class TreeExecutor:
                     matched = False
                     if "match" in sig_def and isinstance(sig_def["match"], str):
                         # Simple regex match in response.body
-                        body = result.get("body", "")
-                        if re.search(sig_def["match"], body, re.IGNORECASE):
+                        body = str(result.get("body", ""))[:200_000]
+                        if self._safe_signal_search(sig_def["match"], body):
                             matched = True
                     elif "match" in sig_def and isinstance(sig_def["match"], dict):
                         # Mini-language condition
@@ -256,8 +259,9 @@ class TreeExecutor:
                         m = re.search(pattern, body)
                         if m:
                             val = m.group(1) if m.groups() else m.group(0)
-                            self.captures[as_key] = val
-                            context.setdefault("captures", {})[as_key] = val
+                            safe_val = self._sanitize_capture_value(val)
+                            self.captures[as_key] = safe_val
+                            context.setdefault("captures", {})[as_key] = safe_val
                             step_success = True
 
                 er = result.get("evidence_records") or []
@@ -490,6 +494,7 @@ class TreeExecutor:
                             mutation_id = str(uuid.uuid4())
 
                         req_args = spec_to_adapter_args(run_spec)
+                        req_args = self.request_reconstructor.reconstruct(req_args)
                         target_base, _ = normalize_request_url(run_spec.url)
 
                         try:
@@ -547,6 +552,25 @@ class TreeExecutor:
                     results.extend(batch)
 
         return results
+
+    def _safe_signal_search(self, pattern: str, body: str) -> bool:
+        try:
+            compiled = self._signal_regex_cache.get(pattern)
+            if compiled is None:
+                compiled = re.compile(pattern, re.IGNORECASE)
+                self._signal_regex_cache[pattern] = compiled
+            return compiled.search(body) is not None
+        except re.error:
+            logger.warning("Invalid signal regex: %r", pattern)
+            return False
+
+    @staticmethod
+    def _sanitize_capture_value(value: Any) -> str:
+        text = str(value)
+        text = text.replace("\r", "").replace("\n", "")
+        if len(text) > 2048:
+            return text[:2048]
+        return text
 
     async def _run_comparison_step(self, tree: DecisionTree, step: Any, context: Dict[str, Any],
                                     true_payload: str, false_payload: str) -> List[Dict[str, Any]]:

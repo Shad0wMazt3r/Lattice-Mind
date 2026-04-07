@@ -87,7 +87,7 @@ class CurlAdapter(CommandToolAdapter):
             if isinstance(p, list):
                 params_str = urlencode(p)
             else:
-                params_str = "&".join(f"{k}={v}" for k, v in p.items())
+                params_str = urlencode(p)
             target = f"{target}?{params_str}"
         
         # Redirects
@@ -197,7 +197,6 @@ class RequestsAdapter(CommandToolAdapter):
         try:
             import requests
             self.requests = requests
-            self._session = self.requests.Session()
             self._use_requests = True
         except ImportError:
             logger.warning("[requests] requests module not available, falling back to curl")
@@ -219,6 +218,9 @@ class RequestsAdapter(CommandToolAdapter):
         try:
             method = args.get("method", "GET").upper()
             headers = dict(args.get("headers", {}))
+            sni_hostname = str(args.get("sni_hostname", "")).strip()
+            if sni_hostname and "Host" not in headers:
+                headers["Host"] = sni_hostname
             data = args.get("data", None)
             json_body = args.get("json")
             params = args.get("params", {}) or {}
@@ -229,7 +231,6 @@ class RequestsAdapter(CommandToolAdapter):
             if json_body is not None and data is not None:
                 raise ValueError("Pass only one of 'json' or 'data' to RequestsAdapter.run")
 
-            request_func = getattr(self._session, method.lower())
             req_kw: Dict[str, Any] = {
                 "headers": headers,
                 "params": params,
@@ -244,7 +245,7 @@ class RequestsAdapter(CommandToolAdapter):
             else:
                 req_kw["data"] = data
 
-            response = request_func(target, **req_kw)
+            response = self.requests.request(method, target, **req_kw)
 
             redirect_chain = [str(r.url) for r in response.history]
             redirect_chain.append(str(response.url))
@@ -272,6 +273,4 @@ class RequestsAdapter(CommandToolAdapter):
 
     def get_session_cookies(self) -> Dict[str, str]:
         """Return current requests-session cookies as a plain dict."""
-        if not self._use_requests:
-            return {}
-        return {str(k): str(v) for k, v in self._session.cookies.get_dict().items()}
+        return {}

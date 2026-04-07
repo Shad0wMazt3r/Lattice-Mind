@@ -2,6 +2,7 @@
 from typing import Dict, Any, List, Optional
 import xml.etree.ElementTree as ET
 import logging
+import time
 
 from lattice_mind.adapters.base import CommandToolAdapter
 
@@ -201,8 +202,16 @@ class SimplePortScanAdapter(CommandToolAdapter):
             return result
         
         # Try to scan each port
-        logger.info(f"[nc] Scanning {len(list(ports))} ports on {target}")
+        total_ports = len(ports) if isinstance(ports, list) else (ports.stop - ports.start)
+        logger.info(f"[nc] Scanning {total_ports} ports on {target}")
+        max_total_seconds = float(args.get("max_total_seconds", 30.0))
+        started_at = time.monotonic()
         for port in ports:
+            if time.monotonic() - started_at >= max_total_seconds:
+                result["error"] = (
+                    f"Scan stopped after {max_total_seconds:.1f}s aggregate deadline"
+                )
+                break
             try:
                 cmd = ["nc", "-zv", "-w", "2", target, str(port)]
                 output = self.execute_command(cmd)

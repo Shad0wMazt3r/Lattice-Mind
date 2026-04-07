@@ -191,6 +191,21 @@ class RequestLifecycleManager:
             }
         return {"status": "none", "paused_request": None}
 
+    def find_pending_for_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            iids = list(self._run_to_interceptions.get(run_id, []))
+            for iid in iids:
+                pending = self._pending.get(iid)
+                if pending:
+                    return {
+                        "interception_id": iid,
+                        "request_id": pending.request_id,
+                        "tree_id": pending.tree_id,
+                        "step_id": pending.step_id,
+                        "request": pending.spec_snapshot,
+                    }
+        return None
+
     def submit_mutation(
         self,
         interception_id: str,
@@ -234,6 +249,29 @@ class RequestLifecycleManager:
             "mutation_record_id": rec_id,
             "applied_fields": record.applied_fields,
         }
+
+    def resume_without_mutation(self, interception_id: str, request_id: str) -> Dict[str, Any]:
+        with self._lock:
+            pending = self._pending.get(interception_id)
+        if not pending or pending.request_id != request_id:
+            raise ValueError("no pending request for that interception_id/request_id pair")
+        pending.result_spec = request_spec_from_jsonable(pending.spec_snapshot)
+        pending.event.set()
+        return {"resumed": True, "mutation_record_id": None, "applied_fields": []}
+
+    def drop_interception(self, interception_id: str) -> Dict[str, Any]:
+        with self._lock:
+            arm = self._armed.pop(interception_id, None)
+            pending = self._pending.pop(interception_id, None)
+            if arm:
+                ids = self._run_to_interceptions.get(arm.run_id, [])
+                self._run_to_interceptions[arm.run_id] = [
+                    iid for iid in ids if iid != interception_id
+                ]
+        if pending:
+            pending.error = "interception dropped by operator"
+            pending.event.set()
+        return {"dropped": bool(arm or pending)}
 
     def list_mutations(self, run_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         with self._lock:

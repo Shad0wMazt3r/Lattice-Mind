@@ -67,6 +67,10 @@ class MVPSolver:
         # Set challenge in orchestrator and executor
         self.orchestrator.set_challenge(challenge)
         self.confidence_pool.clear()
+        # Ensure no stale HITL hints/overrides leak across runs.
+        from lattice_mind.core.human_loop import get_human_loop_manager
+
+        get_human_loop_manager().clear()
         
         # Step 1: Asset classification
         logger.info("\n[Step 1] Classifying asset type...")
@@ -107,9 +111,9 @@ class MVPSolver:
         # Merge MCP-managed session cookies (set via API) for YAML / executor probes
         if run_id:
             try:
-                from lattice_mind.core.session_store import get_session_store
+                from lattice_mind.core.session_epoch import get_session_epoch_manager
 
-                sess = get_session_store().get(run_id)
+                sess = get_session_epoch_manager().read(run_id)
                 if sess and sess.cookies:
                     base = obs.get("session_cookies")
                     base = dict(base) if isinstance(base, dict) else {}
@@ -117,7 +121,7 @@ class MVPSolver:
                     merged.update(sess.cookies)
                     obs["session_cookies"] = merged
             except Exception as e:
-                logger.warning("[MVP] session cookie merge failed: %s", e)
+                raise RuntimeError(f"session cookie merge failed: {e}") from e
 
         # Translate legacy recon keys to YAML-expected names.
         # WebReconProbeNode writes "technologies" (dict) and "directories" (list of dicts);
@@ -234,6 +238,11 @@ class MVPSolver:
 
         import asyncio
 
+        async def _normalize_exec_result(v):
+            if asyncio.iscoroutine(v):
+                return await v
+            return v
+
         def _next_tree_id() -> str:
             return max(
                 remaining,
@@ -250,7 +259,8 @@ class MVPSolver:
             current_score = self.confidence_pool.get_tree_confidence(tree.id).score
             logger.info(f"\n[MVP] Executing tree: {tree.id} (confidence: {current_score:.2f})")
 
-            flag = asyncio.run(self.executor.execute_tree(tree, context))
+            raw_result = self.executor.execute_tree(tree, context)
+            flag = asyncio.run(_normalize_exec_result(raw_result))
             if flag:
                 self._record_strategy_memory(context, challenge, flag)
                 context["execution_plan"] = execution_plan
@@ -329,38 +339,33 @@ def main():
     
     # Example 1: Web challenge
     web_challenge = ChallengeDescriptor(
-        id="ctf_001",
         name="SQL Injection Challenge",
         type=ChallengeType.WEB,
         url="http://vulnerable-app.com/search",
-        description="Find the flag by exploiting SQL injection"
+        metadata={"description": "Find the flag by exploiting SQL injection"},
     )
     
     # Example 2: Binary challenge
     binary_challenge = ChallengeDescriptor(
-        id="ctf_002",
         name="Buffer Overflow Challenge",
         type=ChallengeType.PWN,
         file_path="/tmp/pwn_binary",
-        description="Exploit stack overflow to leak flag"
+        metadata={"description": "Exploit stack overflow to leak flag"},
     )
     
     # Example 3: Crypto challenge
     crypto_challenge = ChallengeDescriptor(
-        id="ctf_003",
         name="Cipher Challenge",
         type=ChallengeType.CRYPTO,
         metadata={"content": "HELLO_FLAG_HERE_ENCRYPTED"},
-        description="Decrypt the message"
     )
     
     # Example 4: Forensics challenge
     forensics_challenge = ChallengeDescriptor(
-        id="ctf_004",
         name="Steganography Challenge",
         type=ChallengeType.FORENSICS,
         file_path="/tmp/image.png",
-        description="Extract hidden flag from image"
+        metadata={"description": "Extract hidden flag from image"},
     )
     
     # Run MVP solver

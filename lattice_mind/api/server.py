@@ -12,6 +12,7 @@ import shutil
 import smtplib
 import sqlite3
 import threading
+import urllib.parse
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -675,6 +676,17 @@ class SubmitMutationRequest(BaseModel):
     note: Optional[str] = None
 
 
+class PauseRequestLifecycleRequest(BaseModel):
+    match: Dict[str, Any] = Field(default_factory=dict)
+    mode: str = "first"
+    ttl_seconds: Optional[int] = Field(default=None, ge=1, le=3600)
+
+
+class ResumeRequestLifecycleRequest(BaseModel):
+    interception_id: str
+    request_id: str
+
+
 # ── Auth endpoints ───────────────────────────────────────────────────────────
 class AuthRequest(BaseModel):
     username: str
@@ -735,7 +747,7 @@ class ForgotPasswordRequest(BaseModel):
 async def auth_forgot_password(payload: ForgotPasswordRequest):
     user = _db_get_user_by_email(payload.email)
     if user:
-        token = base64.b64encode(urllib.parse.quote(payload.email).encode()).decode()
+        token = _b64.b64encode(urllib.parse.quote(payload.email).encode()).decode()
         reset_link = f"/#reset={token}"
         _send_email(
             payload.email,
@@ -747,14 +759,14 @@ async def auth_forgot_password(payload: ForgotPasswordRequest):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str
+    new_password: str = Field(min_length=8)
 
 
 @app.post("/auth/reset-password")
 async def auth_reset_password(payload: ResetPasswordRequest):
     try:
-        email = urllib.parse.unquote(base64.b64decode(payload.token).decode())
-    except:
+        email = urllib.parse.unquote(_b64.b64decode(payload.token).decode())
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid token")
 
     user = _db_get_user_by_email(email)
@@ -805,9 +817,9 @@ async def auth_change_password(request: Request, payload: ChangePasswordRequest)
     if not user or not _verify_pw(payload.current_password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid current password")
 
-    if len(payload.new_password) < 6:
+    if len(payload.new_password) < 8:
         raise HTTPException(
-            status_code=400, detail="New password must be at least 6 characters"
+            status_code=400, detail="New password must be at least 8 characters"
         )
 
     hashed = _hash_pw(payload.new_password)
@@ -820,9 +832,9 @@ async def auth_change_password(request: Request, payload: ChangePasswordRequest)
 
 
 @app.get("/rules")
-async def list_rules():
+async def list_rules(include_quarantined: bool = False):
     """List all loaded YAML decision trees."""
-    return [
+    rows = [
         {
             "id": t.id,
             "name": t.name,
@@ -832,9 +844,28 @@ async def list_rules():
             "description": t.description,
             "detection_paths": len(t.detection_paths),
             "exploitation_paths": len(t.exploitation_paths),
+            "validation_error": None,
         }
         for t in solver.registry.list_trees()
     ]
+    if include_quarantined and getattr(solver.registry, "validation_errors", None):
+        for rid, err in sorted(solver.registry.validation_errors.items()):
+            if rid in {r["id"] for r in rows}:
+                continue
+            rows.append(
+                {
+                    "id": rid,
+                    "name": rid,
+                    "category": "unknown",
+                    "version": "unknown",
+                    "enabled": False,
+                    "description": "",
+                    "detection_paths": 0,
+                    "exploitation_paths": 0,
+                    "validation_error": err,
+                }
+            )
+    return rows
 
 
 @app.get("/rules/{rule_id}")
@@ -1024,8 +1055,8 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
 
     if name == "wait_for_run":
         run_id = arguments["run_id"]
-        timeout = int(arguments.get("timeout_seconds", 300))
-        interval = int(arguments.get("poll_interval_seconds", 3))
+        timeout = max(1, min(600, int(arguments.get("timeout_seconds", 300))))
+        interval = max(1, min(30, int(arguments.get("poll_interval_seconds", 3))))
         deadline = asyncio.get_event_loop().time() + timeout
         while True:
             state = get_run_state(run_id)
@@ -1056,7 +1087,7 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
         return await list_runs(limit=int(arguments.get("limit", 50)))
 
     if name == "list_rules":
-        return await list_rules()
+        return await list_rules(include_quarantined=bool(arguments.get("include_quarantined")))
 
     if name == "get_rule":
         return await get_rule(arguments["rule_id"])
@@ -1084,6 +1115,16 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
         return result.model_dump()
 
     if name == "set_scan_session":
+        return await set_run_session(
+            arguments["run_id"],
+            SetRunSessionRequest(
+                cookies=[CookieInputModel(**c) for c in arguments["cookies"]],
+                replace=bool(arguments.get("replace")),
+                ttl_seconds=arguments.get("ttl_seconds"),
+            ),
+        )
+
+    if name == "set_session_cookies":
         return await set_run_session(
             arguments["run_id"],
             SetRunSessionRequest(
@@ -1131,6 +1172,41 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
                 note=arguments.get("note"),
             ),
         )
+
+    if name == "mutate_request":
+        action = str(arguments["action"]).strip().lower()
+        run_id = arguments["run_id"]
+        if action == "inspect":
+            return await pending_run_request(run_id)
+        if action == "pause":
+            return await pause_run_request(
+                run_id,
+                PauseRequestLifecycleRequest(
+                    match=dict(arguments.get("match") or {}),
+                    mode=str(arguments.get("mode", "first")),
+                    ttl_seconds=arguments.get("ttl_seconds"),
+                ),
+            )
+        if action == "mutate":
+            return await submit_interception_mutation(
+                arguments["interception_id"],
+                SubmitMutationRequest(
+                    request_id=arguments["request_id"],
+                    mutation=dict(arguments["mutation"]),
+                    note=arguments.get("note"),
+                ),
+            )
+        if action == "resume":
+            return await resume_run_request(
+                run_id,
+                ResumeRequestLifecycleRequest(
+                    interception_id=arguments["interception_id"],
+                    request_id=arguments["request_id"],
+                ),
+            )
+        if action == "drop":
+            return await drop_interception_api(arguments["interception_id"])
+        raise ValueError(f"Unsupported mutate_request action: {action!r}")
 
     if name == "list_mutation_history":
         return await list_run_mutations(
@@ -1186,6 +1262,20 @@ async def mcp_rpc(request: Request):
             "capabilities": {"tools": {}},
         })
 
+    allow_unauth = method == "initialize" or (
+        method == "tools/call" and (params.get("name") == "auth_login")
+    )
+    if not allow_unauth:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer ") or not _decode_token(auth_header[7:]):
+            return _ok({
+                "content": [{
+                    "type": "text",
+                    "text": "Invalid or expired token. Authenticate via /auth/login and include Authorization: Bearer <token>.",
+                }],
+                "isError": True,
+            })
+
     if method == "tools/list":
         return _ok({"tools": LatticeMindMCPServer._tool_definitions()})
 
@@ -1193,27 +1283,55 @@ async def mcp_rpc(request: Request):
         tool_name = params.get("name", "")
         arguments = params.get("arguments") or {}
 
-        # auth_login is unauthenticated by design; all other tools require a valid token
-        if tool_name != "auth_login":
-            auth_header = request.headers.get("Authorization", "")
-            if not auth_header.startswith("Bearer ") or not _decode_token(auth_header[7:]):
-                return _ok({
-                    "content": [{
-                        "type": "text",
-                        "text": "Invalid or expired token. Call auth_login with your credentials to get a fresh token.",
-                    }],
-                    "isError": True,
-                })
-
         try:
             result = await _mcp_dispatch(tool_name, arguments)
             return _ok({"content": [{"type": "text", "text": json.dumps(result, indent=2)}], "isError": False})
         except HTTPException as exc:
-            return _ok({"content": [{"type": "text", "text": f"Error {exc.status_code}: {exc.detail}"}], "isError": True})
+            return _ok(
+                {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(
+                                {
+                                    "error_code": "http_error",
+                                    "status_code": exc.status_code,
+                                    "message": str(exc.detail),
+                                }
+                            ),
+                        }
+                    ],
+                    "isError": True,
+                }
+            )
         except (KeyError, ValueError) as exc:
-            return _ok({"content": [{"type": "text", "text": f"Invalid arguments: {exc}"}], "isError": True})
+            return _ok(
+                {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(
+                                {"error_code": "invalid_arguments", "message": str(exc)}
+                            ),
+                        }
+                    ],
+                    "isError": True,
+                }
+            )
         except Exception as exc:
-            return _ok({"content": [{"type": "text", "text": str(exc)}], "isError": True})
+            return _ok(
+                {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(
+                                {"error_code": "internal_error", "message": str(exc)}
+                            ),
+                        }
+                    ],
+                    "isError": True,
+                }
+            )
 
     return _err(-32601, f"Method not found: {method}")
 
@@ -1366,27 +1484,31 @@ async def list_runs(limit: int = 50) -> List[Dict[str, Any]]:
 
 
 @app.get("/runs/{run_id}", response_model=RunStatusResponse)
-async def get_run_status(run_id: str) -> RunStatusResponse:
+async def get_run_status(run_id: str, max_steps: Optional[int] = None) -> RunStatusResponse:
     """Fetch the current state of a solver run."""
     state = get_run_state(run_id)
     if not state:
         raise HTTPException(status_code=404, detail="Run not found")
-    return RunStatusResponse(**state.to_dict())
+    payload = state.to_dict()
+    if max_steps is not None:
+        lim = max(1, min(500, int(max_steps)))
+        payload["steps"] = payload.get("steps", [])[-lim:]
+    return RunStatusResponse(**payload)
 
 
 @app.post("/runs/{run_id}/session")
 async def set_run_session(run_id: str, body: SetRunSessionRequest) -> Dict[str, Any]:
     if not get_run_state(run_id):
         raise HTTPException(status_code=404, detail="Run not found")
-    from lattice_mind.core.session_store import get_session_store
+    from lattice_mind.core.session_epoch import get_session_epoch_manager
 
     cookies = [c.model_dump() for c in body.cookies]
     try:
-        rec = get_session_store().create_or_update(
+        rec = get_session_epoch_manager().commit(
             run_id,
             cookies,
+            body.ttl_seconds,
             replace=body.replace,
-            ttl_seconds=body.ttl_seconds,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1403,9 +1525,18 @@ async def get_run_session(
 ) -> Dict[str, Any]:
     if not get_run_state(run_id):
         raise HTTPException(status_code=404, detail="Run not found")
-    from lattice_mind.core.session_store import get_session_store
+    from lattice_mind.core.session_epoch import get_session_epoch_manager
 
-    return get_session_store().view(run_id, include_values=include_values)
+    rec = get_session_epoch_manager().read(run_id)
+    if not rec:
+        return {"session_id": None, "cookies": [], "version": 0}
+    cookies_out: List[Dict[str, Any]] = []
+    for name, val in sorted(rec.cookies.items()):
+        if include_values:
+            cookies_out.append({"name": name, "value": val})
+        else:
+            cookies_out.append({"name": name, "value_redacted": True, "value_len": len(val)})
+    return {"session_id": f"sess_{run_id}", "cookies": cookies_out, "version": rec.version}
 
 
 @app.post("/runs/{run_id}/session/rotate")
@@ -1414,11 +1545,11 @@ async def rotate_run_session(
 ) -> Dict[str, Any]:
     if not get_run_state(run_id):
         raise HTTPException(status_code=404, detail="Run not found")
-    from lattice_mind.core.session_store import get_session_store
+    from lattice_mind.core.session_epoch import get_session_epoch_manager
 
     cookies = [c.model_dump() for c in body.cookies]
     try:
-        rec = get_session_store().rotate(
+        rec = get_session_epoch_manager().rotate(
             run_id,
             cookies,
             expected_version=body.expected_version,
@@ -1455,6 +1586,56 @@ async def enable_run_interception(
     return {"interception_id": iid, "status": "armed"}
 
 
+@app.post("/runs/{run_id}/request/pause")
+async def pause_run_request(
+    run_id: str, body: PauseRequestLifecycleRequest
+) -> Dict[str, Any]:
+    """Arm interception for the next matching request in this run."""
+    if not get_run_state(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    try:
+        interception_id = get_request_lifecycle_manager().register_interception(
+            run_id,
+            body.match,
+            mode=body.mode,
+            ttl_seconds=body.ttl_seconds,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"interception_id": interception_id, "status": "armed"}
+
+
+@app.post("/runs/{run_id}/request/resume")
+async def resume_run_request(
+    run_id: str, body: ResumeRequestLifecycleRequest
+) -> Dict[str, Any]:
+    """Resume a paused request without applying mutations."""
+    if not get_run_state(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    try:
+        return get_request_lifecycle_manager().resume_without_mutation(
+            body.interception_id,
+            body.request_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/runs/{run_id}/request/pending")
+async def pending_run_request(run_id: str) -> Dict[str, Any]:
+    """Return currently paused request for a run, if any."""
+    if not get_run_state(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    pending = get_request_lifecycle_manager().find_pending_for_run(run_id)
+    return {"pending": pending}
+
+
 @app.get("/interception/{interception_id}")
 async def poll_interception_api(interception_id: str) -> Dict[str, Any]:
     from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
@@ -1477,6 +1658,13 @@ async def submit_interception_mutation(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.post("/interception/{interception_id}/drop")
+async def drop_interception_api(interception_id: str) -> Dict[str, Any]:
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    return get_request_lifecycle_manager().drop_interception(interception_id)
 
 
 @app.get("/runs/{run_id}/mutations")
@@ -1545,6 +1733,12 @@ async def _run_solver(
         logger.exception("Solver execution failed")
         state.update(status="error", error=str(exc), finished_at=_now())
     finally:
+        try:
+            from lattice_mind.core.session_epoch import get_session_epoch_manager
+
+            get_session_epoch_manager().expire(run_id)
+        except Exception:
+            pass
         _tasks.pop(run_id, None)
 
 
@@ -1602,7 +1796,8 @@ UPLOAD_DIR = pathlib.Path("/tmp/lattice-mind-uploads")
 async def upload_file(file: UploadFile = File(...)):
     """Save uploaded file and return its server path."""
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    dest = UPLOAD_DIR / f"{uuid.uuid4().hex}_{file.filename}"
+    safe_name = pathlib.Path(file.filename).name
+    dest = UPLOAD_DIR / f"{uuid.uuid4().hex}_{safe_name}"
     with dest.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     return {"path": str(dest), "filename": file.filename}

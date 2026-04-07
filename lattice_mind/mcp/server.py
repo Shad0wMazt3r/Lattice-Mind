@@ -27,7 +27,10 @@ class LatticeMindMCPServer:
         self.base_url = (base_url or os.environ.get("LATTICE_MIND_API_BASE_URL", "http://127.0.0.1:8000")).rstrip("/")
         self.token = token if token is not None else os.environ.get("LATTICE_MIND_MCP_TOKEN")
         raw_timeout = timeout if timeout is not None else os.environ.get("LATTICE_MIND_MCP_TIMEOUT", "30")
-        self.timeout = float(raw_timeout)
+        try:
+            self.timeout = float(raw_timeout)
+        except (TypeError, ValueError):
+            self.timeout = 30.0
 
     @staticmethod
     def _tool_definitions() -> list[Dict[str, Any]]:
@@ -111,7 +114,10 @@ class LatticeMindMCPServer:
                 "description": "Get full run status including every scan/tree step and observation. Prefer get_run_summary unless you need the detailed step log.",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {"run_id": {"type": "string"}},
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "max_steps": {"type": "integer", "minimum": 1, "maximum": 500},
+                    },
                     "required": ["run_id"],
                 },
             },
@@ -126,7 +132,12 @@ class LatticeMindMCPServer:
             {
                 "name": "list_rules",
                 "description": "List loaded decision-tree rules in the engine.",
-                "inputSchema": {"type": "object", "properties": {}},
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "include_quarantined": {"type": "boolean"},
+                    },
+                },
             },
             {
                 "name": "get_rule",
@@ -178,6 +189,33 @@ class LatticeMindMCPServer:
                         "include_disabled_trees": {"type": "boolean"},
                     },
                     "required": ["challenge_type"],
+                },
+            },
+            {
+                "name": "set_session_cookies",
+                "description": (
+                    "Inject or replace cookies for an active run. Alias of set_scan_session "
+                    "with run-scoped TTL and optimistic versioning."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "cookies": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string", "maxLength": 256},
+                                    "value": {"type": "string", "maxLength": 8192},
+                                },
+                                "required": ["name", "value"],
+                            },
+                        },
+                        "replace": {"type": "boolean"},
+                        "ttl_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+                    },
+                    "required": ["run_id", "cookies"],
                 },
             },
             {
@@ -287,6 +325,31 @@ class LatticeMindMCPServer:
                 },
             },
             {
+                "name": "mutate_request",
+                "description": (
+                    "Pause/inspect/mutate/resume request lifecycle for a run. "
+                    "Actions: inspect, pause, mutate, resume, drop."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "action": {
+                            "type": "string",
+                            "enum": ["inspect", "pause", "mutate", "resume", "drop"],
+                        },
+                        "match": {"type": "object"},
+                        "mode": {"type": "string", "enum": ["first", "all"]},
+                        "ttl_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+                        "interception_id": {"type": "string"},
+                        "request_id": {"type": "string"},
+                        "mutation": {"type": "object"},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["run_id", "action"],
+                },
+            },
+            {
                 "name": "list_mutation_history",
                 "description": "List mutation audit records for a run.",
                 "inputSchema": {
@@ -343,6 +406,9 @@ class LatticeMindMCPServer:
                 "username": arguments["username"],
                 "password": arguments["password"],
             })
+            token = result.get("access_token")
+            if token:
+                self.token = str(token)
             result["note"] = (
                 "Store this token and include it as 'Authorization: Bearer <token>' "
                 "in future MCP requests."
@@ -361,8 +427,8 @@ class LatticeMindMCPServer:
         if name == "wait_for_run":
             import time
             run_id = arguments["run_id"]
-            timeout = int(arguments.get("timeout_seconds", 300))
-            interval = int(arguments.get("poll_interval_seconds", 3))
+            timeout = max(1, min(600, int(arguments.get("timeout_seconds", 300))))
+            interval = max(1, min(30, int(arguments.get("poll_interval_seconds", 3))))
             terminal = {"success", "completed", "error"}
             deadline = time.monotonic() + timeout
             while True:
@@ -382,12 +448,19 @@ class LatticeMindMCPServer:
             return self._run_summary(data)
         if name == "get_run_status":
             run_id = arguments["run_id"]
-            return self._request("GET", f"/runs/{run_id}")
+            max_steps = arguments.get("max_steps")
+            if max_steps is None:
+                return self._request("GET", f"/runs/{run_id}?max_steps=50")
+            lim = max(1, min(500, int(max_steps)))
+            return self._request("GET", f"/runs/{run_id}?max_steps={lim}")
         if name == "list_runs":
             limit = int(arguments.get("limit", 50))
             return self._request("GET", f"/runs?limit={limit}")
         if name == "list_rules":
-            return self._request("GET", "/rules")
+            iq = bool(arguments.get("include_quarantined"))
+            return self._request(
+                "GET", f"/rules?include_quarantined={'true' if iq else 'false'}"
+            )
         if name == "get_rule":
             rule_id = arguments["rule_id"]
             return self._request("GET", f"/rules/{rule_id}")
@@ -420,6 +493,14 @@ class LatticeMindMCPServer:
             }
             return self._request("POST", "/solve", payload)
         if name == "set_scan_session":
+            run_id = arguments["run_id"]
+            body = {
+                "cookies": arguments["cookies"],
+                "replace": bool(arguments.get("replace")),
+                "ttl_seconds": arguments.get("ttl_seconds"),
+            }
+            return self._request("POST", f"/runs/{run_id}/session", body)
+        if name == "set_session_cookies":
             run_id = arguments["run_id"]
             body = {
                 "cookies": arguments["cookies"],
@@ -461,6 +542,36 @@ class LatticeMindMCPServer:
                 "note": arguments.get("note"),
             }
             return self._request("POST", f"/interception/{iid}/mutate", body)
+        if name == "mutate_request":
+            action = str(arguments["action"]).strip().lower()
+            run_id = arguments["run_id"]
+            if action == "inspect":
+                return self._request("GET", f"/runs/{run_id}/request/pending")
+            if action == "pause":
+                body = {
+                    "match": arguments.get("match", {}),
+                    "mode": arguments.get("mode", "first"),
+                    "ttl_seconds": arguments.get("ttl_seconds"),
+                }
+                return self._request("POST", f"/runs/{run_id}/request/pause", body)
+            if action == "mutate":
+                iid = arguments["interception_id"]
+                body = {
+                    "request_id": arguments["request_id"],
+                    "mutation": arguments["mutation"],
+                    "note": arguments.get("note"),
+                }
+                return self._request("POST", f"/interception/{iid}/mutate", body)
+            if action == "resume":
+                body = {
+                    "interception_id": arguments["interception_id"],
+                    "request_id": arguments["request_id"],
+                }
+                return self._request("POST", f"/runs/{run_id}/request/resume", body)
+            if action == "drop":
+                iid = arguments["interception_id"]
+                return self._request("POST", f"/interception/{iid}/drop", {})
+            raise MCPRequestError(f"Unsupported mutate_request action: {action!r}")
         if name == "list_mutation_history":
             run_id = arguments["run_id"]
             limit = int(arguments.get("limit", 100))
@@ -519,10 +630,39 @@ class LatticeMindMCPServer:
             except (KeyError, ValueError) as exc:
                 return self._ok(
                     request_id,
-                    {"content": [{"type": "text", "text": f"Invalid tool arguments: {exc}"}], "isError": True},
+                    {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(
+                                    {
+                                        "error_code": "invalid_arguments",
+                                        "message": f"Invalid tool arguments: {exc}",
+                                    }
+                                ),
+                            }
+                        ],
+                        "isError": True,
+                    },
                 )
             except MCPRequestError as exc:
-                return self._ok(request_id, {"content": [{"type": "text", "text": str(exc)}], "isError": True})
+                return self._ok(
+                    request_id,
+                    {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(
+                                    {
+                                        "error_code": "request_failed",
+                                        "message": str(exc),
+                                    }
+                                ),
+                            }
+                        ],
+                        "isError": True,
+                    },
+                )
 
         return self._error(request_id, -32601, f"Method not found: {method}")
 

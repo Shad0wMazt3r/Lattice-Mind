@@ -23,12 +23,10 @@ class FlagRecognizer:
         if not text:
             return None
         
-        for pattern in COMPILED_FLAG_PATTERNS:
-            match = pattern.search(text)
-            if match:
-                flag = match.group(0)
-                self.found_flags.append(flag)
-                return flag
+        flag = self._probe(text)
+        if flag is not None:
+            self.found_flags.append(flag)
+            return flag
         
         return None
     
@@ -60,7 +58,17 @@ class FlagRecognizer:
         Returns:
             True if a flag pattern was found.
         """
-        return self.recognize(text) is not None
+        return self._probe(text) is not None
+
+    def _probe(self, text: str) -> Optional[str]:
+        """Find first matching flag without mutating recognizer state."""
+        if not text:
+            return None
+        for pattern in COMPILED_FLAG_PATTERNS:
+            match = pattern.search(text)
+            if match:
+                return match.group(0)
+        return None
     
     def clear(self):
         """Reset found flags list."""

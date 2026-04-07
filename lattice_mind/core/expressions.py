@@ -73,6 +73,17 @@ class ExpressionEvaluator:
             left = self._eval_node(node.left)
             for op, right_node in zip(node.ops, node.comparators):
                 right = self._eval_node(right_node)
+                # Normalize common YAML edge case: numeric value compared to quoted number.
+                if isinstance(left, (int, float)) and isinstance(right, str):
+                    try:
+                        right = float(right) if "." in right else int(right)
+                    except ValueError:
+                        pass
+                elif isinstance(right, (int, float)) and isinstance(left, str):
+                    try:
+                        left = float(left) if "." in left else int(left)
+                    except ValueError:
+                        pass
                 op_func = self.OPERATORS.get(type(op))
                 if not op_func:
                     raise TypeError(f"Unsupported operator: {type(op)}")
