@@ -27,7 +27,7 @@ class NodeStatus(str, Enum):
     PENDING | SKIPPED | QUEUED | ESCALATE | ASK_HUMAN | TIMEOUT
 ```
 
-**Known issue:** `FAILURE` and `FAILED` share value `"failure"`. Identity checks (`is`) can silently pass/fail incorrectly. See `07_known_bugs.md` Bug 19.
+**Note:** `NodeStatus` has a single `FAILURE = "failure"` member. The former `FAILED` alias has been removed — use `FAILURE` exclusively.
 
 ### Dataclasses
 
@@ -40,7 +40,7 @@ class ChallengeDescriptor:
     file_path: Optional[str] = None
     flag_format: str = "flag{...}"
     metadata: Dict[str, Any] = field(default_factory=dict)
-    # NO id or description fields — mvp.py:main() incorrectly passes these (Bug 25)
+    # Fields: type, name, url, file_path, flag_format, metadata only
 
 @dataclass
 class VulnDescriptor:
@@ -48,7 +48,7 @@ class VulnDescriptor:
     technique: str
     endpoint: Optional[str] = None
     param: Optional[str] = None
-    confidence: float = 0.5     # comment says 0.0–1.0 but no enforcement (Bug)
+    confidence: float = 0.5     # 0.0–1.0 range; not enforced by the dataclass
     extra: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
@@ -86,7 +86,7 @@ class DecisionNode(ABC):
 
 `SimpleNode` is a passthrough stub for testing — returns `SUCCESS` with a message.
 
-**State leakage risk:** `signal_bus`, `confidence_pool`, and `tree_id` are instance fields. If a node instance is reused across runs without re-injection, stale state persists.
+**State leakage risk:** `signal_bus`, `confidence_pool`, and `tree_id` are instance fields. Node instances should not be reused across runs without re-injection.
 
 ---
 
@@ -99,7 +99,6 @@ Walks a linked chain of `DecisionNode` objects. Called by `MVPSolver` for Python
 ```python
 def set_challenge(self, challenge: ChallengeDescriptor) -> None:
     # Resets execution context, clears FlagRecognizer, clears ConfidencePool
-    # Does NOT clear HumanLoopManager hints/overrides (Bug 15)
 
 def set_progress_callback(self, cb: Callable[[Dict], None]) -> None:
     # Server injects: writes to DB + broadcasts over WebSocket
@@ -194,9 +193,8 @@ Safe AST evaluator — used for YAML `applies_when` guards and `confidence_seeds
 
 ### Known gaps
 
-- **Integer vs string comparison:** `context.observations.port == '80'` silently fails when `port` is `int(80)` (Bug 4)
-- **No evaluation timeout:** pathological expressions can hang the executor thread (Bug — medium)
-- **ReDoS via regex in context:** `re.search` is used internally for regex-style `in` checks; YAML-controlled patterns are not compiled with timeouts (Bug 1 in `07_known_bugs.md`)
+- **No evaluation timeout:** pathological expressions can hang the executor thread
+- **ReDoS via regex:** signal regex matching has no execution timeout — see `07_known_bugs.md` Bug 1
 
 ---
 
@@ -229,9 +227,7 @@ class FlagRecognizer:
         self.found_flags.clear()
 ```
 
-**Cross-run leakage:** `Orchestrator.set_challenge()` calls `clear()`. If YAML executor calls `has_flag()` for detection without going through orchestrator, flags accumulate across steps.
-
-**Race:** `found_flags.append()` from multiple threads — CPython GIL partially protects list appends but logical deduplication is not guaranteed.
+**`has_flag()` is side-effect-free:** calls `_probe()` internally — does not mutate `found_flags`.
 
 **No input size guard:** extremely large response bodies can make regex expensive.
 
@@ -245,8 +241,8 @@ class FlagRecognizer:
 
 ```python
 class HumanLoopManager:
-    hints: Dict[str, Any]        # pre-loaded hints (persist across runs — Bug 15)
-    overrides: Dict[str, bool]   # feature overrides (persist across runs — Bug 15)
+    hints: Dict[str, Any]        # pre-loaded hints; cleared at start of each solve()
+    overrides: Dict[str, bool]   # feature overrides; cleared at start of each solve()
 
     def ask_user(self, question: str, qid: str,
                  timeout: Optional[float] = None) -> Optional[str]:
@@ -296,7 +292,7 @@ class MVPSolver:
 # 1. Reset state
 orchestrator.set_challenge(challenge)     # clears FlagRecognizer, ConfidencePool
 confidence_pool.clear()
-# NOTE: HumanLoopManager NOT cleared here (Bug 15)
+get_human_loop_manager().clear()          # clears hints/overrides from prior runs
 
 # 2. Classify asset                       [AUTOMATIC]
 asset_type = _classify_asset()
@@ -305,18 +301,18 @@ asset_type = _classify_asset()
 try:
     orchestrator.run_tree(WebReconProbeNode())
 except Exception:
-    logger.warning(...)                   # swallowed (Bug — medium)
+    logger.warning(...)                   # recon failure is non-fatal; solve continues
 
 # 4. Merge session cookies (if any)
 # Agent may have called set_session_cookies MCP tool before or during this run
 try:
     session_store.get_cookies(run_id) → merged into context
 except Exception:
-    logger.warning(...)                   # swallowed silently (Bug 16)
+    raise RuntimeError("session cookie merge failed: ...")  # surfaces to run log
 
 # 5. YAML tree dispatch loop              [AUTOMATIC; agent can augment via mutate_request]
 while remaining_trees:
-    flag = asyncio.run(executor.execute_tree(tree, context))   # Bug 7: asyncio.run in thread
+    flag = asyncio.run(executor.execute_tree(tree, context))   # BUG 7 (open): crashes Python 3.10+ in async context
     if flag: return flag
 
 # 6. Legacy Python tree fallback          [AUTOMATIC]
@@ -326,4 +322,4 @@ orchestrator.run_tree(domain_root_node)
 human_loop.ask_user(...)
 ```
 
-**Critical bug (Bug 7):** `asyncio.run()` is called inside `asyncio.to_thread()` which is already inside an event loop. On Python 3.10+ this raises `RuntimeError: This event loop is already running`.
+**Open bug (Bug 7):** `asyncio.run()` at line 263 inside the tree execution loop. On Python 3.10+ this raises `RuntimeError: This event loop is already running` when called from a FastAPI async context. See `07_known_bugs.md`.

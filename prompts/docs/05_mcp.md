@@ -75,12 +75,11 @@ All 9 tools are defined in `_tool_definitions()` as JSON Schema objects. These a
   ```json
   {
     "run_id": "str",
-    "timeout_seconds": "int (default 300)",     // BUG 21: not clamped in MCP layer
-    "poll_interval_seconds": "int (default 3)"  // BUG 21: not clamped in MCP layer
+    "timeout_seconds": "int (default 300, clamped 1–600)",
+    "poll_interval_seconds": "int (default 3, clamped 1–30)"
   }
   ```
 - **Returns:** final run state dict
-- **Known issue (Bug 21):** `int(arguments.get("timeout_seconds", 300))` — value of 0 → infinite loop; value of 86400 → blocks MCP process for 24h. REST API clamps TTL but MCP layer does not.
 
 ### 5. `get_run_summary`
 - **Purpose:** Compact result (flag, status, timestamps only)
@@ -89,9 +88,8 @@ All 9 tools are defined in `_tool_definitions()` as JSON Schema objects. These a
 
 ### 6. `get_run_status`
 - **Purpose:** Full run data including all steps
-- **Inputs:** `{run_id: str}`
-- **Returns:** full run dict including `steps` array (can be 200+ entries)
-- **Known issue (Bug 22):** No `max_steps` or pagination. Long runs return the full steps array, consuming the agent's entire context window with event data.
+- **Inputs:** `{run_id: str, max_steps: int (default 50, max 500)}`
+- **Returns:** full run dict with `steps[-max_steps:]` and `total_steps` count. Use `get_run_summary` unless you need the step log.
 
 ### 7. `list_runs`
 - **Purpose:** Recent runs (up to 200)
@@ -125,8 +123,8 @@ def _call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
 
     if name == "wait_for_run":
         run_id   = arguments["run_id"]
-        timeout  = int(arguments.get("timeout_seconds", 300))   # no clamp
-        interval = int(arguments.get("poll_interval_seconds", 3))
+        timeout  = max(1, min(600, int(arguments.get("timeout_seconds", 300))))
+        interval = max(1, min(30,  int(arguments.get("poll_interval_seconds", 3))))
         # polling loop — blocks MCP process thread
         ...
 ```
@@ -147,10 +145,10 @@ def handle_request(self, request: Dict) -> Dict:
     except (ValueError, TypeError) as e:
         return error_response(f"Invalid argument: {e}")
     except Exception as e:
-        return error_response(str(e))   # BUG 23: raw Python exception string to agent
+        return error_response(str(e))   # some paths still return raw exception strings (Bug 23, partial)
 ```
 
-**Bug 23:** The agent receives strings like `AttributeError: 'NoneType' object has no attribute 'type'`. It cannot distinguish transient vs permanent errors, so it may retry indefinitely.
+**Bug 23 (partial):** Common error paths include an `error_code` field (`"invalid_arguments"`, `"request_failed"`). Uncommon exception paths still return raw Python strings. See `07_known_bugs.md`.
 
 ---
 
@@ -209,11 +207,9 @@ No concurrent handling — each request is processed synchronously before the ne
 
 ---
 
-## Known Issues Summary
+## Open Issues
 
 | Bug | Severity | Detail |
 |-----|----------|--------|
-| Bug 20 | High | `/mcp` endpoint fully public — middleware bypassed |
-| Bug 21 | High | `wait_for_run` timeout/interval unclamped — infinite loop or 24h block possible |
-| Bug 22 | Medium | `get_run_status` returns full unbounded steps array — context window bloat |
-| Bug 23 | Medium | Raw Python exception strings returned to agent — no structured error codes |
+| Bug 20 | High | `/mcp` in `_PUBLIC_PATHS` — `tools/list` and `initialize` unauthenticated |
+| Bug 23 | Medium | Some error paths still return raw Python exception strings (partial fix) |

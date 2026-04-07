@@ -41,7 +41,7 @@ def execute_command(self, cmd: List[str]) -> str:
 
 **No shell=True** — argv list prevents classic shell injection. Risk is argument injection into the tool itself (e.g., nmap `--script` injection via `ports` string).
 
-**State leakage:** `last_output` and `last_result` are instance fields. If an adapter instance is reused across runs without reinstantiation, stale results persist.
+**State leakage:** `last_output` and `last_result` are instance fields. Adapter instances should not be reused across concurrent operations.
 
 ---
 
@@ -53,47 +53,27 @@ The file is named `curl_adapter.py` but the primary class is `RequestsAdapter` w
 
 ```python
 class RequestsAdapter(ToolAdapter):
-    def __init__(self):
-        self._session = requests.Session()   # one session per instance
-        # Cookies from target Set-Cookie responses persist within this session
-```
+    def __init__(self, timeout=10.0):
+        # Uses stateless requests.request() — no Session, no cookie persistence
 
-```python
 def run(self, target: str, args: Dict[str, Any]) -> Dict[str, Any]:
-    method = args.get("method", "GET").lower()
-    headers = args.get("headers", {})
-    params  = args.get("params", {})    # BUG: not URL-encoded (Bug 8)
-    body    = args.get("body")
-    timeout = args.get("timeout", 10)
+    method  = args.get("method", "GET").upper()
+    headers = dict(args.get("headers", {}))
+    params  = args.get("params", {}) or {}      # passed to requests as dict — URL-encoded automatically
+    data    = args.get("data")
+    json_body = args.get("json")
+    sni_hostname = args.get("sni_hostname", "")  # optional SNI override — sets Host header
+    cookies = args.get("cookies")
 
-    response = getattr(self._session, method)(
-        target,
-        headers=headers,   # BUG: CRLF not stripped (Bug 10)
-        params=params,
-        data=body,
-        timeout=timeout,
-        verify=False       # SSL verification disabled
-    )
-    return {
-        "status_code": response.status_code,
-        "headers": dict(response.headers),
-        "body": response.text,
-        "url": response.url,
-    }
+    response = requests.request(method, target, headers=headers,  # BUG 10 (open): CRLF not stripped
+                                params=params, data=data, ...)
 ```
 
-### Known issues
+### Open issue
 
-| Bug | Location | Detail |
-|-----|----------|--------|
-| **Bug 8** | `params` building | `{k: v}` dict passed to requests but values not manually sanitized — special chars in values can corrupt query string in edge cases with manual string building elsewhere |
-| **Bug 10** | `headers` passthrough | YAML header values containing `\r\n` passed directly to requests. `requests` ≥2.26 rejects some CRLF but behavior varies by version |
-| **Bug 9** | HTTPS to IP | No SNI override; many TLS stacks reject IP as SNI value |
-| **Bug 18** | Session persistence | `requests.Session` accumulates `Set-Cookie` from target responses; if adapter instance is reused, attacker cookies replay on next request |
-
-### Query param encoding (manual paths)
-
-In parts of executor that manually build query strings (`f"{k}={v}"`), `&`, `=`, unicode, and spaces in values corrupt the string. Fix: use `urllib.parse.urlencode()`.
+| Bug | Detail |
+|-----|--------|
+| **Bug 10** (High, open) | `headers` dict passed to `requests.request()` without CRLF sanitization. YAML step headers containing `\r\n` can inject extra headers. Fix: strip `\r`/`\n` from all header names/values before dispatch. |
 
 ---
 
@@ -103,24 +83,22 @@ Wraps `ffuf` (directory/parameter fuzzer) via subprocess.
 
 ```python
 class FFUFAdapter(CommandToolAdapter):
-    DEFAULT_WORDLIST = "/usr/share/wordlists/dirb/common.txt"
-    OUTPUT_FILE = "/tmp/ffuf_output.json"    # BUG: shared fixed path (Bug 12)
+    OUTPUT_FILE = "/tmp/ffuf_output.json"    # legacy constant — not used for concurrent runs
+    DEFAULT_WORDLIST = "/usr/share/dirb/wordlists/common.txt"
     timeout = 300
 ```
 
 ### run() flow
 
+Per-run temp file is created via `tempfile.mkstemp()` to prevent cross-run collision. The `OUTPUT_FILE` constant remains for backward-compat pre-run cleanup only.
+
 ```python
 def run(self, target: str, args: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        os.remove(self.OUTPUT_FILE)    # delete previous result
-    except FileNotFoundError:
-        pass
-    cmd = self.build_command(target, args)
-    output = self.execute_command(cmd)
-    with open(self.OUTPUT_FILE) as f:
-        data = json.load(f)            # reads whoever wrote last (Bug 12)
-    return self.normalize_output(data)
+    fd, output_file = tempfile.mkstemp(prefix="ffuf_", suffix=".json")
+    os.close(fd)
+    merged_args["_output_file"] = output_file
+    cmd = self.build_command(target, merged_args)
+    ...
 ```
 
 ### build_command() args
@@ -129,22 +107,16 @@ def run(self, target: str, args: Dict[str, Any]) -> Dict[str, Any]:
 |-----|---------|------|
 | `wordlist` | DEFAULT_WORDLIST | str |
 | `extensions` | `[]` | list of str |
-| `match_status` | `[200,204,301,302,307,401,403]` | list of int |
-| `threads` | `100` | int (no validation) |
-| `timeout` | `5` | int (per-request, separate from subprocess timeout) |
+| `match_status` | auto-calibrate | list of int |
+| `threads` | `100` | int |
+| `timeout` | `5` | int (per-request) |
 | `headers` | `{}` | dict |
-| `recursive` | `False` | bool |
-| `depth` | `2` | int |
 
-**No type validation** — non-numeric `threads` or `timeout` becomes a string in the command without error until ffuf rejects it.
+### Remaining issue
 
-### Known issues
-
-| Bug | Detail |
-|-----|--------|
-| **Bug 12** (Critical) | `/tmp/ffuf_output.json` is a fixed shared path. Concurrent ffuf runs from different solver instances overwrite each other. Run A reads Run B's results as its own. Fix: `tempfile.mkstemp()` per invocation. |
-| No aggregate timeout | Per-request `-timeout 5` is separate from subprocess timeout (300s). A very large wordlist runs for the full subprocess timeout. |
-| Error swallowing | Broad `except Exception` in JSON parse — failures produce `{"error": "..."}` silently |
+| Issue | Detail |
+|-------|--------|
+| Stale class constant | `OUTPUT_FILE = "/tmp/ffuf_output.json"` still defined; can confuse readers. Safe to remove along with the `os.remove(self.OUTPUT_FILE)` pre-run cleanup. |
 
 ---
 
@@ -169,24 +141,22 @@ class NmapAdapter(CommandToolAdapter):
 
 ### SimplePortScanAdapter
 
-Fallback when nmap unavailable. Uses `nc -zv -w 2` per port.
+Fallback when nmap unavailable. Uses `nc -zv -w 2` per port. Enforces aggregate deadline via `max_total_seconds` (default 30s).
 
 ```python
-for port in ports:           # iterates every port in range
-    cmd = ["nc", "-zv", "-w", "2", target, str(port)]
-    try:
-        output = self.execute_command(cmd)
-    except RuntimeError:
-        pass                 # swallows ALL RuntimeError — closed port AND timeout AND crash
+max_total_seconds = float(args.get("max_total_seconds", 30.0))
+started_at = time.monotonic()
+for port in ports:
+    if time.monotonic() - started_at >= max_total_seconds:
+        break   # aggregate deadline enforced
+    ...
 ```
 
-### Known issues
+### Notes
 
-| Bug | Detail |
-|-----|--------|
-| **Bug 13** (High) | `SimplePortScanAdapter` has no aggregate deadline. Scanning ports 1–65535 at 60s per call = up to 65535 minutes. `self.timeout` applies per `nc` call, not to the whole scan loop. |
+| Issue | Detail |
+|-------|--------|
 | Input validation absent | `ports`, `target`, `scripts` values not sanitized — nmap argument injection possible |
-| Memory | `len(list(ports))` materializes full range iterator for logging — wasteful for large ranges |
 | Error swallowing | `except RuntimeError: pass` masks timeouts and unexpected errors alongside expected "port closed" |
 
 ---
@@ -198,15 +168,10 @@ File analysis adapters. All use `CommandToolAdapter.execute_command()`.
 ### BinwalkAdapter
 
 ```python
-class BinwalkAdapter(CommandToolAdapter):
-    timeout = 60
-
-    def build_command(self, target: str, args: Dict) -> List[str]:
-        cmd = ["binwalk"]
-        if args.get("extract", False):
-            cmd.append("-e")    # writes extracted files to disk — no output dir control
-        cmd.append(target)      # no path validation
-        return cmd
+cmd = ["binwalk"]
+if args.get("extract", False):
+    cmd.append("-e")    # writes extracted files to disk — no output dir control
+cmd.append(target)      # no path validation
 ```
 
 ### ExiftoolAdapter

@@ -112,14 +112,11 @@ class TreeRegistry:
     def reload(self) -> int: ...   # called by POST /rules/reload
 ```
 
-### Known issues in tree_loader.py
+### Notes on tree_loader.py
 
-| Issue | Detail |
-|-------|--------|
-| No schema validation | `confidence_seeds` parsed with `s["if"]` / `s["boost"]` — wrong key → `KeyError`; v2 uses `condition` not `if` |
-| Silent duplicate ID overwrite | `registry[tree.id] = tree` with no duplicate check or warning (Bug 2) |
-| Broad `except Exception` + `print` | Errors go to stdout; no structured logging |
-| No DAG validation | Circular `requires_signal` chains not detected at load time (Bug 5) |
+- `confidence_seeds` accepts both `condition` (v1) and `if` (v2) keys — both are normalized
+- Duplicate tree IDs raise `ValueError` and are recorded in `validation_errors`
+- `DAGValidator` runs after load to detect circular `requires_signal` dependencies
 
 ---
 
@@ -179,15 +176,14 @@ Inside each exploitation path:
 
 A **new** `RequestsAdapter()` is created per executor step (line ~417). This limits session cookie leakage between steps — but the `requests.Session` inside still accumulates `Set-Cookie` responses from the target within a single step's requests (Bug 18).
 
-### Known issues in executor.py
+### Notes on executor.py
 
-| Issue | Line range | Detail |
-|-------|-----------|--------|
-| ReDoS via YAML signal regex | ~172–176 | `re.search(sig_def["match"], body)` with no timeout (Bug 1) |
-| Exception swallowed in condition eval | ~202–206 | Failures become "no match" silently |
-| Template injection from captures | ~422–426 | Attacker-controlled `captures.table_name` inserted into next payloads (Bug 6) |
-| Shallow `context.copy()` | ~181 | Nested dicts still shared; deep cycles in context can confuse evaluators |
-| `asyncio.run()` in while loop | mvp.py:246–254 | `execute_tree` called via `asyncio.run()` inside `to_thread` — crashes Python 3.10+ (Bug 7) |
+| Issue | Detail |
+|-------|--------|
+| ReDoS (partial) | `_safe_signal_search()` caches compiled regexes but has no execution timeout — see Bug 1 in `07_known_bugs.md` |
+| Exception in condition eval | Failures become "no match" silently |
+| Shallow `context.copy()` | Nested dicts still shared; deep cycles in context can confuse evaluators |
+| `asyncio.run()` in mvp.py | `execute_tree` result wrapped in `asyncio.run()` — crashes Python 3.10+ — see Bug 7 in `07_known_bugs.md` |
 
 ---
 
@@ -224,9 +220,7 @@ for key, pattern in step.capture.items():
 payload = payload.replace(f"{{{{ captures.{key} }}}}", value)
 ```
 
-**Security note:** `captures` values come from attacker-controlled HTTP responses. If a later step's payload is `UNION SELECT {{captures.table_name}}-- -` and the attacker poisoned `table_name` with `\r\nX-Injected: evil`, the substitution propagates hostile content into the next request (Bug 6).
-
-**Fix (planned Sprint 3):** sanitize `captures` values — strip control characters and enforce maximum length before storage.
+**Security:** `captures` values are sanitized via `_sanitize_capture_value()` before storage — strips `\r`/`\n` and truncates at 2048 chars. Values still come from attacker-controlled responses, so treat them as untrusted input in any logic that uses them.
 
 ---
 
