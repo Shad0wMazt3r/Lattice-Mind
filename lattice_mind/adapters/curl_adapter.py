@@ -197,6 +197,7 @@ class RequestsAdapter(CommandToolAdapter):
     
     def __init__(self, timeout: float = 10.0):
         super().__init__("requests", timeout=timeout)
+        self._session = None
         try:
             import requests
             self._session = requests.Session()
