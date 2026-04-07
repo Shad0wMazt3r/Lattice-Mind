@@ -24,6 +24,7 @@ from lattice_mind.web.request_models import (
 )
 from lattice_mind.web.request_builder import (
     filter_probe_specs_by_candidate_filter,
+    merge_session_cookies_from_context,
     resolve_probe_base_specs,
     target_params_for_selector,
 )
@@ -386,7 +387,11 @@ class TreeExecutor:
         request_source = params.get("request_source")
         candidate_filter = params.get("candidate_filter")
         if inject_into == "none":
-            probe_specs = [request_spec_for_challenge_url(url)]
+            probe_specs = [
+                merge_session_cookies_from_context(
+                    request_spec_for_challenge_url(url), context
+                )
+            ]
         else:
             probe_specs = resolve_probe_base_specs(context, url, request_source)
         probe_specs = filter_probe_specs_by_candidate_filter(
@@ -467,6 +472,18 @@ class TreeExecutor:
                     batch: List[Dict[str, Any]] = []
                     for pv in planned:
                         run_spec = pv.spec
+                        run_id = context.get("run_id")
+                        if run_id:
+                            from lattice_mind.core.request_lifecycle import (
+                                get_request_lifecycle_manager,
+                            )
+
+                            run_spec = get_request_lifecycle_manager().intercept_before_send(
+                                str(run_id),
+                                tree.id,
+                                getattr(step, "id", ""),
+                                run_spec,
+                            )
                         start_time = time.time()
                         mutation_id: Optional[str] = None
                         if use_mutations and not pv.is_baseline:
@@ -552,7 +569,11 @@ class TreeExecutor:
             target_params = [None]
 
         if inject_into == "none":
-            probe_specs = [request_spec_for_challenge_url(url)]
+            probe_specs = [
+                merge_session_cookies_from_context(
+                    request_spec_for_challenge_url(url), context
+                )
+            ]
         else:
             probe_specs = resolve_probe_base_specs(context, url, params.get("request_source"))
         probe_specs = filter_probe_specs_by_candidate_filter(
@@ -569,6 +590,19 @@ class TreeExecutor:
                     else:
                         true_spec = clone_http_request_spec(base_spec)
                         false_spec = clone_http_request_spec(base_spec)
+                    run_id = context.get("run_id")
+                    if run_id:
+                        from lattice_mind.core.request_lifecycle import (
+                            get_request_lifecycle_manager,
+                        )
+
+                        rlm = get_request_lifecycle_manager()
+                        true_spec = rlm.intercept_before_send(
+                            str(run_id), tree.id, getattr(step, "id", ""), true_spec
+                        )
+                        false_spec = rlm.intercept_before_send(
+                            str(run_id), tree.id, getattr(step, "id", ""), false_spec
+                        )
                     ra_t = spec_to_adapter_args(true_spec)
                     tb_t, _ = normalize_request_url(true_spec.url)
                     t0 = time.time()

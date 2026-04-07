@@ -26,6 +26,9 @@ def test_tools_list_contains_submit_scan():
     names = {tool["name"] for tool in tools}
     assert "submit_scan" in names
     assert "get_run_status" in names
+    assert "list_scan_trees" in names
+    assert "run_selected_trees" in names
+    assert "set_scan_session" in names
 
 
 def test_submit_scan_tool_call_success(monkeypatch):
@@ -115,4 +118,53 @@ def test_unknown_method_returns_jsonrpc_error():
     response = server.handle_request({"jsonrpc": "2.0", "id": 6, "method": "prompts/list"})
     assert response is not None
     assert response["error"]["code"] == -32601
+
+
+def test_list_scan_trees_get(monkeypatch):
+    def fake_request(method, url, headers, json, timeout):
+        assert method == "GET"
+        assert "/scan-trees" in url
+        return _FakeResponse(data={"trees": [], "groups": []})
+
+    monkeypatch.setattr("lattice_mind.mcp.server.requests.request", fake_request)
+    server = LatticeMindMCPServer(base_url="http://engine.local")
+    response = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "list_scan_trees",
+                "arguments": {"category": "web", "include_disabled": False},
+            },
+        }
+    )
+    assert response["result"]["isError"] is False
+
+
+def test_run_selected_trees_posts_solve(monkeypatch):
+    def fake_request(method, url, headers, json, timeout):
+        assert method == "POST"
+        assert url.endswith("/solve")
+        assert json.get("selected_tree_ids") == ["a"]
+        return _FakeResponse(data={"run_id": "r1", "status": "queued"})
+
+    monkeypatch.setattr("lattice_mind.mcp.server.requests.request", fake_request)
+    server = LatticeMindMCPServer(base_url="http://engine.local")
+    response = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {
+                "name": "run_selected_trees",
+                "arguments": {
+                    "challenge_type": "web",
+                    "url": "http://t",
+                    "selected_tree_ids": ["a"],
+                },
+            },
+        }
+    )
+    assert response["result"]["isError"] is False
 

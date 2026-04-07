@@ -2,9 +2,14 @@
 
 Demonstrates autonomous vulnerability detection and exploitation
 across all challenge categories using integrated decision trees.
+
+NOTE: This implementation uses separate Orchestrator (Python trees) and
+TreeExecutor (YAML trees). For new code, consider using UnifiedTreeOrchestrator
+from lattice_mind.core.unified_orchestrator which provides a single interface
+for both Python and YAML trees with shared SignalBus and ConfidencePool.
 """
 import logging
-from typing import Optional
+from typing import List, Optional
 
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
 from lattice_mind.core.orchestrator import Orchestrator
@@ -41,7 +46,13 @@ class MVPSolver:
         self.confidence_pool = ConfidencePool()
         self.executor = TreeExecutor(self.confidence_pool)
 
-    def solve(self, challenge: ChallengeDescriptor) -> Optional[str]:
+    def solve(
+        self,
+        challenge: ChallengeDescriptor,
+        *,
+        selected_tree_ids: Optional[List[str]] = None,
+        run_id: Optional[str] = None,
+    ) -> Optional[str]:
         """Solve a challenge autonomously.
         
         Steps:
@@ -91,6 +102,22 @@ class MVPSolver:
         # Build context for expression evaluation
         context = self.orchestrator.execution_context
         obs = context["observations"]
+        if run_id:
+            context["run_id"] = run_id
+        # Merge MCP-managed session cookies (set via API) for YAML / executor probes
+        if run_id:
+            try:
+                from lattice_mind.core.session_store import get_session_store
+
+                sess = get_session_store().get(run_id)
+                if sess and sess.cookies:
+                    base = obs.get("session_cookies")
+                    base = dict(base) if isinstance(base, dict) else {}
+                    merged = dict(base)
+                    merged.update(sess.cookies)
+                    obs["session_cookies"] = merged
+            except Exception as e:
+                logger.warning("[MVP] session cookie merge failed: %s", e)
 
         # Translate legacy recon keys to YAML-expected names.
         # WebReconProbeNode writes "technologies" (dict) and "directories" (list of dicts);
@@ -141,15 +168,52 @@ class MVPSolver:
         # Find applicable trees
         candidate_trees = []
         for tree in self.registry.list_trees():
-            if not tree.enabled: continue
-            
+            if not tree.enabled:
+                continue
+
             # Check applies_when
             from lattice_mind.core.expressions import ExpressionEvaluator
+
             evaluator = ExpressionEvaluator(context)
             if all(evaluator.evaluate(cond) for cond in tree.applies_when):
                 # Evaluate seeds to get initial confidence
                 self.executor.evaluate_seeds(tree, context)
                 candidate_trees.append(tree)
+
+        execution_plan: dict = {
+            "mode": "full",
+            "ordered_tree_ids": [t.id for t in candidate_trees],
+            "skipped_not_applicable": [],
+            "dependency_warnings": [],
+        }
+
+        if selected_tree_ids is not None:
+            sel_set = set(selected_tree_ids)
+            id_to_candidate = {t.id: t for t in candidate_trees}
+            skipped_na = [tid for tid in selected_tree_ids if tid not in id_to_candidate]
+            from lattice_mind.core.tree_catalog import validate_tree_dependencies
+
+            dep_graph = {t.id: t.depends_on for t in self.registry.list_trees()}
+            dep_res = validate_tree_dependencies(
+                [tid for tid in selected_tree_ids if tid in id_to_candidate],
+                dep_graph,
+            )
+            ordered = [tid for tid in dep_res.ordered_ids if tid in id_to_candidate]
+            candidate_trees = [id_to_candidate[tid] for tid in ordered if tid in id_to_candidate]
+            warnings = [f"DEPENDENCY_MISSING:{a}_needs_{b}" for a, b in dep_res.missing_dependencies]
+            if dep_res.cycle:
+                warnings.append("DEPENDENCY_CYCLE")
+            execution_plan = {
+                "mode": "selected",
+                "ordered_tree_ids": [t.id for t in candidate_trees],
+                "skipped_not_applicable": skipped_na,
+                "dependency_warnings": warnings,
+            }
+            logger.info(
+                "[MVP] Selected-tree mode: running %s trees (skipped_not_applicable=%s)",
+                len(candidate_trees),
+                skipped_na,
+            )
         
         # Sort candidate trees by initial confidence score (highest first)
         candidate_trees.sort(
@@ -157,7 +221,7 @@ class MVPSolver:
             reverse=True
         )
 
-        logger.info(f"[MVP] Found {len(candidate_trees)} applicable declarative trees")
+        logger.info(f"[MVP] Found {len(candidate_trees)} declarative trees to execute")
         for t in candidate_trees:
             score = self.confidence_pool.get_tree_confidence(t.id).score
             logger.info(f"  - {t.id} (initial confidence: {score:.2f})")
@@ -189,6 +253,7 @@ class MVPSolver:
             flag = asyncio.run(self.executor.execute_tree(tree, context))
             if flag:
                 self._record_strategy_memory(context, challenge, flag)
+                context["execution_plan"] = execution_plan
                 return flag
 
         self._record_strategy_memory(
@@ -196,6 +261,7 @@ class MVPSolver:
             challenge,
             self.orchestrator.execution_context.get("flag_found"),
         )
+        context["execution_plan"] = execution_plan
         return self.orchestrator.execution_context.get("flag_found")
 
     def _record_strategy_memory(

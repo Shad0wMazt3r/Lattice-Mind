@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 import requests
 
@@ -136,6 +137,167 @@ class LatticeMindMCPServer:
                     "required": ["rule_id"],
                 },
             },
+            {
+                "name": "list_scan_trees",
+                "description": (
+                    "List available YAML scan trees with metadata for targeted execution "
+                    "(ids, tags, category, estimated duration, dependencies)."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string"},
+                        "challenge_type": {"type": "string"},
+                        "include_disabled": {"type": "boolean"},
+                    },
+                },
+            },
+            {
+                "name": "run_selected_trees",
+                "description": (
+                    "Queue a solver run that executes only the selected YAML tree IDs and/or groups. "
+                    "Same as submit_scan plus tree_selection / selected_tree_ids."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "challenge_type": {"type": "string"},
+                        "url": {"type": "string"},
+                        "file_path": {"type": "string"},
+                        "flag_format": {"type": "string"},
+                        "metadata": {"type": "object"},
+                        "selected_tree_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "tree_selection": {
+                            "type": "object",
+                            "description": "Optional ids, groups[], exclude_ids[] per tree catalog API.",
+                        },
+                        "include_disabled_trees": {"type": "boolean"},
+                    },
+                    "required": ["challenge_type"],
+                },
+            },
+            {
+                "name": "set_scan_session",
+                "description": (
+                    "Set or merge HTTP cookies for a run (run-scoped session). "
+                    "Cookies apply to subsequent HTTP probes for that run_id."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "cookies": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "value": {"type": "string"},
+                                },
+                                "required": ["name", "value"],
+                            },
+                        },
+                        "replace": {"type": "boolean"},
+                        "ttl_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+                    },
+                    "required": ["run_id", "cookies"],
+                },
+            },
+            {
+                "name": "get_scan_session",
+                "description": "Inspect cookies stored for a run (values redacted unless include_values is true).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "include_values": {"type": "boolean"},
+                    },
+                    "required": ["run_id"],
+                },
+            },
+            {
+                "name": "rotate_scan_session",
+                "description": "Atomically replace session cookies for a run; optional expected_version for optimistic locking.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "cookies": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "value": {"type": "string"},
+                                },
+                                "required": ["name", "value"],
+                            },
+                        },
+                        "expected_version": {"type": "integer"},
+                        "ttl_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+                    },
+                    "required": ["run_id", "cookies"],
+                },
+            },
+            {
+                "name": "enable_request_interception",
+                "description": (
+                    "Arm interception for the next matching HTTP request in a run. "
+                    "Agent polls then submits a mutation to resume."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "match": {
+                            "type": "object",
+                            "description": "Optional tree_id, step_id, url_contains, method",
+                        },
+                        "mode": {"type": "string", "enum": ["first", "all"]},
+                        "ttl_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+                    },
+                    "required": ["run_id", "match"],
+                },
+            },
+            {
+                "name": "poll_interception",
+                "description": "Poll a pending intercepted HTTP request for mutation.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"interception_id": {"type": "string"}},
+                    "required": ["interception_id"],
+                },
+            },
+            {
+                "name": "submit_request_mutation",
+                "description": "Submit patch.set mutations for a paused request and resume the scan thread.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "interception_id": {"type": "string"},
+                        "request_id": {"type": "string"},
+                        "mutation": {"type": "object"},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["interception_id", "request_id", "mutation"],
+                },
+            },
+            {
+                "name": "list_mutation_history",
+                "description": "List mutation audit records for a run.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 500},
+                    },
+                    "required": ["run_id"],
+                },
+            },
         ]
 
     def _headers(self) -> Dict[str, str]:
@@ -229,6 +391,80 @@ class LatticeMindMCPServer:
         if name == "get_rule":
             rule_id = arguments["rule_id"]
             return self._request("GET", f"/rules/{rule_id}")
+        if name == "list_scan_trees":
+            q = []
+            if arguments.get("category"):
+                q.append(f"category={quote(str(arguments['category']), safe='')}")
+            if arguments.get("challenge_type"):
+                q.append(
+                    "challenge_type="
+                    + quote(str(arguments["challenge_type"]), safe="")
+                )
+            if arguments.get("include_disabled"):
+                q.append("include_disabled=true")
+            path = "/scan-trees"
+            if q:
+                path += "?" + "&".join(q)
+            return self._request("GET", path)
+        if name == "run_selected_trees":
+            payload = {
+                "name": arguments.get("name", "Untitled Challenge"),
+                "challenge_type": arguments["challenge_type"],
+                "url": arguments.get("url"),
+                "file_path": arguments.get("file_path"),
+                "flag_format": arguments.get("flag_format", "flag{"),
+                "metadata": arguments.get("metadata", {}),
+                "selected_tree_ids": arguments.get("selected_tree_ids"),
+                "tree_selection": arguments.get("tree_selection"),
+                "include_disabled_trees": bool(arguments.get("include_disabled_trees")),
+            }
+            return self._request("POST", "/solve", payload)
+        if name == "set_scan_session":
+            run_id = arguments["run_id"]
+            body = {
+                "cookies": arguments["cookies"],
+                "replace": bool(arguments.get("replace")),
+                "ttl_seconds": arguments.get("ttl_seconds"),
+            }
+            return self._request("POST", f"/runs/{run_id}/session", body)
+        if name == "get_scan_session":
+            run_id = arguments["run_id"]
+            iv = arguments.get("include_values", False)
+            return self._request(
+                "GET",
+                f"/runs/{run_id}/session?include_values={'true' if iv else 'false'}",
+            )
+        if name == "rotate_scan_session":
+            run_id = arguments["run_id"]
+            body = {
+                "cookies": arguments["cookies"],
+                "expected_version": arguments.get("expected_version"),
+                "ttl_seconds": arguments.get("ttl_seconds"),
+            }
+            return self._request("POST", f"/runs/{run_id}/session/rotate", body)
+        if name == "enable_request_interception":
+            run_id = arguments["run_id"]
+            body = {
+                "match": arguments["match"],
+                "mode": arguments.get("mode", "first"),
+                "ttl_seconds": arguments.get("ttl_seconds"),
+            }
+            return self._request("POST", f"/runs/{run_id}/interception", body)
+        if name == "poll_interception":
+            iid = arguments["interception_id"]
+            return self._request("GET", f"/interception/{iid}")
+        if name == "submit_request_mutation":
+            iid = arguments["interception_id"]
+            body = {
+                "request_id": arguments["request_id"],
+                "mutation": arguments["mutation"],
+                "note": arguments.get("note"),
+            }
+            return self._request("POST", f"/interception/{iid}/mutate", body)
+        if name == "list_mutation_history":
+            run_id = arguments["run_id"]
+            limit = int(arguments.get("limit", 100))
+            return self._request("GET", f"/runs/{run_id}/mutations?limit={limit}")
         raise MCPRequestError(f"Unknown tool: {name}")
 
     @staticmethod

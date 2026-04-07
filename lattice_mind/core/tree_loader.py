@@ -111,8 +111,28 @@ class DecisionTree:
             self.exploitation_paths.append(
                 ExploitationPath(p["id"], p["name"], p["requires_signal"], p["technique"], steps)
             )
-        
-        self.enabled = True
+
+        raw_tags = raw_data.get("tags", [])
+        self.tags: List[str] = (
+            [str(t).strip().lower() for t in raw_tags if t]
+            if isinstance(raw_tags, list)
+            else []
+        )
+        raw_dep = raw_data.get("depends_on") or raw_data.get("dependencies") or []
+        self.depends_on: List[str] = (
+            [str(x) for x in raw_dep if x]
+            if isinstance(raw_dep, list)
+            else []
+        )
+        ed = raw_data.get("estimated_duration_seconds")
+        if ed is None:
+            ed = raw_data.get("estimated_duration")
+        try:
+            self.estimated_duration_seconds: Optional[int] = int(ed) if ed is not None else None
+        except (TypeError, ValueError):
+            self.estimated_duration_seconds = None
+
+        self.enabled = bool(raw_data.get("enabled", True))
 
 
 class TreeRegistry:

@@ -177,6 +177,14 @@ def _init_db():
             conn.execute("ALTER TABLE runs ADD COLUMN confidence TEXT")
         except Exception:
             pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN selected_tree_ids TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN execution_plan TEXT")
+        except Exception:
+            pass
         # settings table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS settings (
@@ -339,8 +347,9 @@ def _db_save(state: RunState):
             """
             INSERT INTO runs
                 (run_id, status, challenge, steps, flag, error, log, observations, confidence,
+                 selected_tree_ids, execution_plan,
                  started_at, finished_at, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(run_id) DO UPDATE SET
                 status       = excluded.status,
                 steps        = excluded.steps,
@@ -349,6 +358,8 @@ def _db_save(state: RunState):
                 log          = excluded.log,
                 observations = excluded.observations,
                 confidence   = excluded.confidence,
+                selected_tree_ids = excluded.selected_tree_ids,
+                execution_plan   = excluded.execution_plan,
                 started_at   = excluded.started_at,
                 finished_at  = excluded.finished_at,
                 updated_at   = excluded.updated_at
@@ -363,6 +374,8 @@ def _db_save(state: RunState):
                 json.dumps(d["log"]) if d["log"] else None,
                 json.dumps(d["observations"]) if d["observations"] else None,
                 json.dumps(d["confidence"]) if d["confidence"] else None,
+                json.dumps(d["selected_tree_ids"]) if d.get("selected_tree_ids") else None,
+                json.dumps(d["execution_plan"]) if d.get("execution_plan") else None,
                 d["started_at"],
                 d["finished_at"],
                 d["created_at"],
@@ -389,6 +402,10 @@ def _db_load(run_id: str) -> Optional[Dict[str, Any]]:
     d["log"] = json.loads(d["log"]) if d["log"] else None
     d["observations"] = json.loads(d["observations"]) if d["observations"] else None
     d["confidence"] = json.loads(d["confidence"]) if d.get("confidence") else None
+    d["selected_tree_ids"] = (
+        json.loads(d["selected_tree_ids"]) if d.get("selected_tree_ids") else None
+    )
+    d["execution_plan"] = json.loads(d["execution_plan"]) if d.get("execution_plan") else None
     return d
 
 
@@ -463,6 +480,8 @@ class RunState:
     log: Optional[Dict[str, Any]] = None
     observations: Optional[Dict[str, Any]] = None
     confidence: Optional[Dict[str, float]] = None
+    selected_tree_ids: Optional[List[str]] = None
+    execution_plan: Optional[Dict[str, Any]] = None
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     created_at: str = field(default_factory=_now)
@@ -480,6 +499,8 @@ class RunState:
                 "log": self.log,
                 "observations": self.observations,
                 "confidence": self.confidence,
+                "selected_tree_ids": self.selected_tree_ids,
+                "execution_plan": self.execution_plan,
                 "challenge": self.challenge,
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
@@ -555,6 +576,8 @@ def get_run_state(run_id: str) -> Optional[RunState]:
         log=row["log"],
         observations=row["observations"],
         confidence=row.get("confidence"),
+        selected_tree_ids=row.get("selected_tree_ids"),
+        execution_plan=row.get("execution_plan"),
         started_at=row["started_at"],
         finished_at=row["finished_at"],
         created_at=row["created_at"],
@@ -574,6 +597,10 @@ class SolveRequest(BaseModel):
     file_path: Optional[str] = None
     flag_format: str = Field(default="flag{")
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    # Targeted YAML execution (optional). When set, only these trees run after recon.
+    selected_tree_ids: Optional[List[str]] = None
+    tree_selection: Optional[Dict[str, Any]] = None
+    include_disabled_trees: bool = False
 
 
 class SolveSubmissionResponse(BaseModel):
@@ -581,6 +608,8 @@ class SolveSubmissionResponse(BaseModel):
 
     run_id: str
     status: str
+    selected_tree_ids: Optional[List[str]] = None
+    execution_plan: Optional[Dict[str, Any]] = None
 
 
 class RunStatusResponse(BaseModel):
@@ -594,6 +623,8 @@ class RunStatusResponse(BaseModel):
     log: Optional[Dict[str, Any]] = None
     observations: Optional[Dict[str, Any]] = None
     confidence: Optional[Dict[str, float]] = None
+    selected_tree_ids: Optional[List[str]] = None
+    execution_plan: Optional[Dict[str, Any]] = None
     challenge: Dict[str, Any]
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
@@ -602,6 +633,35 @@ class RunStatusResponse(BaseModel):
 class StrategyResetRequest(BaseModel):
     scope_type: Optional[str] = None
     scope_value: Optional[str] = None
+
+
+class CookieInputModel(BaseModel):
+    name: str = Field(max_length=256)
+    value: str = Field(max_length=8192)
+
+
+class SetRunSessionRequest(BaseModel):
+    cookies: List[CookieInputModel]
+    replace: bool = False
+    ttl_seconds: Optional[int] = Field(default=None, ge=1, le=86400)
+
+
+class RotateRunSessionRequest(BaseModel):
+    cookies: List[CookieInputModel]
+    expected_version: Optional[int] = None
+    ttl_seconds: Optional[int] = Field(default=None, ge=1, le=86400)
+
+
+class EnableInterceptionRequest(BaseModel):
+    match: Dict[str, Any]
+    mode: str = "first"
+    ttl_seconds: Optional[int] = Field(default=None, ge=1, le=3600)
+
+
+class SubmitMutationRequest(BaseModel):
+    request_id: str
+    mutation: Dict[str, Any]
+    note: Optional[str] = None
 
 
 # ── Auth endpoints ───────────────────────────────────────────────────────────
@@ -990,6 +1050,83 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
     if name == "get_rule":
         return await get_rule(arguments["rule_id"])
 
+    if name == "list_scan_trees":
+        return await list_scan_trees_api(
+            category=arguments.get("category"),
+            challenge_type=arguments.get("challenge_type"),
+            include_disabled=bool(arguments.get("include_disabled")),
+        )
+
+    if name == "run_selected_trees":
+        payload = SolveRequest(
+            name=arguments.get("name", "Untitled Challenge"),
+            challenge_type=arguments["challenge_type"],
+            url=arguments.get("url"),
+            file_path=arguments.get("file_path"),
+            flag_format=arguments.get("flag_format", "flag{"),
+            metadata=arguments.get("metadata", {}),
+            selected_tree_ids=arguments.get("selected_tree_ids"),
+            tree_selection=arguments.get("tree_selection"),
+            include_disabled_trees=bool(arguments.get("include_disabled_trees")),
+        )
+        result = await solve_challenge(payload)
+        return result.model_dump()
+
+    if name == "set_scan_session":
+        return await set_run_session(
+            arguments["run_id"],
+            SetRunSessionRequest(
+                cookies=[CookieInputModel(**c) for c in arguments["cookies"]],
+                replace=bool(arguments.get("replace")),
+                ttl_seconds=arguments.get("ttl_seconds"),
+            ),
+        )
+
+    if name == "get_scan_session":
+        return await get_run_session(
+            arguments["run_id"],
+            include_values=bool(arguments.get("include_values")),
+        )
+
+    if name == "rotate_scan_session":
+        return await rotate_run_session(
+            arguments["run_id"],
+            RotateRunSessionRequest(
+                cookies=[CookieInputModel(**c) for c in arguments["cookies"]],
+                expected_version=arguments.get("expected_version"),
+                ttl_seconds=arguments.get("ttl_seconds"),
+            ),
+        )
+
+    if name == "enable_request_interception":
+        return await enable_run_interception(
+            arguments["run_id"],
+            EnableInterceptionRequest(
+                match=dict(arguments["match"]),
+                mode=str(arguments.get("mode", "first")),
+                ttl_seconds=arguments.get("ttl_seconds"),
+            ),
+        )
+
+    if name == "poll_interception":
+        return await poll_interception_api(arguments["interception_id"])
+
+    if name == "submit_request_mutation":
+        return await submit_interception_mutation(
+            arguments["interception_id"],
+            SubmitMutationRequest(
+                request_id=arguments["request_id"],
+                mutation=dict(arguments["mutation"]),
+                note=arguments.get("note"),
+            ),
+        )
+
+    if name == "list_mutation_history":
+        return await list_run_mutations(
+            arguments["run_id"],
+            limit=int(arguments.get("limit", 100)),
+        )
+
     raise ValueError(f"Unknown tool: {name}")
 
 
@@ -1110,6 +1247,76 @@ async def challenge_types() -> Dict[str, List[str]]:
     }
 
 
+def _resolve_selected_trees(payload: SolveRequest) -> Tuple[Optional[List[str]], Optional[Dict[str, Any]]]:
+    """Build ordered tree id list from optional selected_tree_ids / tree_selection."""
+    from lattice_mind.core.tree_catalog import (
+        TreeCatalogError,
+        build_tree_catalog,
+        resolve_tree_selection,
+    )
+
+    extra = list(payload.selected_tree_ids or [])
+    sel = payload.tree_selection
+    if not extra and not sel:
+        return None, None
+
+    catalog = build_tree_catalog(solver.registry)
+    merged: Dict[str, Any] = {"ids": [], "groups": [], "exclude_ids": []}
+    if isinstance(sel, dict):
+        merged["groups"] = list(sel.get("groups") or [])
+        merged["exclude_ids"] = list(sel.get("exclude_ids") or [])
+        merged["ids"] = list(sel.get("ids") or [])
+    merged["ids"] = list(dict.fromkeys(list(merged["ids"]) + extra))
+    try:
+        result = resolve_tree_selection(
+            catalog,
+            merged,
+            challenge_type=payload.challenge_type.value,
+            include_disabled=payload.include_disabled_trees,
+        )
+    except TreeCatalogError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    preview = {
+        "mode": "selected",
+        "ordered_tree_ids": result.ordered_tree_ids,
+        "skipped_unknown_ids": result.skipped_unknown_ids,
+        "skipped_disabled": result.skipped_disabled,
+        "dependency_warnings": result.dependency_warnings,
+        "cycle_detected": result.cycle_detected,
+    }
+    return result.ordered_tree_ids, preview
+
+
+@app.get("/scan-trees")
+async def list_scan_trees_api(
+    category: Optional[str] = None,
+    challenge_type: Optional[str] = None,
+    include_disabled: bool = False,
+) -> Dict[str, Any]:
+    """Catalog of YAML trees for targeted scans (MCP / agents)."""
+    from lattice_mind.core.tree_catalog import build_tree_catalog
+
+    catalog = build_tree_catalog(solver.registry)
+    data = catalog.to_jsonable()
+    if not include_disabled:
+        data["trees"] = [t for t in data["trees"] if t.get("enabled")]
+    if category:
+        c = category.lower().strip()
+        data["trees"] = [
+            t for t in data["trees"] if str(t.get("category", "")).lower() == c
+        ]
+    if challenge_type:
+        ct = challenge_type.lower().strip()
+        data["trees"] = [
+            t
+            for t in data["trees"]
+            if not t.get("challenge_types_hint")
+            or ct in (t.get("challenge_types_hint") or [])
+        ]
+    return data
+
+
 @app.post("/solve", response_model=SolveSubmissionResponse)
 async def solve_challenge(payload: SolveRequest) -> SolveSubmissionResponse:
     """Queue a solver run and return a run identifier for polling."""
@@ -1124,10 +1331,21 @@ async def solve_challenge(payload: SolveRequest) -> SolveSubmissionResponse:
 
     run_id = str(uuid.uuid4())
     challenge_snapshot = _serialize_challenge(descriptor)
-    state = RunState(run_id=run_id, challenge=challenge_snapshot or {})
+    selected_ids, plan_preview = _resolve_selected_trees(payload)
+    state = RunState(
+        run_id=run_id,
+        challenge=challenge_snapshot or {},
+        selected_tree_ids=selected_ids,
+        execution_plan=plan_preview,
+    )
     _register_run(state)
-    _start_solver_task(run_id, descriptor)
-    return SolveSubmissionResponse(run_id=run_id, status=state.status)
+    _start_solver_task(run_id, descriptor, selected_tree_ids=selected_ids)
+    return SolveSubmissionResponse(
+        run_id=run_id,
+        status=state.status,
+        selected_tree_ids=selected_ids,
+        execution_plan=plan_preview,
+    )
 
 
 @app.get("/runs", response_model=List[Dict[str, Any]])
@@ -1145,12 +1363,138 @@ async def get_run_status(run_id: str) -> RunStatusResponse:
     return RunStatusResponse(**state.to_dict())
 
 
-def _start_solver_task(run_id: str, descriptor: ChallengeDescriptor):
-    task = asyncio.create_task(_run_solver(run_id, descriptor))
+@app.post("/runs/{run_id}/session")
+async def set_run_session(run_id: str, body: SetRunSessionRequest) -> Dict[str, Any]:
+    if not get_run_state(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    from lattice_mind.core.session_store import get_session_store
+
+    cookies = [c.model_dump() for c in body.cookies]
+    try:
+        rec = get_session_store().create_or_update(
+            run_id,
+            cookies,
+            replace=body.replace,
+            ttl_seconds=body.ttl_seconds,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {
+        "session_id": f"sess_{run_id}",
+        "applied_count": len(cookies),
+        "version": rec.version,
+    }
+
+
+@app.get("/runs/{run_id}/session")
+async def get_run_session(
+    run_id: str, include_values: bool = False
+) -> Dict[str, Any]:
+    if not get_run_state(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    from lattice_mind.core.session_store import get_session_store
+
+    return get_session_store().view(run_id, include_values=include_values)
+
+
+@app.post("/runs/{run_id}/session/rotate")
+async def rotate_run_session(
+    run_id: str, body: RotateRunSessionRequest
+) -> Dict[str, Any]:
+    if not get_run_state(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    from lattice_mind.core.session_store import get_session_store
+
+    cookies = [c.model_dump() for c in body.cookies]
+    try:
+        rec = get_session_store().rotate(
+            run_id,
+            cookies,
+            expected_version=body.expected_version,
+            ttl_seconds=body.ttl_seconds,
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return {
+        "session_id": f"sess_{run_id}",
+        "version": rec.version,
+        "rotated": True,
+    }
+
+
+@app.post("/runs/{run_id}/interception")
+async def enable_run_interception(
+    run_id: str, body: EnableInterceptionRequest
+) -> Dict[str, Any]:
+    if not get_run_state(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    try:
+        iid = get_request_lifecycle_manager().register_interception(
+            run_id,
+            body.match,
+            mode=body.mode,
+            ttl_seconds=body.ttl_seconds,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"interception_id": iid, "status": "armed"}
+
+
+@app.get("/interception/{interception_id}")
+async def poll_interception_api(interception_id: str) -> Dict[str, Any]:
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    return get_request_lifecycle_manager().poll_interception(interception_id)
+
+
+@app.post("/interception/{interception_id}/mutate")
+async def submit_interception_mutation(
+    interception_id: str, body: SubmitMutationRequest
+) -> Dict[str, Any]:
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    try:
+        return get_request_lifecycle_manager().submit_mutation(
+            interception_id,
+            body.request_id,
+            body.mutation,
+            note=body.note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/runs/{run_id}/mutations")
+async def list_run_mutations(run_id: str, limit: int = 100) -> Dict[str, Any]:
+    if not get_run_state(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    lim = max(1, min(500, int(limit)))
+    return {"records": get_request_lifecycle_manager().list_mutations(run_id, lim)}
+
+
+def _start_solver_task(
+    run_id: str,
+    descriptor: ChallengeDescriptor,
+    *,
+    selected_tree_ids: Optional[List[str]] = None,
+):
+    task = asyncio.create_task(
+        _run_solver(run_id, descriptor, selected_tree_ids=selected_tree_ids)
+    )
     _tasks[run_id] = task
 
 
-async def _run_solver(run_id: str, descriptor: ChallengeDescriptor):
+async def _run_solver(
+    run_id: str,
+    descriptor: ChallengeDescriptor,
+    selected_tree_ids: Optional[List[str]] = None,
+):
     state = get_run_state(run_id)
     if not state:
         return
@@ -1166,7 +1510,9 @@ async def _run_solver(run_id: str, descriptor: ChallengeDescriptor):
             # overwrite each other's callback before execution starts.
             solver.orchestrator.set_progress_callback(progress_callback)
             try:
-                flag, log = await asyncio.to_thread(_execute_solver, descriptor)
+                flag, log = await asyncio.to_thread(
+                    _execute_solver, descriptor, run_id, selected_tree_ids
+                )
             finally:
                 solver.orchestrator.clear_progress_callback()
         serialized_log = _serialize_log(log)
@@ -1174,11 +1520,13 @@ async def _run_solver(run_id: str, descriptor: ChallengeDescriptor):
             solver.orchestrator.execution_context.get("observations", {})
         )
         confidence = solver.confidence_pool.get_scores()
+        exec_plan = solver.orchestrator.execution_context.get("execution_plan")
         state.update(
             flag=flag,
             log=serialized_log,
             observations=observations,
             confidence=confidence,
+            execution_plan=exec_plan if exec_plan is not None else state.execution_plan,
             status="success" if flag else "completed",
             finished_at=_now(),
         )
@@ -1191,9 +1539,15 @@ async def _run_solver(run_id: str, descriptor: ChallengeDescriptor):
 
 def _execute_solver(
     challenge: ChallengeDescriptor,
+    run_id: str,
+    selected_tree_ids: Optional[List[str]] = None,
 ) -> Tuple[Optional[str], Dict[str, Any]]:
     """Run MVPSolver synchronously for use inside asyncio executors."""
-    flag = solver.solve(challenge)
+    flag = solver.solve(
+        challenge,
+        selected_tree_ids=selected_tree_ids,
+        run_id=run_id,
+    )
     log = solver.orchestrator.get_execution_log()
     return flag, log
 

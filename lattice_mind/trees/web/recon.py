@@ -93,7 +93,7 @@ class WebReconProbeNode(DecisionNode):
             context["observations"]["http_response"] = result
             context["observations"]["technologies"] = observations["technologies"]
             context["observations"]["crawled_endpoints"] = crawled["endpoints"]
-            context["observations"]["potential_params"] = observations[
+            context["observations"]["params"] = observations[  # Changed from potential_params
                 "potential_params"
             ]
             context["observations"]["forms"] = observations["forms"]
@@ -267,7 +267,7 @@ class WebReconDirectoryScanNode(DecisionNode):
                 if item.get("status") in [200, 204, 301, 302, 403]
             ]
 
-            context["observations"]["directories"] = directories
+            context["observations"]["found_paths"] = directories  # Changed from directories
             logger.info(f"[web-recon] Found {len(directories)} accessible paths")
 
             return NodeResult(

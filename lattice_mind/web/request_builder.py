@@ -17,6 +17,22 @@ from lattice_mind.web.request_models import (
 
 logger = logging.getLogger(__name__)
 
+
+def merge_session_cookies_from_context(spec: HTTPRequestSpec, context: Dict[str, Any]) -> HTTPRequestSpec:
+    """Attach observations.session_cookies to a spec (used for inject_into: none paths)."""
+    obs = context.get("observations", {})
+    session_cookies = obs.get("session_cookies") if isinstance(obs.get("session_cookies"), dict) else {}
+    if not session_cookies:
+        return spec
+    if spec.cookies:
+        merged = dict(spec.cookies)
+        merged.update(session_cookies)
+        spec.cookies = merged
+        return spec
+    spec.cookies = dict(session_cookies)
+    return spec
+
+
 # YAML request_source values (F5); default matches legacy resolution order.
 _REQUEST_SOURCE_ALIASES = {
     "default": None,
