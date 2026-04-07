@@ -45,8 +45,6 @@ artifacts/
 # Prompt files
 prompt.md
 
-# YAML trees
-lattice_mind/trees/yaml/*
 
 # Models
 .gemini/
@@ -58,3 +56,7 @@ lattice_mind/trees/yaml/*
 # Github
 .github/
 ROADMAP.md
+
+
+# Playwright
+.playwright-mcp/
