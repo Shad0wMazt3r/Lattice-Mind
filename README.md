@@ -193,3 +193,5 @@ The following prompt outlines how to instruct an AI researcher to discover new T
 > Follow the exact schema provided by Lattice Mind: metadata (id, name, category, version, author, description), `applies_when`, `min_confidence`, `stop_on_flag`, `confidence_seeds`, `detection_paths`, and `exploitation_paths` with ordered steps, payload permutations, and signal matching instructions.
 
 Adhering to this blueprint ensures community research contributions can be translated into yaml files that the engine can consume immediately.
+---
+<!-- TODO: Add SKILLS section -->
