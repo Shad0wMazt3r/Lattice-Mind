@@ -80,7 +80,7 @@ class LFIDetectTraversalNode(DecisionNode):
                             logger.info(f"[lfi] Found {file_type} via {path}")
                             
                             # Emit signal for LFI confirmation
-                            self.emit_signal("lfi_traversal_confirmed", confidence=0.9)
+                            self.emit_signal("lfi_traversal_confirmed", confidence_boost=0.9)
                             
                             return NodeResult(
                                 status=NodeStatus.SUCCESS,

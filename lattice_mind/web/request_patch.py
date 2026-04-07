@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict
 
 from lattice_mind.web.request_models import (
     HTTPRequestSpec,
@@ -40,7 +39,6 @@ def apply_request_patch(spec: HTTPRequestSpec, patch: Dict[str, Any]) -> HTTPReq
         raise RequestPatchError("patch.set must be an object")
 
     out = clone_http_request_spec(spec)
-    applied: List[str] = []
 
     for raw_key, raw_val in sets.items():
         key = str(raw_key).strip()
@@ -53,20 +51,17 @@ def apply_request_patch(spec: HTTPRequestSpec, patch: Dict[str, Any]) -> HTTPReq
             m = raw_val.strip().upper()
             _reject_crlf(m, "method")
             out.method = m
-            applied.append("method")
             continue
         if lower == "url":
             if not isinstance(raw_val, str):
                 raise RequestPatchError("url must be a string")
             _reject_crlf(raw_val, "url")
             out.url = raw_val
-            applied.append("url")
             continue
         if lower == "json_body":
             out.json_body = raw_val
             out.body_params = None
             out.body_param_pairs = None
-            applied.append("json_body")
             continue
 
         if lower.startswith("query."):
@@ -78,17 +73,14 @@ def apply_request_patch(spec: HTTPRequestSpec, patch: Dict[str, Any]) -> HTTPReq
             pairs.append((qname, str(raw_val)))
             out.query_param_pairs = pairs
             out.query_params = None
-            applied.append(f"query.{qname}")
             continue
 
         if lower.startswith("body.") or lower.startswith("form."):
-            prefix = "body." if lower.startswith("body.") else "form."
             bname = key.split(".", 1)[1]
             _reject_crlf(bname, "body param name")
             bp = dict(out.body_params or {})
             bp[bname] = str(raw_val)
             out.body_params = bp
-            applied.append(f"body.{bname}")
             continue
 
         if lower.startswith("headers."):
@@ -104,7 +96,6 @@ def apply_request_patch(spec: HTTPRequestSpec, patch: Dict[str, Any]) -> HTTPReq
             hdr = dict(out.headers or {})
             hdr[canon] = hv
             out.headers = hdr
-            applied.append(f"headers.{canon}")
             continue
 
         raise RequestPatchError(f"unsupported patch key: {key!r}")

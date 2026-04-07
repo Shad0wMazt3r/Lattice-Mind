@@ -4,7 +4,7 @@ import json
 import re
 import logging
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 
 from lattice_mind.adapters.base import CommandToolAdapter
 from lattice_mind.core.adapter_types import (
@@ -85,10 +85,13 @@ class CurlAdapter(CommandToolAdapter):
         if "params" in args:
             p = args["params"]
             if isinstance(p, list):
-                params_str = urlencode(p)
+                new_pairs = p
             else:
-                params_str = urlencode(p)
-            target = f"{target}?{params_str}"
+                new_pairs = list(p.items())
+            parts = urlsplit(target)
+            existing = parse_qsl(parts.query, keep_blank_values=True)
+            merged = existing + new_pairs
+            target = urlunsplit(parts._replace(query=urlencode(merged)))
         
         # Redirects
         if args.get("follow_redirects", False):
@@ -196,6 +199,7 @@ class RequestsAdapter(CommandToolAdapter):
         super().__init__("requests", timeout=timeout)
         try:
             import requests
+            self._session = requests.Session()
             self.requests = requests
             self._use_requests = True
         except ImportError:
@@ -245,7 +249,7 @@ class RequestsAdapter(CommandToolAdapter):
             else:
                 req_kw["data"] = data
 
-            response = self.requests.request(method, target, **req_kw)
+            response = self._session.request(method, target, **req_kw)
 
             redirect_chain = [str(r.url) for r in response.history]
             redirect_chain.append(str(response.url))
@@ -273,4 +277,6 @@ class RequestsAdapter(CommandToolAdapter):
 
     def get_session_cookies(self) -> Dict[str, str]:
         """Return current requests-session cookies as a plain dict."""
-        return {}
+        if not self._use_requests:
+            return {}
+        return dict(self._session.cookies)

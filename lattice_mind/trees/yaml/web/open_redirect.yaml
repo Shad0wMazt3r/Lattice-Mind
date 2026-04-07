@@ -42,7 +42,7 @@ detection_paths:
             - 'example.com' # no protocol
         signals:
           - match:
-              condition: "response.status in [301, 302, 303, 307, 308] and re.search(r'(?i)(?:https?:)?//(?:www\\.)?example\\.com(?:/|$)', response.headers['Location'])"
+              condition: "response.status in [301, 302, 303, 307, 308] and 'Location' in response.headers and re.search(r'(?i)(?:https?:)?//(?:www\\.)?example\\.com(?:/|$)', response.headers['Location'])"
             on_match:
               confidence_boost: 0.40
               emit: open_redirect_confirmed

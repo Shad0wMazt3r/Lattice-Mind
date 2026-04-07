@@ -84,18 +84,9 @@ def resolve_probe_base_specs(
     specs: List[HTTPRequestSpec] = []
     cap = max(1, int(FEATURE_FLAGS.max_probe_base_specs))
     mode = _normalize_request_source(request_source)
-    session_cookies = obs.get("session_cookies") if isinstance(obs.get("session_cookies"), dict) else {}
 
     def _attach_session_cookies(spec: HTTPRequestSpec) -> HTTPRequestSpec:
-        if not session_cookies:
-            return spec
-        if spec.cookies:
-            merged = dict(spec.cookies)
-            merged.update(session_cookies)
-            spec.cookies = merged
-            return spec
-        spec.cookies = dict(session_cookies)
-        return spec
+        return merge_session_cookies_from_context(spec, context)
 
     def _from_candidates() -> None:
         nonlocal specs
