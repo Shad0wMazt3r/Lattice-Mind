@@ -1,0 +1,123 @@
+id: pwn_off_by_one
+name: Off-by-one
+category: pwn
+version: "1.0"
+author: system
+description: >
+  Exploits a buffer overflow where exactly one byte is written outside the allocated memory.
+  This can corrupt stack metadata (e.g., LSB of saved RBP) or heap metadata (e.g., prev_in_use bit),
+  leading to control flow hijacking or overlapping chunks for RCE.
+
+applies_when:
+  - "context.challenge.type == 'pwn'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['c', 'cpp'])"
+    boost: 0.20
+    label: "C/C++ binary detected, prone to off-by-one"
+  - if: "context.binary_properties.string_copy_usage == true" # Hypothetical context property
+    boost: 0.15
+    label: "Program uses string copy functions (e.g., strcpy, strncat)"
+  - if: "context.binary_properties.loop_boundary_issues == true" # Hypothetical context property
+    boost: 0.10
+    label: "Program logic might have off-by-one loop conditions"
+
+detection_paths:
+  - id: single_byte_overflow_probe
+    name: Single-Byte Overflow Probe (Stack/General)
+    description: >
+      Sends an input exactly one byte larger than an expected buffer size, observing
+      for crashes or unexpected output changes indicative of a single byte overwrite.
+    min_confidence: 0.15
+    steps:
+      - id: send_one_byte_over_payload
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/input_field' # Example endpoint for text input
+          body: 'A' * 129 # If buffer is 128 bytes, this is 1 byte over
+        signals:
+          - match: '(?i)segmentation fault|crash|stack smashing detected' # Direct crash indicators
+            on_match:
+              confidence_boost: 0.45
+              emit: off_by_one_crash_detected
+          - match: '(?i)corrupted|unexpected value|buffer error' # More generic error messages
+            on_match:
+              confidence_boost: 0.30
+              emit: off_by_one_potential
+
+  - id: poison_null_byte_probe
+    name: Poison Null Byte Probe (Heap Off-by-one)
+    description: >
+      Sends an input that, due to string termination or similar logic, places a null byte
+      one byte past a heap buffer boundary, potentially corrupting heap metadata (e.g., `prev_in_use` bit).
+      Detection relies on subsequent program behavior (e.g., double free, unexpected allocations).
+    min_confidence: 0.20
+    steps:
+      - id: send_poison_null_byte_payload
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/allocate_and_copy' # Example endpoint
+          # Payload that fills a buffer up to its limit, then has a null byte just after
+          # Example: buffer size 0x100, send 0x100 'A's, then subsequent action reveals corruption.
+          body: 'A' * 256 # Conceptual: filling 256-byte buffer, expecting null byte after
+        signals:
+          - match: '(?i)double free|heap corruption|invalid next size|corrupted size vs. prev_size'
+            on_match:
+              confidence_boost: 0.50
+              emit: heap_off_by_one_detected
+          - match: '500 Internal Server Error'
+            on_match:
+              confidence_boost: 0.35
+              emit: off_by_one_potential
+
+exploitation_paths:
+  - id: stack_off_by_one_rce
+    name: Stack Off-by-one RCE (LSB Overwrite)
+    requires_signal: off_by_one_crash_detected
+    technique: off_by_one_stack_pivot
+    description: >
+      A stack off-by-one was detected. This path outlines how to leverage an LSB overwrite
+      of the saved frame pointer (EBP/RBP) to achieve a stack pivot, leading to RCE.
+    steps:
+      - id: construct_and_send_stack_pivot_payload
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/input_field'
+          # Conceptual payload: padding + LSB overwrite + address of controlled stack data
+          body: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' # Placeholder
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)whoami|uid=\d+' # Confirm shell execution
+            as: shell_access_confirmed
+
+  - id: heap_off_by_one_rce
+    name: Heap Off-by-one RCE (Metadata Corruption)
+    requires_signal: heap_off_by_one_detected
+    technique: off_by_one_heap_exploit
+    description: >
+      A heap off-by-one (e.g., poison null byte) was detected, leading to heap metadata corruption.
+      This path outlines how to exploit this to gain arbitrary write primitives and achieve RCE.
+    steps:
+      - id: construct_and_send_heap_payload
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/allocate_and_copy'
+          # Conceptual payload: series of allocations and frees to manipulate heap chunks
+          body: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' # Placeholder
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)whoami|uid=\d+' # Confirm shell execution
+            as: shell_access_confirmed

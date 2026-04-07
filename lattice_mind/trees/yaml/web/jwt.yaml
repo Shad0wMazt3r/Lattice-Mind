@@ -4,12 +4,18 @@
 id: web_jwt
 name: JWT Authentication Bypass
 category: web
-version: "1.0"
+version: "1.1"
 author: system
 description: >
   Detects and exploits JWT vulnerabilities including none algorithm, algorithm
   confusion, weak secret brute-forcing, and signature bypass to escalate
   privileges and forge authentication tokens.
+
+tags:
+  - jwt
+  - auth
+  - token
+estimated_duration_seconds: 30
 
 # ============================================================
 # Guard
@@ -52,7 +58,8 @@ detection_paths:
           inject_into: none
           payloads: []
         signals:
-          - match: 'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
+          - match:
+              condition: "response.status in [200, 302, 401, 403] and re.search(r'eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+', response.body)"
             on_match:
               confidence_boost: 0.45
               emit: jwt_found
@@ -72,7 +79,8 @@ detection_paths:
             - 'eyJhbGciOiJOb25lIiwidHlwIjoiSldUIn0.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4ifQ.'
             - 'eyJhbGciOiJOT05FIiwidHlwIjoiSldUIn0.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4ifQ.'
         signals:
-          - match: 'admin|authorized|success'
+          - match:
+              condition: "response.status in [200, 302, 403] and re.search(r'admin|authorized|success|welcome', response.body, re.I) and not re.search(r'invalid|signature|malformed|decode', response.body, re.I)"
             on_match:
               confidence_boost: 0.50
               emit: jwt_none_accepted
@@ -90,7 +98,8 @@ detection_paths:
           payloads:
             - 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWRtaW4ifQ.4Adcj0bT8RhVltfXbVbP3VlXjXTpNnF2-y4e8zf9sKM'
         signals:
-          - match: 'admin|success|authorized'
+          - match:
+              condition: "response.status in [200, 302, 403] and re.search(r'admin|success|authorized|welcome', response.body, re.I)"
             on_match:
               confidence_boost: 0.40
               emit: jwt_weak_secret_confirmed

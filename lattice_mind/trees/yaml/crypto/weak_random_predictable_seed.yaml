@@ -1,0 +1,107 @@
+id: crypto_weak_random_predictable_seed
+name: Weak Random (Predictable Seed)
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Exploits predictable Pseudo-Random Number Generators (PRNGs) due to weak seeding
+  (e.g., system time, process ID) or insufficient entropy. Allows an attacker to
+  predict future "random" values to compromise security-critical functions.
+
+applies_when:
+  - "context.challenge.type == 'crypto' or context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['php', 'python', 'c', 'java'])"
+    boost: 0.20
+    label: "Language known for common PRNG use detected"
+  - if: "any(p in context.params for p in ['token', 'session_id', 'nonce', 'captcha_value', 'seed', 'random_id'])"
+    boost: 0.15
+    label: "Parameter relying on randomness found"
+  - if: "context.responses_properties.randomness_pattern_detected == true" # Hypothetical property
+    boost: 0.25
+    label: "Statistical analysis suggests non-random or sequential output"
+
+detection_paths:
+  - id: time_based_seed_bruteforce_probe
+    name: Time-Based Seed Bruteforce Probe
+    description: >
+      Obtains several "random" outputs and their associated timestamps (or a narrow time window).
+      Attempts to re-seed a local PRNG with timestamps within that window and generate the same
+      sequence, indicating a time-based predictable seed.
+    min_confidence: 0.20
+    steps:
+      - id: collect_random_outputs_and_timestamps
+        action: http_probe # Conceptual action
+        params:
+          comment: "Collect multiple 'random' outputs and their generation timestamps (e.g., from HTTP headers)."
+          # This step involves making several requests and recording responses/times.
+          endpoint: '/generate_random_value'
+          num_samples: 5
+        capture:
+          - pattern: '(?i)random_value:\s*([0-9a-fA-F]+).*timestamp:\s*([0-9]+)'
+            as: random_output_and_time
+
+      - id: test_time_based_seeds_locally
+        action: http_probe # Conceptual action (local computation)
+        params:
+          comment: "Bruteforce seeds around captured timestamps using a local PRNG to find a match."
+        signals:
+          - match: '(?i)seed_found' # Conceptual signal if a matching seed is found locally
+            on_match:
+              confidence_boost: 0.50
+              emit: predictable_seed_identified
+
+  - id: consecutive_output_state_recovery_probe
+    name: Consecutive Output State Recovery Probe
+    description: >
+      If enough consecutive "random" outputs from a known PRNG (e.g., Mersenne Twister) are obtained,
+      attempt to reconstruct the PRNG's internal state to predict all future outputs.
+    min_confidence: 0.25
+    steps:
+      - id: collect_many_random_outputs
+        action: http_probe # Conceptual action
+        params:
+          comment: "Collect a large number of consecutive 'random' outputs (e.g., >624 for MT19937)."
+          endpoint: '/get_many_random_values'
+          num_samples: 700
+        capture:
+          - pattern: '(?i)random_values:\s*(\[.*\])' # Capture a list of values
+            as: many_random_outputs
+
+      - id: attempt_state_recovery_locally
+        action: http_probe # Conceptual action (local computation)
+        params:
+          comment: "Use captured outputs with a tool like `randcrack` to recover the PRNG's internal state."
+        signals:
+          - match: '(?i)state_recovered' # Conceptual signal if state is recovered
+            on_match:
+              confidence_boost: 0.55
+              emit: prng_state_recovered
+
+exploitation_paths:
+  - id: predict_and_exploit_randomness
+    name: Predict and Exploit Weak Randomness
+    requires_signal: predictable_seed_identified # Or prng_state_recovered
+    technique: prng_prediction_exploit
+    description: >
+      A predictable seed or PRNG internal state has been identified. This path outlines
+      how to predict future "random" values to bypass security mechanisms
+      (e.g., predict a session token, password reset code, or nonce).
+    steps:
+      - id: generate_and_use_predicted_value
+        action: http_probe
+        params:
+          comment: "Generate the next predicted 'random' value and use it in a subsequent request."
+          endpoint: '/authenticate_with_token' # Example
+          predicted_value: '{{predicted_random_token}}' # Placeholder
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)authentication successful|access granted'
+            as: exploitation_success

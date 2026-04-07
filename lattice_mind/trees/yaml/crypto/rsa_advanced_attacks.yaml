@@ -1,0 +1,159 @@
+id: crypto_rsa_advanced_attacks
+name: RSA Advanced Attacks
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Exploits specific weaknesses in RSA implementations including small private exponent (Wiener's),
+  reused modulus with different exponents (Common Modulus), and side-channel information
+  from a Least Significant Bit (LSB) decryption oracle.
+
+applies_when:
+  - "context.challenge.type == 'crypto'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "'rsa' in context.tech_stack"
+    boost: 0.20
+    label: "RSA encryption indicated"
+  - if: "context.key_properties.multiple_ciphertexts_same_modulus == true" # Hypothetical
+    boost: 0.25
+    label: "Multiple ciphertexts with same modulus (potential common modulus)"
+  - if: "context.oracle_properties.lsb_decryption_oracle_available == true" # Hypothetical
+    boost: 0.25
+    label: "LSB decryption oracle available (potential LSB oracle attack)"
+  - if: "context.key_properties.e_is_very_large == true" # Hypothetical: very large 'e' often implies small 'd'
+    boost: 0.20
+    label: "Public exponent 'e' is unusually large (potential Wiener's)"
+
+detection_paths:
+  - id: wiener_condition_check
+    name: Wiener's Attack Condition Check
+    description: >
+      Checks if the conditions for Wiener's attack (small private exponent 'd') might be present,
+      often indicated by a very large public exponent 'e' relative to the modulus 'N'.
+    min_confidence: 0.15
+    steps:
+      - id: analyze_rsa_keys_for_wiener
+        action: http_probe # Conceptual for key analysis
+        params:
+          comment: "Analyze provided RSA public key (N, e) for indicators of small 'd'."
+          n_value: '{{context.rsa.n}}' # Hypothetical
+          e_value: '{{context.rsa.e}}' # Hypothetical
+        signals:
+          - match: '(?i)e is large and N is small enough for Wiener' # Conceptual signal
+            on_match:
+              confidence_boost: 0.40
+              emit: wiener_attack_possible
+
+  - id: common_modulus_check_probe
+    name: Common Modulus Check Probe
+    description: >
+      Checks if multiple ciphertexts are provided that were encrypted using the same modulus 'N'
+      but with different public exponents 'e', indicating a common modulus vulnerability.
+    min_confidence: 0.20
+    steps:
+      - id: compare_rsa_parameters
+        action: http_probe # Conceptual for comparing parameters
+        params:
+          comment: "Identify multiple ciphertext/public key pairs and compare their moduli."
+          ciphertexts_and_keys: '{{context.rsa.encrypted_data_sets}}' # Hypothetical
+        signals:
+          - match: '(?i)multiple ciphertexts share same N but different e' # Conceptual signal
+            on_match:
+              confidence_boost: 0.50
+              emit: common_modulus_possible
+
+  - id: lsb_oracle_probe
+    name: LSB Decryption Oracle Probe
+    description: >
+      Sends specially crafted ciphertexts to a decryption oracle and observes if it reveals
+      the Least Significant Bit (LSB) or parity of the decrypted plaintext, indicating
+      an LSB oracle vulnerability.
+    min_confidence: 0.20
+    steps:
+      - id: send_ciphertext_to_oracle
+        action: http_probe
+        params:
+          method: POST
+          path: '/decrypt_lsb' # Example LSB oracle endpoint
+          ciphertext: '{{context.rsa.target_ciphertext}}' # Original ciphertext
+          modified_ciphertext: '{{context.rsa.target_ciphertext * (2^context.rsa.e) % context.rsa.n}}' # Conceptual: c * 2^e mod N
+        signals:
+          - match: '(?i)lsb is 0|lsb is 1|parity is even|parity is odd' # Oracle response
+            on_match:
+              confidence_boost: 0.50
+              emit: lsb_oracle_detected
+
+exploitation_paths:
+  - id: wiener_attack_decrypt
+    name: Wiener's Attack Decryption
+    requires_signal: wiener_attack_possible
+    technique: rsa_wiener
+    description: >
+      Wiener's attack conditions are met. Recover the private exponent 'd' using continued
+      fractions and decrypt the ciphertext.
+    steps:
+      - id: recover_d_and_decrypt
+        action: http_probe # Conceptual action (local computation)
+        params:
+          comment: "Perform Wiener's attack algorithm to find 'd' and decrypt the ciphertext."
+          n: '{{context.rsa.n}}'
+          e: '{{context.rsa.e}}'
+          ciphertext: '{{context.rsa.ciphertext}}'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)decrypted_plaintext:\s*(.+)'
+            as: decrypted_message
+
+  - id: common_modulus_decrypt
+    name: Common Modulus Decryption
+    requires_signal: common_modulus_possible
+    technique: rsa_common_modulus
+    description: >
+      Common modulus conditions are met. Recover the message 'm' using the Extended
+      Euclidean Algorithm and modular exponentiation.
+    steps:
+      - id: recover_m_common_modulus
+        action: http_probe # Conceptual action (local computation)
+        params:
+          comment: "Apply Extended Euclidean Algorithm to find modular inverses and recover plaintext."
+          n: '{{context.rsa.n}}'
+          e1: '{{context.rsa.e1}}'
+          e2: '{{context.rsa.e2}}'
+          c1: '{{context.rsa.c1}}'
+          c2: '{{context.rsa.c2}}'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)decrypted_plaintext:\s*(.+)'
+            as: decrypted_message
+
+  - id: lsb_oracle_decrypt
+    name: LSB Oracle Decryption
+    requires_signal: lsb_oracle_detected
+    technique: rsa_lsb_oracle
+    description: >
+      An LSB decryption oracle is available. Perform the binary search attack to recover
+      the full plaintext bit by bit.
+    steps:
+      - id: recover_plaintext_lsb_oracle
+        action: http_probe # Conceptual action (iterative requests)
+        params:
+          comment: "Iteratively query the LSB oracle to determine plaintext bits via binary search."
+          target_ciphertext: '{{context.rsa.target_ciphertext}}'
+          lsb_oracle_endpoint: '/decrypt_lsb'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)decrypted_plaintext:\s*(.+)'
+            as: decrypted_message

@@ -1,0 +1,92 @@
+id: crypto_xor_keystream_reuse
+name: XOR Keystream Reuse
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Exploits the reuse of the same keystream for multiple XOR or stream cipher encryptions.
+  By XORing two ciphertexts encrypted with the same key, the XOR sum of their plaintexts
+  is revealed, which can then be used to recover the original plaintexts.
+
+applies_when:
+  - "context.challenge.type == 'crypto' or context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['xor', 'stream_cipher', 'rc4'])"
+    boost: 0.20
+    label: "XOR or stream cipher indicated"
+  - if: "context.data_properties.multiple_ciphertexts_available == true" # Hypothetical context property
+    boost: 0.30
+    label: "Multiple ciphertexts available for analysis"
+  - if: "context.data_properties.known_plaintext_prefix == true" # Hypothetical context property
+    boost: 0.25
+    label: "Known plaintext prefix available"
+
+detection_paths:
+  - id: ciphertext_xor_analysis_probe
+    name: Ciphertext XOR Analysis Probe
+    description: >
+      If multiple ciphertexts are available, XOR pairs of them together. High frequency
+      of common characters (e.g., space for English text) in the resulting XOR stream
+      indicates potential plaintext overlap, suggesting keystream reuse.
+    min_confidence: 0.20
+    steps:
+      - id: perform_pairwise_xor
+        action: http_probe # Conceptual for data submission/retrieval
+        params:
+          comment: "Submit pairs of ciphertexts for XOR operation or perform analysis locally if data is available."
+          # This step would typically involve an external tool or a custom script.
+          # Here, it's a symbolic representation.
+          ciphertexts_to_xor: ['ciphertext1', 'ciphertext2'] # Example
+        signals:
+          - match: '(?i)high frequency of common_chars|printable_chars_after_xor' # Conceptual matches
+            on_match:
+              confidence_boost: 0.45
+              emit: plaintext_xor_sum_obtained
+
+  - id: known_plaintext_leak_probe
+    name: Known Plaintext Leak Probe
+    description: >
+      If a known plaintext (or a strong guess) is available, use it to XOR with a ciphertext
+      to partially or fully recover the keystream. Applying this keystream to other
+      ciphertexts can reveal additional plaintexts.
+    min_confidence: 0.25
+    steps:
+      - id: apply_known_plaintext_xor
+        action: http_probe # Conceptual for data submission/retrieval
+        params:
+          comment: "XOR a known plaintext (or prefix) with a corresponding ciphertext to derive part of the keystream."
+          known_plaintext: 'flag{' # Example
+          ciphertext: 'ENCRYPTED_FLAG_WITH_PREFIX' # Example
+        signals:
+          - match: '(?i)keystream_segment_recovered|intelligible_output' # Conceptual signals
+            on_match:
+              confidence_boost: 0.50
+              emit: keystream_partially_recovered
+
+exploitation_paths:
+  - id: crib_dragging_plaintext_recovery
+    name: Crib Dragging Plaintext Recovery
+    requires_signal: plaintext_xor_sum_obtained # Or keystream_partially_recovered
+    technique: xor_crib_dragging
+    description: >
+      With the XOR sum of plaintexts (or partial keystream), perform crib dragging
+      (guessing common words or patterns) to recover the full plaintext(s) and potentially the key.
+    steps:
+      - id: perform_crib_drag
+        action: http_probe # Conceptual action
+        params:
+          comment: "Iteratively apply common cribs (e.g., 'the', 'flag{') to the XOR sum of plaintexts, looking for meaningful text."
+          # This would typically be a local process using a tool like CyberChef or xortool.
+          xor_sum_data: 'XOR_SUM_OF_PLAINTESTS'
+          cribs: ['the', 'flag{', 'admin']
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)recovered_plaintext:\s*(.+)'
+            as: recovered_plaintext

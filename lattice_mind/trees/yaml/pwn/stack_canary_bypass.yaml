@@ -1,0 +1,101 @@
+id: pwn_stack_canary_bypass
+name: Stack Canary Bypass
+category: pwn
+version: "1.0"
+author: system
+description: >
+  Bypasses stack canaries (security cookies) designed to prevent stack-based buffer overflows.
+  Techniques often involve leaking the canary value via information disclosure or
+  brute-forcing in forking environments.
+
+applies_when:
+  - "context.challenge.type == 'pwn'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['c', 'cpp', 'assembly', 'linux'])"
+    boost: 0.20
+    label: "C/C++/Assembly binary detected"
+  - if: "context.binary_properties.canary_enabled == true" # Hypothetical context property
+    boost: 0.25
+    label: "Stack canary protection is enabled"
+
+detection_paths:
+  - id: format_string_canary_leak_probe
+    name: Format String Canary Leak Probe
+    description: >
+      Sends format string specifiers (e.g., %p, %x) to a program endpoint that reflects
+      user input, attempting to leak stack addresses where a canary might reside.
+    min_confidence: 0.15
+    steps:
+      - id: send_format_string_payload_canary
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/echo' # Example endpoint for interacting with a service
+          body: 'Hello %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p'
+        signals:
+          - match: '0x[0-9a-fA-F]{8,16}' # Matches hexadecimal addresses
+            match_type: regex
+            on_match:
+              confidence_boost: 0.40
+              emit: potential_stack_leak
+          - match: '(?i)\x00' # Search for null byte, a common characteristic of canaries
+            on_match:
+              confidence_boost: 0.45
+              emit: potential_canary_leak
+
+  - id: buffer_over_read_canary_leak_probe
+    name: Buffer Over-read Canary Leak Probe
+    description: >
+      Sends an input that slightly exceeds the expected buffer size, hoping to trigger
+      an over-read that exposes the stack canary or part of it in the response.
+    min_confidence: 0.15
+    steps:
+      - id: send_over_read_payload
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/message' # Example endpoint for messages/inputs
+          body: 'A' * 260 # Example: Buffer size 256 + 4 bytes over-read to touch canary
+        signals:
+          - match: '[a-fA-F0-9]{8}' # Look for a 4-byte or 8-byte hex string (canary)
+            match_type: regex
+            on_match:
+              confidence_boost: 0.35
+              emit: potential_canary_in_output
+
+exploitation_paths:
+  - id: leak_canary_then_overflow
+    name: Leak Canary and Exploit Buffer Overflow
+    requires_signal: potential_canary_leak
+    technique: stack_canary_leak_and_rce
+    description: >
+      A stack canary leak was detected. This path outlines the strategy to extract the
+      canary value and then use it to construct a valid buffer overflow payload for RCE.
+    steps:
+      - id: capture_canary_value
+        action: http_probe # Conceptual action
+        params:
+          comment: "Use the info leak to precisely extract the stack canary value."
+        capture:
+          - pattern: '(0x[0-9a-fA-F]{8,16})(\x00[a-fA-F0-9]{6,14})?' # Capture hex value, possibly with null byte
+            as: leaked_canary_value
+
+      - id: construct_and_send_rce_payload_with_canary
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/submit'
+          # This payload is conceptual: padding + leaked_canary + RBP_placeholder + return_address(e.g., system)
+          body: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' # Placeholder padding
+          # Dynamically generated payload with the actual leaked canary would go here.
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)whoami|uid=\d+' # Confirm shell execution
+            as: shell_access_confirmed

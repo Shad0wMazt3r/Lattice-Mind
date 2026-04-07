@@ -1,0 +1,79 @@
+id: crypto_padding_oracle
+name: Padding Oracle Attack
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Exploits vulnerabilities in block cipher implementations using CBC mode with padding.
+  Relies on an "oracle" that reveals whether decrypted ciphertext has valid padding,
+  allowing for byte-by-byte decryption without knowing the key.
+
+applies_when:
+  - "context.challenge.type == 'crypto' or context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['aes', 'cbc', 'block_cipher', 'encryption'])"
+    boost: 0.20
+    label: "Block cipher in CBC mode detected or indicated"
+  - if: "any(p in context.params for p in ['data', 'ciphertext', 'encrypted_data', 'cookie', 'token', 'auth_data'])"
+    boost: 0.15
+    label: "Encrypted data parameter found"
+  - if: "any(re.search(r'(?i)padding error|mac invalid|invalid signature', r) for r in context.responses) and not any(re.search(r'(?i)bad request|malformed input', r) for r in context.responses)"
+    boost: 0.25
+    label: "Distinct padding/crypto error messages detected"
+
+detection_paths:
+  - id: padding_error_differentiation_probe
+    name: Padding Error Differentiation Probe
+    description: >
+      Sends malformed ciphertext (e.g., by flipping bits in the last block or IV)
+      and observes if the application provides distinct error messages, HTTP status codes,
+      or timing differences for padding errors vs. other decryption failures.
+    min_confidence: 0.20
+    steps:
+      - id: submit_malformed_ciphertext
+        action: http_probe
+        params:
+          method: POST
+          path: '/decrypt' # Example decryption endpoint
+          # Assuming ciphertext is base64 encoded. Flip a byte in the last block.
+          body: 'ciphertext=BASE64_ENCODED_CIPHERTEXT_WITH_LAST_BYTE_FLIPPED' # Conceptual
+        signals:
+          - match: '(?i)padding error|invalid padding|mac invalid|bad decrypt' # Specific padding/crypto error
+            on_match:
+              confidence_boost: 0.50
+              emit: padding_oracle_distinct_error
+          - match: '400|500' # Distinct HTTP status codes
+            in: status_code
+            on_match:
+              confidence_boost: 0.40
+              emit: padding_oracle_distinct_status
+
+exploitation_paths:
+  - id: decrypt_ciphertext_byte_by_byte
+    name: Decrypt Ciphertext Byte-by-Byte via Padding Oracle
+    requires_signal: padding_oracle_distinct_error # Or padding_oracle_distinct_status
+    technique: padding_oracle_decryption
+    description: >
+      A padding oracle has been identified. This path outlines the iterative process of
+      manipulating ciphertext bytes and using the oracle's response to decrypt the
+      original ciphertext byte-by-byte, eventually revealing a secret.
+    steps:
+      - id: iterative_byte_decryption
+        action: http_probe # Conceptual action for each byte decryption
+        params:
+          comment: "Perform iterative requests, modifying ciphertext bytes to determine plaintext bytes based on padding oracle responses."
+          # This step would be highly interactive and involve multiple probes per byte.
+          # The 'payloads' parameter here is symbolic of the process.
+          payloads:
+            - 'manipulated_ciphertext_for_byte_N'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)decrypted_secret:\s*([a-zA-Z0-9+/=]+)'
+            as: decrypted_secret

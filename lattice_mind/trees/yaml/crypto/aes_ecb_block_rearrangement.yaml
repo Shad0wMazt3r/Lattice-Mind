@@ -1,0 +1,107 @@
+id: crypto_aes_ecb_block_rearrangement
+name: AES-ECB Block Rearrangement
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Exploits AES in Electronic Codebook (ECB) mode, where identical plaintext blocks
+  produce identical ciphertext blocks, allowing an attacker to rearrange, duplicate,
+  or delete ciphertext blocks to alter the decrypted message.
+
+applies_when:
+  - "context.challenge.type == 'crypto' or context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['aes', 'ecb', 'cipher'])"
+    boost: 0.20
+    label: "AES/ECB encryption indicated in tech stack"
+  - if: "any(p in context.params for p in ['data', 'ciphertext', 'encrypted_data', 'cookie', 'token'])"
+    boost: 0.15
+    label: "Encrypted data parameter found"
+  # This seed is harder to implement reliably without knowing specific ciphertext patterns
+  # - if: "any(re.search(r'(?P<block>.{24})=\s*(?P=block)', r) for r in context.responses)"
+  #   boost: 0.10
+  #   label: "Repeating ciphertext blocks in response (potential ECB)"
+
+detection_paths:
+  - id: block_size_detection_probe
+    name: Block Size Detection Probe
+    description: >
+      Sends inputs of varying lengths to an encryption oracle (via HTTP endpoint) and observes
+      the resulting ciphertext length to determine the block size, a key indicator for block ciphers.
+    min_confidence: 0.15
+    steps:
+      - id: determine_block_size
+        action: http_probe
+        params:
+          method: POST
+          path: '/encrypt_data' # Example encryption endpoint
+          body: 'data=A' # Initial small data
+        signals:
+          - match: 'length_increases_by_16' # If subsequent probes show 16-byte length increments
+            on_match:
+              confidence_boost: 0.40
+              emit: block_cipher_detected
+          - match: 'length_increases_by_8' # If subsequent probes show 8-byte length increments
+            on_match:
+              confidence_boost: 0.30
+              emit: block_cipher_detected
+
+  - id: identical_block_detection_probe
+    name: Identical Block Detection Probe (ECB Mode)
+    description: >
+      Sends inputs containing identical blocks of plaintext (e.g., 'AAAAAAAAAAAAAAAA')
+      and checks if the corresponding ciphertext blocks are identical, a strong indicator of ECB mode.
+    min_confidence: 0.20
+    steps:
+      - id: check_for_ecb_pattern
+        action: http_probe
+        params:
+          method: POST
+          path: '/encrypt_data'
+          body: 'data=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' # Two identical 16-byte blocks
+        signals:
+          - match: '(?P<block>.{24})(?P=block)' # Matches if two consecutive base64 blocks are identical (16 bytes plaintext -> 24 bytes base64)
+            match_type: regex
+            on_match:
+              confidence_boost: 0.50
+              emit: ecb_mode_confirmed
+
+exploitation_paths:
+  - id: forge_admin_cookie_via_ecb
+    name: Forge Admin Cookie/Token via ECB Block Rearrangement
+    requires_signal: ecb_mode_confirmed
+    technique: ecb_block_cut_and_paste
+    description: >
+      ECB mode confirmed. This path outlines the strategy to forge a desirable ciphertext block
+      (e.g., "admin=true") by controlling plaintext input and then rearranging ciphertext blocks
+      to achieve elevated privileges or desired state.
+    steps:
+      - id: generate_admin_block_ciphertext
+        action: http_probe # Conceptual step to get encrypted 'admin' block
+        params:
+          method: POST
+          path: '/encrypt_data'
+          # Craft input to ensure 'admin' (padded) is in its own block
+          body: 'data=xxxxxxxxxxxxxxxxadmin' + '\x0b'*11 # Assuming 16-byte block, x*5, admin, padding
+        capture:
+          - pattern: '(?P<admin_block>.{24})' # Capture the base64 encoded 'admin' block
+            as: admin_block_ciphertext
+
+      - id: inject_forged_ciphertext
+        action: http_probe # Conceptual step to inject forged ciphertext
+        params:
+          method: POST
+          path: '/set_cookie_or_token' # Endpoint to update cookie/token
+          # Example: Original ciphertext is C1 C2 C3, C2 has 'user'. Replace C2 with forged_admin_block.
+          body: 'cookie_or_token=' + 'ORIGINAL_C1' + '{{admin_block_ciphertext}}' + 'ORIGINAL_C3'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)logged in as admin|privileges elevated'
+            as: exploitation_success
