@@ -1,6 +1,21 @@
-# Lattice Mind — deterministic CTF exploitation toolkit
+# Lattice Mind — MCP-native CTF exploitation toolkit for LLM agents
 
-Lattice Mind automates vulnerability discovery and exploitation by weaving together rule-based decision trees, deterministic probes, and adaptive exploit prioritization. There are no LLMs or randomness; every action is justified by evidence collected from adapters and recorded in the execution log.
+Lattice Mind is an MCP (Model Context Protocol) server that gives LLM agents a complete, automated vulnerability discovery and exploitation pipeline. The agent does not need to run scans, manage HTTP sessions, or iterate over payloads manually — Lattice Mind handles all of that deterministically. The agent's job is to **direct and augment**: submit a target, monitor progress via the MCP tools, and step in to mutate requests, inject session cookies, or answer escalation questions when the automated engine needs higher-level reasoning.
+
+**What runs automatically (no LLM needed):**
+- Asset classification, web recon, technology fingerprinting
+- YAML-tree-driven detection (HTTP probing, signal evaluation, confidence scoring)
+- Exploit payload permutation and flag capture
+- Fallback Python decision trees for common vulnerability classes
+
+**What the LLM agent does:**
+- Submits challenges and monitors run progress via MCP tools
+- Mutates in-flight requests (headers, body, params) when the automated engine surfaces a promising signal
+- Injects or rotates session cookies/tokens mid-scan
+- Selects specific YAML attack trees to run for targeted assessments
+- Answers HITL escalation questions when automation is insufficient
+
+Every automated action is rule-driven and reproducible; every LLM intervention is explicitly tracked via `run_id` and recorded in the execution log.
 
 ## Quickstart
 
@@ -102,23 +117,28 @@ In the web UI header, use **SHOW TOKEN** after login to reveal/hide the current 
 
 Lattice Mind is composed of the following layers:
 
-1. **Core orchestration** — `core/` defines shared data types (`ChallengeDescriptor`, `NodeResult`), the DecisionNode base class, a knowledge base for vulnerability archetypes, the orchestrator, and the flag recognizer.
-2. **Adapters** — Tool adapters (curl, ffuf, nmap, etc.) wrap command-line utilities to emit normalized JSON so decision nodes can reason about structured observations.
-3. **Decision trees** — Split between Python nodes (`trees/`) and YAML-driven trees (`lattice_mind/trees/yaml/`). Detection and exploitation paths read context, emit confidence boosts, and branch deterministically.
-4. **Execution engine** — `lattice_mind/core/executor.py` drives YAML trees, runs HTTP probes, applies exploit payloads, and checks flag patterns after every response.
-5. **API + UI** — `lattice_mind/api/server.py` exposes REST endpoints, persists run history (SQLite), and hosts the cyberpunk dashboard for live tree playback.
+1. **MCP interface** — `mcp/server.py` exposes 9 tools over stdio JSON-RPC 2.0 (also available at `POST /mcp`). This is the primary surface an LLM agent interacts with: submit scans, poll progress, inspect results, and mutate in-flight requests.
+2. **Core orchestration** — `core/` defines shared data types (`ChallengeDescriptor`, `NodeResult`), the DecisionNode base class, a knowledge base for vulnerability archetypes, the orchestrator, and the flag recognizer.
+3. **Adapters** — Tool adapters (curl, ffuf, nmap, etc.) wrap command-line utilities to emit normalized JSON so decision nodes can reason about structured observations.
+4. **Decision trees** — Split between Python nodes (`trees/`) and YAML-driven trees (`lattice_mind/trees/yaml/`). Detection and exploitation paths read context, emit confidence boosts, and branch deterministically.
+5. **Execution engine** — `lattice_mind/core/executor.py` drives YAML trees, runs HTTP probes, applies exploit payloads, and checks flag patterns after every response.
+6. **API + UI** — `lattice_mind/api/server.py` exposes REST endpoints, persists run history (SQLite), and hosts the cyberpunk dashboard for live tree playback and HITL question answering.
 
 ```mermaid
 flowchart LR
-    Input[User challenge descriptor]
-    Asset[Asset classification] --> Recon[Recon & confidence seeds]
-    Recon --> Detection[Decision tree selection]
+    Agent[LLM Agent]
+    MCP[MCP Tools]
+    Agent -->|"submit_scan / mutate_request"| MCP
+    MCP --> Solver[MVPSolver]
+    Solver --> Asset[Asset classification]
+    Asset --> Recon[Recon & confidence seeds]
+    Recon --> Detection[YAML tree detection]
     Detection --> Exploitation[Prioritized exploit paths]
     Exploitation --> Flag[Flag recognizer]
-    Flag -->|match| Halt[Stop execution]
-    Exploitation -->|no flag| Remediation[Record observations]
-    Recon -->|candidates| Detection
-    Input --> Asset
+    Flag -->|match| Halt[Return flag to agent]
+    Exploitation -->|no flag| HITL[HITL escalation]
+    HITL -->|agent answers| Exploitation
+    MCP -->|"get_run_status / wait_for_run"| Agent
 ```
 
 ## File Structure (high-level)
@@ -136,13 +156,17 @@ flowchart LR
 
 ## How it works
 
-1. **Input ingestion** — The user submits a `ChallengeDescriptor` containing type, URL/file, flag format, and metadata.
-2. **Asset classification** — Asset nodes classify the challenge (network, file, web) to narrow applicable trees.
-3. **Confidence seeding** — Recon nodes populate context (paths, params, tech stack), and seeds boost tree confidence before detection.
-4. **Decision tree dispatch** — YAML trees define `applies_when`, `confidence_seeds`, `detection_paths`, and `exploitation_paths`. Each detection step runs HTTP probes with payload permutations, checks response signals, and emits named events.
-5. **Exploit prioritization** — Exploitation paths include ordered payload sets (high → medium → low confidence) and respect `stop_on_flag`. The executor records responses, checks `flag_recognizer`, and supports fallback capture values from YAML.
-6. **Observation tracking** — Every request, payload, and outcome is logged, enabling the UI to display discoveries, payload attempts, and raw JSON state.
-7. **Human-in-the-loop** — When automation is insufficient, the system escalates via `core/human_loop.py`, notes hints, and awaits user overrides.
+1. **Agent submits a challenge** — The LLM agent calls `submit_scan` via MCP with a `ChallengeDescriptor` (type, URL/file, flag format, metadata). This returns a `run_id`.
+2. **Automated asset classification** — The engine classifies the challenge (web/pwn/crypto/forensics) without agent involvement.
+3. **Automated recon & confidence seeding** — Recon nodes populate context (paths, params, tech stack). Each YAML tree's `applies_when` guards and `confidence_seeds` are evaluated to score and rank applicable trees.
+4. **Automated YAML tree dispatch** — Detection paths run HTTP probes with payload permutations, check response signals, and emit named events that unlock exploitation paths. All of this runs without agent intervention.
+5. **Agent augmentation points** — At any point during a run, the agent can:
+   - Call `set_session_cookies` to inject or rotate auth tokens/cookies mid-scan
+   - Call `mutate_request` to inspect and modify a paused outbound request before it is dispatched
+   - Select specific trees upfront via `selected_tree_ids` in `submit_scan`
+6. **Exploit prioritization** — Exploitation paths are ordered by confidence. The executor applies payloads, captures values for multi-step chains via `{{ captures.KEY }}` substitution, and checks the flag recognizer after every response.
+7. **Agent monitors progress** — The agent calls `wait_for_run` or polls `get_run_status` to receive the flag, observations, and step timeline.
+8. **HITL escalation** — When automation is insufficient, the engine pauses and surfaces a question via `GET /hitl/pending`. The agent (or a human via the dashboard) answers to unblock the solver.
 
 ## Testing
 

@@ -218,6 +218,17 @@ def _init_db():
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, val)
             )
+        # Migrate older default crawl budgets to the newer recommended baseline.
+        # Only upgrade rows that still match the legacy defaults so custom values remain intact.
+        legacy_defaults = {
+            "crawl_max_depth": ("3", str(CRAWL_MAX_DEPTH)),
+            "crawl_max_pages": ("50", str(CRAWL_MAX_PAGES)),
+        }
+        for key, (legacy_value, new_value) in legacy_defaults.items():
+            conn.execute(
+                "UPDATE settings SET value=? WHERE key=? AND value=?",
+                (new_value, key, legacy_value),
+            )
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 username        TEXT PRIMARY KEY,

@@ -52,9 +52,9 @@ PROJECT_ROOT = Path(__file__).parent.parent
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 ARTIFACTS_DIR.mkdir(exist_ok=True)
 
-# Web crawl frontier (F4) — defaults match ROADMAP recommended limits
-CRAWL_MAX_DEPTH: int = 3
-CRAWL_MAX_PAGES: int = 50
+# Web crawl frontier (F4) — defaults tuned for moderate depth without runaway expansion
+CRAWL_MAX_DEPTH: int = 5
+CRAWL_MAX_PAGES: int = 100
 CRAWL_MAX_REQUEST_CANDIDATES: int = 200
 CRAWL_MAX_QUEUE_SIZE: int = 500
 CRAWL_MAX_ENDPOINTS: int = 200
