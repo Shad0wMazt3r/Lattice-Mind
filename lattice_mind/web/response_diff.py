@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.cookies
 import re
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -99,10 +100,13 @@ def _interesting_header_items(
 
 def _set_cookie_names(header_val: str) -> Set[str]:
     names: Set[str] = set()
-    for part in header_val.split(","):
-        m = re.match(r"\s*([^=;\s]+)\s*=", part)
-        if m:
-            names.add(m.group(1).lower())
+    sc = http.cookies.SimpleCookie()
+    try:
+        sc.load(header_val)
+        for key in sc:
+            names.add(key.lower())
+    except http.cookies.CookieError:
+        pass
     return names
 
 

@@ -167,7 +167,7 @@ class LFIDetectFilterNode(DecisionNode):
                         logger.info(f"[lfi] Filter bypass successful with: {payload}")
                         
                         # Emit signal for filter bypass
-                        self.emit_signal("lfi_filter_bypass_confirmed", confidence=0.85)
+                        self.emit_signal("lfi_filter_bypass_confirmed", confidence_boost=0.85)
                         
                         return NodeResult(
                             status=NodeStatus.SUCCESS,
@@ -209,17 +209,32 @@ class LFIExploitTraversalNode(DecisionNode):
         challenge = context.get("challenge")
         target_param = context.get("target_param")
         
-        # Try to get LFI details from detection phase
-        observations = context.get("observations", {})
-        
-        # Get param info from detection or context
-        if not target_param:
-            # Try to reconstruct from detection data
-            param_name = observations.get("param_name")
-            endpoint = observations.get("endpoint", challenge.url if challenge else None)
-        else:
+        # Try to get LFI details from detection phase.
+        # Detection results may be stored in observations.lfi, observations, or context.
+        observations = context.setdefault("observations", {})
+        lfi_obs = observations.get("lfi", {})
+
+        if target_param:
             param_name = target_param.get("name")
             endpoint = target_param.get("endpoint", challenge.url if challenge else None)
+        else:
+            param_name = (
+                lfi_obs.get("param_name")
+                or observations.get("param_name")
+                or context.get("param_name")
+            )
+            endpoint = (
+                lfi_obs.get("endpoint")
+                or observations.get("endpoint")
+                or context.get("endpoint")
+                or (challenge.url if challenge else None)
+            )
+
+        # Normalize into observations so later nodes find a stable location.
+        if param_name:
+            observations.setdefault("param_name", param_name)
+        if endpoint:
+            observations.setdefault("endpoint", endpoint)
         
         if not param_name or not endpoint:
             logger.warning("[lfi] Missing parameter info for exploitation")
@@ -282,7 +297,7 @@ class LFIExploitTraversalNode(DecisionNode):
                         url = f"{endpoint}?{param_name}={payload}"
                         result = self.curl.run(url, {})
                         
-                        if result.is_error:
+                        if not result or result.get("error"):
                             continue
                         
                         body = result.get(HttpDataKeys.BODY, "")
@@ -300,7 +315,7 @@ class LFIExploitTraversalNode(DecisionNode):
                             context["flag_found"] = flag
                             
                             # Emit success signal
-                            self.emit_signal("flag_extracted", confidence=1.0)
+                            self.emit_signal("flag_extracted", confidence_boost=1.0)
                             
                             return NodeResult(
                                 status=NodeStatus.SUCCESS,

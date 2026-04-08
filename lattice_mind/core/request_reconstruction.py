@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json
 import re
 import secrets
 from typing import Any, Dict
@@ -15,9 +16,12 @@ class RequestReconstructionEngine:
         out = dict(req_args or {})
         headers = self._sanitize_headers(dict(out.get("headers") or {}))
         body = out.get("data")
+        json_source = body is None and "json" in out
         if body is None:
             body = out.get("json")
-        if isinstance(body, str):
+        if isinstance(body, (dict, list)) and json_source:
+            body_bytes = _json.dumps(body, separators=(",", ":")).encode("utf-8")
+        elif isinstance(body, str):
             body_bytes = body.encode("utf-8", errors="ignore")
         elif isinstance(body, (bytes, bytearray)):
             body_bytes = bytes(body)
@@ -26,6 +30,9 @@ class RequestReconstructionEngine:
         else:
             body_bytes = str(body).encode("utf-8", errors="ignore")
         ctype = headers.get("Content-Type", "")
+        if json_source and not ctype:
+            headers["Content-Type"] = "application/json"
+            ctype = "application/json"
         if "multipart/form-data" in ctype and "boundary=" in ctype and body_bytes:
             boundary = ctype.split("boundary=", 1)[1].strip().strip('"')
             if boundary:

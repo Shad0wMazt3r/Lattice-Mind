@@ -849,9 +849,10 @@ async def list_rules(include_quarantined: bool = False):
         for t in solver.registry.list_trees()
     ]
     if include_quarantined and getattr(solver.registry, "validation_errors", None):
-        for rid, err in sorted(solver.registry.validation_errors.items()):
+        for rid, err_obj in sorted(solver.registry.validation_errors.items()):
             if rid in {r["id"] for r in rows}:
                 continue
+            err_msg = err_obj.get("error", str(err_obj)) if isinstance(err_obj, dict) else str(err_obj)
             rows.append(
                 {
                     "id": rid,
@@ -862,7 +863,7 @@ async def list_rules(include_quarantined: bool = False):
                     "description": "",
                     "detection_paths": 0,
                     "exploitation_paths": 0,
-                    "validation_error": err,
+                    "validation_error": err_msg,
                 }
             )
     return rows
