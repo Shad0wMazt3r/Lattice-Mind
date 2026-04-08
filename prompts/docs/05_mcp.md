@@ -1,12 +1,12 @@
 # MCP Server Reference
 
-> Covers: `mcp/server.py` — stdio MCP, 9 tools, dispatch, validation gaps
+> Covers: `mcp/server.py` — stdio MCP, tool catalog, dispatch, validation gaps
 
 ---
 
 ## Overview
 
-The MCP server is the **primary interface for LLM agents**. The agent never calls adapters, the executor, or the solver directly — everything goes through these 9 tools. The engine handles all automated scanning; the agent uses these tools to:
+The MCP server is the **primary interface for LLM agents**. The agent never calls adapters, the executor, or the solver directly — everything goes through MCP tools. The engine handles all automated scanning; the agent uses these tools to:
 
 1. Submit a challenge and get a `run_id`
 2. Optionally inject session cookies or select specific YAML trees before the scan runs
@@ -14,7 +14,7 @@ The MCP server is the **primary interface for LLM agents**. The agent never call
 4. Augment in-flight requests via mutation tools (planned — see `07_known_bugs.md` Feature 2)
 5. Answer HITL escalation questions if the engine gets stuck
 
-Two transport modes expose the same 9 tools:
+Two transport modes expose the same toolset:
 
 | Transport | Location | Auth |
 |-----------|----------|------|
@@ -41,7 +41,7 @@ class LatticeMineMCPServer:
 
 ## Tool Definitions
 
-All 9 tools are defined in `_tool_definitions()` as JSON Schema objects. These are what the LLM agent sees.
+Tools are defined in `_tool_definitions()` as JSON Schema objects. These are what the LLM agent sees.
 
 ### 1. `health_check`
 - **Purpose:** Verify API is up
@@ -106,6 +106,13 @@ All 9 tools are defined in `_tool_definitions()` as JSON Schema objects. These a
 - **Inputs:** `{rule_id: str}`
 - **Returns:** full YAML tree as parsed dict
 - **Note:** `rule_id` is interpolated into URL path — unusual characters go through REST path handling
+
+### Additional operator tools
+- `tail_run_events` — incremental event tailing with `since_seq`
+- `get_tree_execution_trace` — tree-scoped event history
+- `retry_failed_node` — queue operator retry requests for active runs
+- `explain_confidence` — ranked confidence + decision receipts
+- `export_attack_notebook` — markdown export for replay/reporting
 
 ---
 
@@ -211,5 +218,4 @@ No concurrent handling — each request is processed synchronously before the ne
 
 | Bug | Severity | Detail |
 |-----|----------|--------|
-| Bug 20 | High | `/mcp` in `_PUBLIC_PATHS` — `tools/list` and `initialize` unauthenticated |
 | Bug 23 | Medium | Some error paths still return raw Python exception strings (partial fix) |

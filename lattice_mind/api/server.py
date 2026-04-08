@@ -445,7 +445,6 @@ app = FastAPI(
 _PUBLIC_PATHS = {
     "/",
     "/health",
-    "/mcp",
     "/auth/login",
     "/auth/register",
     "/auth/forgot-password",
@@ -524,6 +523,7 @@ class RunState:
         with self._lock:
             payload = dict(event)
             payload["step"] = len(self.steps) + 1
+            payload["seq"] = payload["step"]
             self.steps.append(payload)
             self.updated_at = _now()
         _db_save(self)
@@ -685,6 +685,10 @@ class PauseRequestLifecycleRequest(BaseModel):
 class ResumeRequestLifecycleRequest(BaseModel):
     interception_id: str
     request_id: str
+
+
+class RetryNodeRequest(BaseModel):
+    override_timeout: Optional[int] = Field(default=None, ge=1, le=300)
 
 
 # ── Auth endpoints ───────────────────────────────────────────────────────────
@@ -1021,7 +1025,7 @@ async def mcp_info():
     }
 
 
-_MCP_TERMINAL_STATES = {"success", "completed", "error"}
+_MCP_TERMINAL_STATES = {"success", "completed", "degraded_success", "error"}
 
 
 async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optional[str] = None) -> Any:
@@ -1213,6 +1217,33 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
             arguments["run_id"],
             limit=int(arguments.get("limit", 100)),
         )
+
+    if name == "tail_run_events":
+        return await get_run_events(
+            arguments["run_id"],
+            since_seq=int(arguments.get("since_seq", 0)),
+            limit=int(arguments.get("limit", 100)),
+        )
+
+    if name == "get_tree_execution_trace":
+        return await get_tree_execution_trace(
+            arguments["run_id"],
+            arguments["tree_id"],
+            limit=int(arguments.get("limit", 500)),
+        )
+
+    if name == "retry_failed_node":
+        return await retry_failed_node(
+            arguments["run_id"],
+            arguments["node_id"],
+            RetryNodeRequest(override_timeout=arguments.get("override_timeout")),
+        )
+
+    if name == "explain_confidence":
+        return await explain_run_confidence(arguments["run_id"])
+
+    if name == "export_attack_notebook":
+        return await export_attack_notebook(arguments["run_id"])
 
     raise ValueError(f"Unknown tool: {name}")
 
@@ -1496,6 +1527,144 @@ async def get_run_status(run_id: str, max_steps: Optional[int] = None) -> RunSta
     return RunStatusResponse(**payload)
 
 
+@app.get("/runs/{run_id}/events")
+async def get_run_events(
+    run_id: str,
+    since_seq: int = 0,
+    limit: int = 100,
+) -> Dict[str, Any]:
+    """Tail run events incrementally for live MCP clients."""
+    state = get_run_state(run_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Run not found")
+    lim = max(1, min(500, int(limit)))
+    since = max(0, int(since_seq))
+    events = [s for s in state.to_dict().get("steps", []) if int(s.get("seq", 0)) > since]
+    events = events[:lim]
+    next_seq = since
+    if events:
+        next_seq = int(events[-1].get("seq", since))
+    return {
+        "run_id": run_id,
+        "since_seq": since,
+        "next_seq": next_seq,
+        "events": events,
+        "status": state.status,
+    }
+
+
+@app.get("/runs/{run_id}/trees/{tree_id}/trace")
+async def get_tree_execution_trace(run_id: str, tree_id: str, limit: int = 500) -> Dict[str, Any]:
+    """Return run events scoped to a specific tree id."""
+    state = get_run_state(run_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Run not found")
+    lim = max(1, min(1000, int(limit)))
+    prefix = f"{tree_id}:"
+    trace = []
+    for step in state.to_dict().get("steps", []):
+        sid = str(step.get("node_id") or "")
+        if sid.startswith(prefix) or step.get("tree_id") == tree_id:
+            trace.append(step)
+    return {"run_id": run_id, "tree_id": tree_id, "events": trace[-lim:]}
+
+
+@app.post("/runs/{run_id}/nodes/{node_id}/retry")
+async def retry_failed_node(
+    run_id: str,
+    node_id: str,
+    body: RetryNodeRequest,
+) -> Dict[str, Any]:
+    """Record a targeted retry request for operator workflows."""
+    state = get_run_state(run_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if state.status in _MCP_TERMINAL_STATES:
+        return {
+            "run_id": run_id,
+            "node_id": node_id,
+            "accepted": False,
+            "reason": f"run already terminal ({state.status})",
+        }
+    state.add_step(
+        {
+            "event": "operator_retry_requested",
+            "node_id": node_id,
+            "node_name": node_id,
+            "status": "queued",
+            "data": {"override_timeout": body.override_timeout},
+            "timestamp": _now(),
+        }
+    )
+    return {
+        "run_id": run_id,
+        "node_id": node_id,
+        "accepted": True,
+        "override_timeout": body.override_timeout,
+    }
+
+
+@app.get("/runs/{run_id}/confidence/explain")
+async def explain_run_confidence(run_id: str) -> Dict[str, Any]:
+    """Explain confidence and reasoning artifacts for a run."""
+    state = get_run_state(run_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Run not found")
+    payload = state.to_dict()
+    confidence = payload.get("confidence") or {}
+    observations = payload.get("observations") or {}
+    log_obs = ((payload.get("log") or {}).get("observations") or {})
+    receipts = observations.get("decision_receipts") or log_obs.get("decision_receipts", [])
+    ranked = sorted(confidence.items(), key=lambda x: x[1], reverse=True)
+    return {
+        "run_id": run_id,
+        "status": payload.get("status"),
+        "ranked_confidence": [{"tree_id": k, "score": v} for k, v in ranked],
+        "decision_receipts": receipts[-100:],
+    }
+
+
+@app.get("/runs/{run_id}/export/notebook")
+async def export_attack_notebook(run_id: str) -> Dict[str, Any]:
+    """Export a compact markdown notebook for replay/reporting."""
+    state = get_run_state(run_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Run not found")
+    run = state.to_dict()
+    ch = run.get("challenge") or {}
+    observations = run.get("observations") or {}
+    receipts = observations.get("decision_receipts") or []
+    lines = [
+        "# Lattice Mind Attack Notebook",
+        "",
+        f"- Run ID: `{run.get('run_id')}`",
+        f"- Status: `{run.get('status')}`",
+        f"- Target: `{ch.get('url') or ch.get('file_path') or ''}`",
+        f"- Challenge Type: `{ch.get('type')}`",
+        "",
+        "## Decision Receipts",
+    ]
+    for rec in receipts[-80:]:
+        lines.extend(
+            [
+                f"- [{rec.get('timestamp', '')}] {rec.get('observation', '')}",
+                f"  - inference: {rec.get('inference', '')}",
+                f"  - action: {rec.get('action', '')}",
+                f"  - result: {rec.get('result', '')}",
+            ]
+        )
+    lines.extend(["", "## Last Steps"])
+    for s in (run.get("steps") or [])[-80:]:
+        lines.append(
+            f"- seq={s.get('seq')} event={s.get('event')} node={s.get('node_id')} status={s.get('status')}"
+        )
+    return {
+        "run_id": run_id,
+        "status": run.get("status"),
+        "markdown": "\n".join(lines),
+    }
+
+
 @app.post("/runs/{run_id}/session")
 async def set_run_session(run_id: str, body: SetRunSessionRequest) -> Dict[str, Any]:
     if not get_run_state(run_id):
@@ -1720,13 +1889,18 @@ async def _run_solver(
         )
         confidence = solver.confidence_pool.get_scores()
         exec_plan = solver.orchestrator.execution_context.get("execution_plan")
+        degraded = bool(
+            (observations or {}).get("recon_degraded")
+            or solver.orchestrator.execution_context.get("degraded_mode")
+        )
+        final_status = "success" if flag else ("degraded_success" if degraded else "completed")
         state.update(
             flag=flag,
             log=serialized_log,
             observations=observations,
             confidence=confidence,
             execution_plan=exec_plan if exec_plan is not None else state.execution_plan,
-            status="success" if flag else "completed",
+            status=final_status,
             finished_at=_now(),
         )
     except Exception as exc:  # pragma: no cover - defensive guard

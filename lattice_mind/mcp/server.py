@@ -74,7 +74,7 @@ class LatticeMindMCPServer:
             {
                 "name": "wait_for_run",
                 "description": (
-                    "Poll a run until it reaches a terminal state (success, completed, error) "
+                    "Poll a run until it reaches a terminal state (success, completed, degraded_success, error) "
                     "then return a summary. Avoids writing external polling loops."
                 ),
                 "inputSchema": {
@@ -361,6 +361,63 @@ class LatticeMindMCPServer:
                     "required": ["run_id"],
                 },
             },
+            {
+                "name": "tail_run_events",
+                "description": "Incrementally tail run events from a sequence id.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "since_seq": {"type": "integer", "minimum": 0},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 500},
+                    },
+                    "required": ["run_id"],
+                },
+            },
+            {
+                "name": "get_tree_execution_trace",
+                "description": "Get events for a specific tree id within a run.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "tree_id": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
+                    },
+                    "required": ["run_id", "tree_id"],
+                },
+            },
+            {
+                "name": "retry_failed_node",
+                "description": "Request targeted retry of a node in a non-terminal run.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "node_id": {"type": "string"},
+                        "override_timeout": {"type": "integer", "minimum": 1, "maximum": 300},
+                    },
+                    "required": ["run_id", "node_id"],
+                },
+            },
+            {
+                "name": "explain_confidence",
+                "description": "Explain confidence ranking and decision receipts for a run.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"run_id": {"type": "string"}},
+                    "required": ["run_id"],
+                },
+            },
+            {
+                "name": "export_attack_notebook",
+                "description": "Export a markdown notebook summarizing a run.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"run_id": {"type": "string"}},
+                    "required": ["run_id"],
+                },
+            },
         ]
 
     def _headers(self) -> Dict[str, str]:
@@ -429,7 +486,7 @@ class LatticeMindMCPServer:
             run_id = arguments["run_id"]
             timeout = max(1, min(600, int(arguments.get("timeout_seconds", 300))))
             interval = max(1, min(30, int(arguments.get("poll_interval_seconds", 3))))
-            terminal = {"success", "completed", "error"}
+            terminal = {"success", "completed", "degraded_success", "error"}
             deadline = time.monotonic() + timeout
             while True:
                 data = self._request("GET", f"/runs/{run_id}")
@@ -576,6 +633,27 @@ class LatticeMindMCPServer:
             run_id = arguments["run_id"]
             limit = int(arguments.get("limit", 100))
             return self._request("GET", f"/runs/{run_id}/mutations?limit={limit}")
+        if name == "tail_run_events":
+            run_id = arguments["run_id"]
+            since = max(0, int(arguments.get("since_seq", 0)))
+            limit = max(1, min(500, int(arguments.get("limit", 100))))
+            return self._request("GET", f"/runs/{run_id}/events?since_seq={since}&limit={limit}")
+        if name == "get_tree_execution_trace":
+            run_id = arguments["run_id"]
+            tree_id = quote(str(arguments["tree_id"]), safe="")
+            limit = max(1, min(1000, int(arguments.get("limit", 500))))
+            return self._request("GET", f"/runs/{run_id}/trees/{tree_id}/trace?limit={limit}")
+        if name == "retry_failed_node":
+            run_id = arguments["run_id"]
+            node_id = quote(str(arguments["node_id"]), safe="")
+            body = {"override_timeout": arguments.get("override_timeout")}
+            return self._request("POST", f"/runs/{run_id}/nodes/{node_id}/retry", body)
+        if name == "explain_confidence":
+            run_id = arguments["run_id"]
+            return self._request("GET", f"/runs/{run_id}/confidence/explain")
+        if name == "export_attack_notebook":
+            run_id = arguments["run_id"]
+            return self._request("GET", f"/runs/{run_id}/export/notebook")
         raise MCPRequestError(f"Unknown tool: {name}")
 
     @staticmethod

@@ -557,6 +557,11 @@ a {
   border-color: var(--teal)
 }
 
+.status-badge.degraded_success {
+  color: var(--amber);
+  border-color: var(--amber)
+}
+
 .status-badge.error,
 .status-badge.failed {
   color: var(--red);

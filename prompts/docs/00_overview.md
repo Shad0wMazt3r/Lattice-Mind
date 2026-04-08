@@ -156,7 +156,7 @@ MVPSolver.solve()                          [mvp.py]
          HumanLoopManager.ask_user()       ◀ AGENT: answer escalation question to unblock solver
          Dashboard HITL tab shows pending questions
 
-LLM Agent calls wait_for_run / get_run_status  ◀ AGENT: poll until flag returned
+LLM Agent calls wait_for_run / get_run_status  ◀ AGENT: poll until terminal state (success/completed/degraded_success/error)
 ```
 
 ---
@@ -180,6 +180,7 @@ LLM Agent calls wait_for_run / get_run_status  ◀ AGENT: poll until flag return
 | Frozen pool | `ConfidencePool.freeze()` | Called before exploitation; scores locked |
 | Template substitution | `{{ captures.KEY }}` in YAML payloads | Multi-step exploits (e.g. capture table → extract data) |
 | Signal bus | `SignalBus` | Tracks which detection signals fired per tree; exploitation paths gate on these |
+| Decision receipts | `TreeExecutor` context writes | Per-run trace of observation/inference/action/result for explainability |
 
 ---
 

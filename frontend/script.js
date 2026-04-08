@@ -822,6 +822,7 @@ function updateActiveRunUI(run) {
   renderConfidence(run.confidence || {});
   // observations display
   renderObservations(run.observations || {});
+  renderTraceReceipts(run.observations || {});
 }
 
 //  tree builder ─
@@ -907,6 +908,7 @@ const STATUS_COLOR = {
   running: "var(--amber)",
   success: "var(--teal)",
   completed: "var(--teal)",
+  degraded_success: "var(--amber)",
   failure: "var(--red)",
   error: "var(--red)",
   flag_found: "var(--cyan)",
@@ -915,6 +917,7 @@ const STATUS_COLOR = {
 const STATUS_FILL = {
   success: "rgba(30,138,110,.1)",
   completed: "rgba(30,138,110,.1)",
+  degraded_success: "rgba(240,165,0,.08)",
   failure: "rgba(217,64,64,.08)",
   error: "rgba(217,64,64,.08)",
   flag_found: "rgba(0,200,212,.08)",
@@ -1449,7 +1452,68 @@ function renderObservations(obs, containerId = "observations-content") {
       params.map((p) => `<span class="intel-chip">${esc(p)}</span>`).join("") +
       "</div></div>";
 
+  const blocked = obs.blocked_keywords || [];
+  if (blocked.length)
+    html +=
+      '<div class="obs-group"><div class="obs-label">BLOCKED KEYWORDS</div><div class="chip-row">' +
+      blocked
+        .slice(-12)
+        .map((k) => `<span class="intel-chip">${esc(k)}</span>`)
+        .join("") +
+      "</div></div>";
+
   el.innerHTML = html || '<div class="nd-empty">No observations.</div>';
+}
+
+function renderTraceReceipts(obs) {
+  const el = $("trace-receipts-content");
+  if (!el) return;
+  const receipts = obs.decision_receipts || [];
+  if (!receipts.length) {
+    el.innerHTML = '<div class="nd-empty">No trace receipts yet.</div>';
+    return;
+  }
+  const rows = receipts
+    .slice(-20)
+    .reverse()
+    .map((r) => {
+      const ts = (r.timestamp || "").slice(11, 19);
+      return `<div class="obs-group">
+        <div class="obs-label">${esc(ts)} ${esc(r.action || "action")}</div>
+        <div class="obs-path">${esc(r.observation || "")}</div>
+        <div class="obs-path">${esc(r.inference || "")}</div>
+        <div class="obs-path">${esc(r.result || "")}</div>
+      </div>`;
+    })
+    .join("");
+  el.innerHTML = rows;
+}
+
+async function exportNotebook() {
+  if (!currentRunId) {
+    alert("No active run selected.");
+    return;
+  }
+  try {
+    const r = await apiFetch(`/runs/${currentRunId}/export/notebook`);
+    if (!r.ok) {
+      alert("Failed to export notebook.");
+      return;
+    }
+    const data = await r.json();
+    const markdown = data.markdown || "";
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lattice-mind-${currentRunId.slice(0, 8)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert("Notebook export failed: " + e.message);
+  }
 }
 
 // ── Run Detail Modal ──────────────────────────────────────────────────────────

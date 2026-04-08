@@ -86,7 +86,7 @@ exploitation_paths:
           method: POST
           path: '/encrypt_data'
           # Craft input to ensure 'admin' (padded) is in its own block
-          body: 'data=xxxxxxxxxxxxxxxxadmin' + '\x0b'*11 # Assuming 16-byte block, x*5, admin, padding
+          body: 'data=xxxxxxxxxxxxxxxxadmin\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b' # Assuming 16-byte block, x*5, admin, padding
         capture:
           - pattern: '(?P<admin_block>.{24})' # Capture the base64 encoded 'admin' block
             as: admin_block_ciphertext
@@ -97,7 +97,7 @@ exploitation_paths:
           method: POST
           path: '/set_cookie_or_token' # Endpoint to update cookie/token
           # Example: Original ciphertext is C1 C2 C3, C2 has 'user'. Replace C2 with forged_admin_block.
-          body: 'cookie_or_token=' + 'ORIGINAL_C1' + '{{admin_block_ciphertext}}' + 'ORIGINAL_C3'
+          body: 'cookie_or_token=ORIGINAL_C1{{admin_block_ciphertext}}ORIGINAL_C3'
         capture:
           - pattern: 'flag\{[^}]+\}'
             as: flag_value

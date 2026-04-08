@@ -131,6 +131,25 @@ class TreeExecutor:
         current_conf = self.confidence_pool.get_tree_confidence(tree.id).score
         if current_conf < tree.min_confidence:
             logger.info(f"Skipping detection for {tree.id}: confidence {current_conf:.2f} < {tree.min_confidence}")
+            self._emit_progress(
+                "tree_skipped",
+                tree.id,
+                "detection",
+                status="skipped",
+                data={
+                    "skip_reason": "min_confidence_not_met",
+                    "current_confidence": current_conf,
+                    "required_confidence": tree.min_confidence,
+                    "phase": "detection",
+                },
+            )
+            self._add_receipt(
+                context,
+                observation=f"confidence={current_conf:.3f}",
+                inference="tree confidence below minimum threshold",
+                action=f"skip detection for {tree.id}",
+                result=f"required={tree.min_confidence:.3f}",
+            )
             return None
 
         detection_tasks = []
@@ -210,10 +229,12 @@ class TreeExecutor:
                     
                     if matched:
                         any_matched = True
+                        prev_conf = self.confidence_pool.get_tree_confidence(tree.id).score
                         on_match = sig_def.get("on_match", {})
                         boost = on_match.get("confidence_boost", 0.0)
                         if boost:
                             self.confidence_pool.apply_boost(tree.id, boost, f"match:{step.id}", phase="detection")
+                        new_conf = self.confidence_pool.get_tree_confidence(tree.id).score
                         
                         signal_name = on_match.get("emit")
                         if signal_name:
@@ -221,6 +242,13 @@ class TreeExecutor:
                             # Record the parameter that worked
                             if result.get("injected_param"):
                                 context["vulnerable_param"] = result["injected_param"]
+                        self._add_receipt(
+                            context,
+                            observation=f"signal matched on step={step.id}",
+                            inference=f"signal={signal_name or 'unnamed'} indicates exploitable path",
+                            action=f"boost confidence by {boost}",
+                            result=f"confidence {prev_conf:.3f} -> {new_conf:.3f}",
+                        )
 
             # Handle step flow (success/failure)
             status = "success" if any_matched else "failure"
@@ -359,7 +387,7 @@ class TreeExecutor:
                 "injected_payload": None,
             }]
         
-        payloads = params.get("payloads", [])
+        payloads = list(params.get("payloads", []))
         if "payload" in params:
             payloads.append(params["payload"])
         
@@ -371,6 +399,7 @@ class TreeExecutor:
         
         if not payloads:
             payloads = [None]
+        payloads = self._expand_blacklist_bypass_payloads(payloads)
             
         inject_into = params.get("inject_into", "none")
         challenge = context.get("challenge")
@@ -516,6 +545,12 @@ class TreeExecutor:
                             resp["mutation_reason"] = pv.mutation_reason
                             resp["baseline_id"] = baseline_id
                             resp["mutation_id"] = mutation_id
+                            forbidden = self._extract_forbidden_keyword(str(resp.get("body", "")))
+                            if forbidden:
+                                resp["blocked_keyword"] = forbidden
+                                context.setdefault("observations", {}).setdefault(
+                                    "blocked_keywords", []
+                                ).append(forbidden)
                             batch.append(resp)
                         except Exception as e:
                             logger.error(f"Step execution failed: {e}")
@@ -563,6 +598,56 @@ class TreeExecutor:
         except re.error:
             logger.warning("Invalid signal regex: %r", pattern)
             return False
+
+    @staticmethod
+    def _extract_forbidden_keyword(message: str) -> Optional[str]:
+        if not message:
+            return None
+        m = re.search(r"forbidden keyword ['\"]?([^'\".]+)['\"]?", message, re.IGNORECASE)
+        if not m:
+            return None
+        return m.group(1).strip()
+
+    def _expand_blacklist_bypass_payloads(self, payloads: List[Any]) -> List[Any]:
+        expanded: List[Any] = []
+        seen: Set[str] = set()
+        for payload in payloads:
+            key = str(payload)
+            if key not in seen:
+                seen.add(key)
+                expanded.append(payload)
+            if payload is None or not isinstance(payload, str):
+                continue
+            # Common keyword-filter bypasses for eval-style contexts.
+            variants = [
+                payload.replace("__import__('os')", "__import__('o'+'s')"),
+                payload.replace("__import__(\"os\")", "__import__(\"o\"+\"s\")"),
+                payload.replace("cat ", "nl "),
+                payload.replace("ls ", "echo "),
+            ]
+            for v in variants:
+                if v != payload and v not in seen:
+                    seen.add(v)
+                    expanded.append(v)
+        return expanded
+
+    @staticmethod
+    def _add_receipt(
+        context: Dict[str, Any],
+        *,
+        observation: str,
+        inference: str,
+        action: str,
+        result: str,
+    ) -> None:
+        receipt = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "observation": observation[:300],
+            "inference": inference[:300],
+            "action": action[:300],
+            "result": result[:300],
+        }
+        context.setdefault("decision_receipts", []).append(receipt)
 
     @staticmethod
     def _sanitize_capture_value(value: Any) -> str:
@@ -683,7 +768,8 @@ class TreeExecutor:
                 "node_id": f"{tree_id}:{node_id}",
                 "node_name": node_id,
                 "status": status,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "tree_id": tree_id,
             }
             if data:
                 payload["data"] = self._sanitize_data(data)

@@ -41,7 +41,7 @@ detection_paths:
           path: '/allocate_and_write' # Example endpoint
           # This payload is conceptual. First part: size, second part: data to write.
           # Example: size = 0x40000001 (overflows to 1 on 32-bit int), data = "A"*1000
-          body: 'size=2147483647&data=' + 'A' * 1000 # Max int for 32-bit, then data
+          body: 'size=2147483647&data=<A_repeated_1000_bytes>' # Max int for 32-bit, then data
         signals:
           - match: '(?i)heap corruption|double free|segmentation fault|memory allocation error'
             on_match:
@@ -65,7 +65,7 @@ detection_paths:
           method: POST
           path: '/copy_string' # Example endpoint
           # Example: length = 65537 (0x10001) for unsigned short; actual input data is longer
-          body: 'length=65537&data=' + 'B' * 500 # Length overflows, then 500 'B's to overflow
+          body: 'length=65537&data=<B_repeated_500_bytes>' # Length overflows, then 500 'B's to overflow
         signals:
           - match: '(?i)stack smashing detected|segmentation fault|buffer overflow'
             on_match:

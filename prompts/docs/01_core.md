@@ -297,11 +297,11 @@ get_human_loop_manager().clear()          # clears hints/overrides from prior ru
 # 2. Classify asset                       [AUTOMATIC]
 asset_type = _classify_asset()
 
-# 3. Web recon (if web)                   [AUTOMATIC]
+# 3. Web recon (if web)                   [AUTOMATIC + watchdog]
 try:
-    orchestrator.run_tree(WebReconProbeNode())
+    orchestrator.run_tree(WebReconProbeNode())  # wrapped with timeout guard
 except Exception:
-    logger.warning(...)                   # recon failure is non-fatal; solve continues
+    logger.warning(...)                   # recon failure is non-fatal; solve continues in degraded mode
 
 # 4. Merge session cookies (if any)
 # Agent may have called set_session_cookies MCP tool before or during this run
@@ -312,8 +312,10 @@ except Exception:
 
 # 5. YAML tree dispatch loop              [AUTOMATIC; agent can augment via mutate_request]
 while remaining_trees:
-    flag = asyncio.run(executor.execute_tree(tree, context))   # BUG 7 (open): crashes Python 3.10+ in async context
-    if flag: return flag
+    # coroutines are executed on a dedicated event loop object (no asyncio.run re-entry)
+    flag = _normalize_exec_result(executor.execute_tree(tree, context))
+    if flag:
+        return flag
 
 # 6. Legacy Python tree fallback          [AUTOMATIC]
 orchestrator.run_tree(domain_root_node)
@@ -322,4 +324,4 @@ orchestrator.run_tree(domain_root_node)
 human_loop.ask_user(...)
 ```
 
-**Open bug (Bug 7):** `asyncio.run()` at line 263 inside the tree execution loop. On Python 3.10+ this raises `RuntimeError: This event loop is already running` when called from a FastAPI async context. See `07_known_bugs.md`.
+`TreeExecutor` now also records `decision_receipts` and blocked keyword observations in run context so API/MCP clients can inspect pivot rationale (`observation -> inference -> action -> result`).

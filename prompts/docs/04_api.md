@@ -224,7 +224,7 @@ Stored keys: `jwt_secret`, `dir_scan_enabled`, etc.
 ## MCP over HTTP
 
 **Path:** `POST /mcp`  
-**Auth:** In `_PUBLIC_PATHS` — middleware bypasses. Tool-level check inside handler for non-`auth_login` tools.
+**Auth:** Protected by auth middleware; only `initialize` and `tools/call` with `auth_login` are allowed unauthenticated inside handler logic.
 
 ```python
 @app.post("/mcp")
@@ -241,7 +241,7 @@ async def mcp_rpc(request: Request):
                 return _ok({"isError": True, "text": "Invalid token..."})
         result = await _mcp_dispatch(tool_name, arguments)
         return _ok({"content": [{"type": "text", "text": json.dumps(result)}]})
-    # tools/list, initialize — no auth check at all (Bug 20)
+    # initialize and auth_login are the only unauthenticated MCP actions
 ```
 
 Error handling:
@@ -256,7 +256,6 @@ Error handling:
 | Bug | Severity | Route / Module |
 |-----|----------|---------------|
 | Bug 14: path traversal in upload | Critical | `POST /upload` |
-| Bug 20: `/mcp` fully public | High | auth middleware |
 | Bug 24: no min_length on reset-password | Medium | `POST /auth/reset-password` |
 | Bug 23: opaque exception strings to agent | Medium | MCP dispatch handler |
-| Bug 7: `asyncio.run()` in thread | Critical | solver execution |
+| Run status includes `degraded_success` | Info | solver execution status lifecycle |

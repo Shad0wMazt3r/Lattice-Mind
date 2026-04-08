@@ -29,6 +29,11 @@ def test_tools_list_contains_submit_scan():
     assert "list_scan_trees" in names
     assert "run_selected_trees" in names
     assert "set_scan_session" in names
+    assert "tail_run_events" in names
+    assert "get_tree_execution_trace" in names
+    assert "retry_failed_node" in names
+    assert "explain_confidence" in names
+    assert "export_attack_notebook" in names
 
 
 def test_submit_scan_tool_call_success(monkeypatch):
@@ -167,4 +172,38 @@ def test_run_selected_trees_posts_solve(monkeypatch):
         }
     )
     assert response["result"]["isError"] is False
+
+
+def test_new_operator_tools_routes(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, headers, json, timeout):
+        calls.append((method, url, json))
+        return _FakeResponse(data={"ok": True})
+
+    monkeypatch.setattr("lattice_mind.mcp.server.requests.request", fake_request)
+    server = LatticeMindMCPServer(base_url="http://engine.local")
+
+    for name, args in [
+        ("tail_run_events", {"run_id": "r1", "since_seq": 5, "limit": 10}),
+        ("get_tree_execution_trace", {"run_id": "r1", "tree_id": "web_eval_injection"}),
+        ("retry_failed_node", {"run_id": "r1", "node_id": "n1", "override_timeout": 12}),
+        ("explain_confidence", {"run_id": "r1"}),
+        ("export_attack_notebook", {"run_id": "r1"}),
+    ]:
+        response = server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 90,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": args},
+            }
+        )
+        assert response["result"]["isError"] is False
+
+    assert any("/runs/r1/events" in u for _, u, _ in calls)
+    assert any("/runs/r1/trees/" in u for _, u, _ in calls)
+    assert any("/runs/r1/nodes/" in u for _, u, _ in calls)
+    assert any("/runs/r1/confidence/explain" in u for _, u, _ in calls)
+    assert any("/runs/r1/export/notebook" in u for _, u, _ in calls)
 

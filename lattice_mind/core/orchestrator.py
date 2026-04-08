@@ -1,4 +1,5 @@
 """Central orchestrator for challenge analysis and exploitation."""
+import concurrent.futures
 import logging
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -31,6 +32,7 @@ class Orchestrator:
         self.signal_bus: Optional[Any] = None  # Type: SignalBus (avoid circular import)
         self.confidence_pool: Optional[Any] = None  # Type: ConfidencePool
         self.current_tree_id: Optional[str] = None
+        self._event_seq: int = 0
 
     def set_challenge(self, challenge: ChallengeDescriptor):
         """Set the challenge to solve.
@@ -49,6 +51,7 @@ class Orchestrator:
         self.tree_history.clear()
         self._last_node_id = None
         self._branch_parent = None
+        self._event_seq = 0
 
     def set_progress_callback(self, callback: Optional[Callable[[Dict[str, Any]], None]]):
         """Register a callback that receives progress events during execution."""
@@ -97,8 +100,28 @@ class Orchestrator:
 
             self._emit_progress("node_start", current_node, parent_node_id=parent_id)
 
-            # Run the node
-            result = current_node.run(self.execution_context)
+            # Run the node with an optional watchdog timeout to avoid
+            # indefinite hangs in long-running node logic.
+            timeout_seconds = self.execution_context.get("node_timeout_seconds", 0)
+            try:
+                timeout_seconds = float(timeout_seconds or 0)
+            except (TypeError, ValueError):
+                timeout_seconds = 0.0
+            if timeout_seconds > 0:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(current_node.run, self.execution_context)
+                    try:
+                        result = future.result(timeout=timeout_seconds)
+                    except concurrent.futures.TimeoutError:
+                        result = NodeResult(
+                            status=NodeStatus.TIMEOUT,
+                            error=(
+                                f"Node timed out after {timeout_seconds:.1f}s "
+                                f"(watchdog)"
+                            ),
+                        )
+            else:
+                result = current_node.run(self.execution_context)
             self._last_node_id = current_node.node_id
             
             # Validate and normalize context after node execution
@@ -180,7 +203,10 @@ class Orchestrator:
             "node_name": getattr(node, "name", node.__class__.__name__),
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "parent_node_id": parent_node_id,
+            "tree_id": self.current_tree_id or getattr(node, "tree_id", None),
         }
+        self._event_seq += 1
+        payload["event_seq"] = self._event_seq
 
         if result:
             payload["status"] = getattr(result.status, "value", str(result.status))

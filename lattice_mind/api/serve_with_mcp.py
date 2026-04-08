@@ -26,6 +26,20 @@ def _build_uvicorn_cmd() -> List[str]:
         includes = os.environ.get("LATTICE_MIND_RELOAD_INCLUDE", "")
         for pattern in [item.strip() for item in includes.split(",") if item.strip()]:
             cmd.extend(["--reload-include", pattern])
+        exclude_defaults = [
+            ".tmp",
+            ".tmp/**",
+            "**/.tmp/**",
+            "**/pytest-of-*/**",
+            "**/.pytest_cache/**",
+            "**/__pycache__/**",
+        ]
+        excludes_raw = os.environ.get(
+            "LATTICE_MIND_RELOAD_EXCLUDE",
+            ",".join(exclude_defaults),
+        )
+        for pattern in [item.strip() for item in excludes_raw.split(",") if item.strip()]:
+            cmd.extend(["--reload-exclude", pattern])
     return cmd
 
 

@@ -149,3 +149,77 @@ def test_settings_include_and_update_form_submission_budget(monkeypatch):
             headers=headers,
             json={"crawl_max_form_submissions": original},
         )
+
+
+def test_run_events_and_trace_endpoints(monkeypatch):
+    monkeypatch.setattr(server, "_decode_token", lambda token: {"sub": "admin", "role": "admin"})
+    headers = {"Authorization": "Bearer fake_token"}
+
+    run_id = "run-events-1"
+    state = server.RunState(
+        run_id=run_id,
+        challenge={"type": "web", "name": "demo", "url": "http://example.com"},
+    )
+    server._register_run(state)
+    state.add_step(
+        {
+            "event": "node_start",
+            "node_id": "web_eval_injection:eval_probe_math",
+            "node_name": "eval_probe_math",
+            "status": "running",
+            "timestamp": "now",
+        }
+    )
+    state.add_step(
+        {
+            "event": "node_end",
+            "node_id": "web_eval_injection:eval_probe_math",
+            "node_name": "eval_probe_math",
+            "status": "success",
+            "timestamp": "now",
+        }
+    )
+
+    ev = client.get(f"/runs/{run_id}/events?since_seq=0&limit=5", headers=headers)
+    assert ev.status_code == 200
+    payload = ev.json()
+    assert payload["events"]
+    assert payload["next_seq"] >= 1
+
+    trace = client.get(f"/runs/{run_id}/trees/web_eval_injection/trace", headers=headers)
+    assert trace.status_code == 200
+    assert len(trace.json()["events"]) >= 1
+
+
+def test_confidence_explain_and_notebook_export(monkeypatch):
+    monkeypatch.setattr(server, "_decode_token", lambda token: {"sub": "admin", "role": "admin"})
+    headers = {"Authorization": "Bearer fake_token"}
+
+    run_id = "run-explain-1"
+    state = server.RunState(
+        run_id=run_id,
+        challenge={"type": "web", "name": "demo", "url": "http://example.com"},
+        confidence={"web_eval_injection": 0.7},
+        observations={
+            "decision_receipts": [
+                {
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "observation": "forbidden keyword",
+                    "inference": "filter present",
+                    "action": "pivot payload",
+                    "result": "still executing",
+                }
+            ]
+        },
+    )
+    server._register_run(state)
+
+    explain = client.get(f"/runs/{run_id}/confidence/explain", headers=headers)
+    assert explain.status_code == 200
+    e = explain.json()
+    assert e["ranked_confidence"][0]["tree_id"] == "web_eval_injection"
+    assert e["decision_receipts"]
+
+    notebook = client.get(f"/runs/{run_id}/export/notebook", headers=headers)
+    assert notebook.status_code == 200
+    assert "Lattice Mind Attack Notebook" in notebook.json()["markdown"]

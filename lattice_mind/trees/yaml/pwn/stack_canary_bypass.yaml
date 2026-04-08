@@ -59,7 +59,7 @@ detection_paths:
         params:
           method: POST
           path: '/message' # Example endpoint for messages/inputs
-          body: 'A' * 260 # Example: Buffer size 256 + 4 bytes over-read to touch canary
+          body: "'A' * 260" # Example: Buffer size 256 + 4 bytes over-read to touch canary
         signals:
           - match: '[a-fA-F0-9]{8}' # Look for a 4-byte or 8-byte hex string (canary)
             match_type: regex

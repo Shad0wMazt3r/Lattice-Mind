@@ -52,8 +52,9 @@ services:
       LATTICE_MIND_MCP_TOKEN: ${LATTICE_MIND_MCP_TOKEN:-}
       LATTICE_MIND_MCP_TIMEOUT: 30
       LATTICE_MIND_RELOAD: "true"
-      LATTICE_MIND_RELOAD_DIR: /app
+      LATTICE_MIND_RELOAD_DIR: /app/lattice_mind
       LATTICE_MIND_RELOAD_INCLUDE: "*.py,*.yaml,*.yml"
+      LATTICE_MIND_RELOAD_EXCLUDE: ".tmp,.tmp/**,**/.tmp/**,**/pytest-of-*/**,**/.pytest_cache/**,**/__pycache__/**"
     volumes:
       # Live-mount the entire project — edits on disk = live in container
       - .:/app

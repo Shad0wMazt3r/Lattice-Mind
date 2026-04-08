@@ -8,25 +8,11 @@
 
 ## Open (Not Fixed)
 
-### Bug 7 — `asyncio.run()` inside `asyncio.to_thread()` → crash
-- **File:** `mvp.py` line 263
-- **Severity:** Critical
-- **Detail:** `asyncio.run(_normalize_exec_result(raw_result))` is called inside a while loop that runs within FastAPI's async context via `asyncio.to_thread`. Raises `RuntimeError: This event loop is already running` on Python 3.10+.
-- **Fix:** Make `MVPSolver.solve()` async and `await executor.execute_tree()` directly, removing the `asyncio.run()` wrapper.
-
 ### Bug 10 — CRLF injection via unsanitized header values
 - **File:** `adapters/curl_adapter.py` line 248
 - **Severity:** High
 - **Detail:** `RequestsAdapter.run()` passes the `headers` dict directly to `requests.request()` with no sanitization. YAML step headers can contain `\r\n` sequences that inject extra headers into the outgoing request.
 - **Fix:** Add `_sanitize_headers(headers)` that strips `\r` and `\n` from all header names and values before dispatch.
-
-### Bug 20 — `/mcp` endpoint fully public
-- **File:** `api/server.py` line 448
-- **Severity:** High
-- **Detail:** `/mcp` is in `_PUBLIC_PATHS`, bypassing auth middleware. `tools/list` and `initialize` are reachable by any unauthenticated HTTP caller. `tools/call` has an internal Bearer check but listing tools requires no credentials.
-- **Fix:** Remove `/mcp` from `_PUBLIC_PATHS`. Handle `initialize` and `tools/list` with relaxed auth inside the `/mcp` handler itself, requiring a token for all `tools/call` invocations.
-
----
 
 ## Partially Fixed
 

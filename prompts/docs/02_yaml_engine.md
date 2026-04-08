@@ -232,6 +232,14 @@ payload = payload.replace(f"{{{{ captures.{key} }}}}", value)
 4. Call `POST /rules/reload` or restart to load
 5. No Python changes needed
 
+## YAML Authoring Pitfalls
+
+- Keep each YAML scalar self-contained. Expressions like `'foo' + 'bar'` or `'A' * 256` are Python syntax, not YAML.
+- `*` starts a YAML alias unless it is inside quotes. Use quoted scalars when documenting conceptual payload math.
+- In double-quoted YAML scalars, only supported escapes are valid. Patterns like `\{` or `\K` should be in single-quoted scalars.
+- For shell commands with nested quotes (for example tshark `-Y` filters), prefer single-quoted YAML strings and double inner single quotes (`''...''`).
+- Very long conceptual payloads still need one valid scalar; avoid giant unclosed quoted lines.
+
 ### Quality checklist
 
 - [ ] `id` globally unique
