@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json as _json
+import logging
 import re
 import secrets
 from typing import Any, Dict
+
+logger = logging.getLogger(__name__)
 
 
 class RequestReconstructionEngine:
@@ -28,6 +31,10 @@ class RequestReconstructionEngine:
         elif body is None:
             body_bytes = b""
         else:
+            logger.warning(
+                "Unexpected body type %s in request reconstruction; converting via str()",
+                type(body).__name__,
+            )
             body_bytes = str(body).encode("utf-8", errors="ignore")
         ctype = headers.get("Content-Type", "")
         if json_source and not ctype:
