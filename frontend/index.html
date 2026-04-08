@@ -1,228 +1,728 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Lattice Mind</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/style.css"/>
-</head>
-<body>
-<div id="header">
-  <span id="logo">LATTICE MIND</span>
-  <span id="hdr-version">v0.1.0</span>
-  <span id="hdr-live"><span class="live-dot"></span>LIVE</span>
-  <span id="hdr-hitl-badge" onclick="switchTab('hitl')">HITL</span>
-  <span id="hdr-spacer"></span>
-  <span id="hdr-dirscan-toggle" title="Toggle directory scanning" onclick="toggleDirScan()">
-    <span class="flag-dot flag-dot-off" id="dirscan-dot"></span>DIR SCAN
-  </span>
-  <span id="hdr-clock"></span>
-</div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Lattice Mind</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&family=Fira+Code:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/style.css?v=2" />
+  </head>
 
-<div id="layout">
-  <!-- SIDEBAR -->
-  <div id="sidebar">
-    <div class="sb-section">
-      <div class="sb-label">New Challenge</div>
-      <div class="field"><label>Name</label><input id="ch-name" type="text" value="Demo Challenge"/></div>
-      <div class="field"><label>Type</label>
-        <select id="ch-type" onchange="onTypeChange()">
-          <option value="web">Web</option>
-          <option value="pwn">Pwn</option>
-          <option value="crypto">Crypto</option>
-          <option value="forensics">Forensics</option>
-          <option value="steganography">Steganography</option>
-          <option value="reverse_engineering">Reverse Engineering</option>
-          <option value="osint">OSINT</option>
-          <option value="network">Network</option>
-          <option value="misc">Misc</option>
-        </select>
-      </div>
-      <div class="field" id="field-url"><label>URL</label><input id="ch-url" type="text" placeholder="http://target:8080"/></div>
-      <div class="field hidden" id="field-filepath"><label>File Path</label><input id="ch-filepath" type="text" placeholder="/path/to/binary"/></div>
-      <div class="field hidden" id="field-upload"><label>Upload File</label><input id="ch-upload" type="file"/></div>
-      <div class="field hidden" id="field-crypto-text"><label>Ciphertext</label><textarea id="ch-crypto-text" placeholder="Paste ciphertext here..."></textarea></div>
-      <div class="field"><label>Flag Format</label><input id="ch-flagfmt" type="text" value="flag{"/></div>
-      <button class="btn btn-full" id="solve-btn" onclick="submitChallenge()">&#9654; SOLVE</button>
-    </div>
-    <div class="sb-section">
-      <div class="sb-label">Recent Runs</div>
-      <div id="recent-runs"></div>
-    </div>
-  </div>
-  <div id="sidebar-resizer" class="resizer resizer-h" title="Drag to resize sidebar"></div>
-
-  <!-- MAIN CONTENT -->
-  <div id="main-content">
-    <div id="tabs-bar">
-      <button class="tab-btn active" onclick="switchTab('active')">ACTIVE RUN</button>
-      <button class="tab-btn" onclick="switchTab('history')">HISTORY</button>
-      <button class="tab-btn" id="tab-hitl-btn" onclick="switchTab('hitl')">HITL<span class="tab-badge" id="hitl-count" style="display:none">0</span></button>
-      <button class="tab-btn" onclick="switchTab('rules')">RULES</button>
-      <button class="tab-btn" onclick="switchTab('crypto')">CRYPTO TOOLS</button>
-    </div>
-
-    <!-- ACTIVE RUN TAB -->
-    <div class="tab-panel active" id="tab-active">
-      <div id="run-statusbar">
-        <span id="run-status-badge" class="status-badge idle">IDLE</span>
-        <span id="run-id-display"></span>
-        <span id="run-target"></span>
-        <span id="flag-banner">&#10003; <span id="flag-banner-text"></span></span>
-      </div>
-      <div id="run-split">
-        <div id="tree-panel">
-          <div id="tree-header">DECISION TREE</div>
-          <div id="tree-svg-wrap">
-            <svg id="tree-svg" width="600" height="400"></svg>
-          </div>
-        </div>
-        <div id="tree-resizer" class="resizer resizer-h" title="Drag to resize panels"></div>
-        <div id="right-panel">
-          <div id="node-details-panel">
-            <div class="nd-empty">Click a node to inspect it.</div>
-          </div>
-          <div id="intel-resizer" class="resizer resizer-v" title="Drag to resize intel panel"></div>
-          <div id="intel-panel">
-            <div class="intel-section">
-              <div class="intel-section-title">CONFIDENCE SCORES</div>
-              <div id="confidence-list"><div class="nd-empty">No data yet.</div></div>
-            </div>
-            <div class="intel-section">
-              <div class="intel-section-title">INTEL</div>
-              <div id="observations-content"><div class="nd-empty">No data yet.</div></div>
-            </div>
-          </div>
-          <div id="terminal-out"></div>
-        </div>
+  <body>
+    <!-- BOOT SCREEN -->
+    <div id="boot-screen">
+      <div id="boot-inner">
+        <div id="boot-logo-text">LATTICE MIND</div>
+        <div id="boot-version">INTELLIGENCE PLATFORM v0.1.0</div>
+        <div id="boot-lines"></div>
+        <span id="boot-cursor">&#x2588;</span>
       </div>
     </div>
 
-    <!-- HISTORY TAB -->
-    <div class="tab-panel" id="tab-history">
-      <div id="history-panel">
-        <div style="display:flex;gap:8px;align-items:center">
-          <input id="history-search" type="text" placeholder="Search runs..." oninput="filterHistory()"/>
-          <button class="btn btn-sm" onclick="loadHistory()">REFRESH</button>
+    <!-- LOGIN OVERLAY -->
+    <div id="login-overlay" class="hidden">
+      <canvas id="login-canvas"></canvas>
+      <div id="login-card">
+        <div id="login-card-logo">LATTICE MIND</div>
+        <div id="login-card-sub">INTELLIGENCE PLATFORM v0.1.0</div>
+        <div id="auth-tabs">
+          <button
+            class="auth-tab active"
+            id="auth-tab-login"
+            onclick="showAuthTab('login')"
+          >
+            SIGN IN
+          </button>
+          <button
+            class="auth-tab"
+            id="auth-tab-register"
+            onclick="showAuthTab('register')"
+          >
+            REGISTER
+          </button>
         </div>
-        <div id="history-table-wrap">
-          <table id="history-table">
-            <thead><tr>
-              <th>RUN ID</th><th>TYPE</th><th>TARGET</th><th>STATUS</th><th>FLAG</th><th>STARTED</th><th>DURATION</th><th>ACTIONS</th>
-            </tr></thead>
-            <tbody id="history-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- HITL TAB -->
-    <div class="tab-panel" id="tab-hitl">
-      <div id="hitl-panel">
-        <div id="hitl-questions"><div class="hitl-empty">No pending questions.</div></div>
-      </div>
-    </div>
-
-    <!-- RULES TAB -->
-    <div class="tab-panel" id="tab-rules">
-      <div id="history-panel">
-        <div style="display:flex;gap:8px;align-items:center">
-          <input id="rules-search" type="text" placeholder="Search rules..." oninput="filterRules()"/>
-          <button class="btn btn-sm" onclick="reloadRules()">RELOAD RULES</button>
-        </div>
-        <div id="history-table-wrap">
-          <table id="rules-table">
-            <thead><tr>
-              <th>RULE ID</th><th>NAME</th><th>CATEGORY</th><th>VER</th><th>DET. PATHS</th><th>EXP. PATHS</th><th>STATUS</th><th>ACTIONS</th>
-            </tr></thead>
-            <tbody id="rules-tbody"></tbody>
-          </table>
-        </div>
-        <div id="rule-detail-view" class="hidden" style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
-           <h4 id="rd-name" style="color:var(--green)"></h4>
-           <pre id="rd-yaml" style="font-size:11px;background:#050505;padding:12px;margin-top:8px;max-height:400px;overflow:auto"></pre>
-        </div>
-      </div>
-    </div>
-
-    <!-- CRYPTO TOOLS TAB -->
-    <div class="tab-panel" id="tab-crypto">
-      <div id="crypto-panel">
-        <div id="crypto-input-pane">
+        <div id="auth-error" class="hidden"></div>
+        <div id="auth-form-login">
           <div class="field">
-            <label>Cipher Type</label>
-            <select id="cr-type" onchange="onCrTypeChange()">
-              <option value="auto">AUTO-DETECT</option>
-              <option value="base64">Base64</option>
-              <option value="hex">Hex</option>
-              <option value="url">URL Encode</option>
-              <option value="caesar">Caesar / ROT</option>
-              <option value="xor">XOR</option>
-              <option value="rsa">RSA</option>
-              <option value="binary">Binary</option>
-              <option value="morse">Morse</option>
-            </select>
+            <label>USERNAME</label>
+            <input
+              id="auth-username"
+              type="text"
+              placeholder="operator"
+              autocomplete="username"
+              onkeydown="if (event.key === 'Enter') doLogin();"
+            />
           </div>
           <div class="field">
-            <label>Input</label>
-            <textarea id="cr-input" style="min-height:120px;font-size:11px" placeholder="Paste ciphertext / encoded data..."></textarea>
+            <label>PASSWORD</label>
+            <input
+              id="auth-password"
+              type="password"
+              placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
+              autocomplete="current-password"
+              onkeydown="if (event.key === 'Enter') doLogin();"
+            />
           </div>
-          <div id="cr-params-caesar" class="crypto-params hidden">
-            <div class="field" style="margin:0"><label>Shift (blank = try all)</label><input id="cr-shift" type="text" placeholder="13"/></div>
+          <button
+            class="btn btn-full"
+            id="login-submit-btn"
+            onclick="doLogin()"
+          >
+            <span id="login-btn-text">ACCESS SYSTEM</span>
+            <span id="login-btn-spinner" class="btn-spinner hidden"></span>
+          </button>
+          <div style="text-align: center; margin-top: 10px">
+            <a
+              href="#"
+              class="auth-note"
+              onclick="
+                showAuthTab('forgot');
+                return false;
+              "
+              style="text-decoration: underline"
+              >Forgot Password?</a
+            >
           </div>
-          <div id="cr-params-xor" class="crypto-params hidden">
-            <div class="field" style="margin:0"><label>Key (blank = brute force)</label><input id="cr-xor-key" type="text" placeholder="0x1f or mykey"/></div>
-          </div>
-          <div id="cr-params-rsa" class="crypto-params hidden">
-            <div class="rsa-fields">
-              <div class="field"><label>n</label><input id="cr-n" type="text"/></div>
-              <div class="field"><label>e</label><input id="cr-e" type="text" value="65537"/></div>
-              <div class="field"><label>c</label><input id="cr-c" type="text"/></div>
-              <div class="field"><label>d (opt)</label><input id="cr-d" type="text"/></div>
-              <div class="field"><label>p (opt)</label><input id="cr-p" type="text"/></div>
-              <div class="field"><label>q (opt)</label><input id="cr-q" type="text"/></div>
-            </div>
-          </div>
-          <button class="btn btn-full" onclick="cryptoSolve()">SOLVE</button>
         </div>
-        <div id="crypto-results-pane">
-          <div id="cr-flag-top" style="display:none" class="crypto-flag-found"></div>
-          <div id="cr-results-list"></div>
+        <div id="auth-form-register" class="hidden">
+          <div class="field">
+            <label>USERNAME</label>
+            <input
+              id="reg-username"
+              type="text"
+              placeholder="operator"
+              autocomplete="username"
+              onkeydown="if (event.key === 'Enter') doRegister();"
+            />
+          </div>
+          <div class="field">
+            <label>EMAIL</label>
+            <input
+              id="reg-email"
+              type="email"
+              placeholder="operator@system.local"
+              autocomplete="email"
+              onkeydown="if (event.key === 'Enter') doRegister();"
+            />
+          </div>
+          <div class="field">
+            <label>PASSWORD</label>
+            <input
+              id="reg-password"
+              type="password"
+              placeholder="min 6 characters"
+              autocomplete="new-password"
+              onkeydown="if (event.key === 'Enter') doRegister();"
+            />
+          </div>
+          <div class="field">
+            <label>CONFIRM PASSWORD</label>
+            <input
+              id="reg-password2"
+              type="password"
+              placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
+              autocomplete="new-password"
+              onkeydown="if (event.key === 'Enter') doRegister();"
+            />
+          </div>
+          <button
+            class="btn btn-full"
+            id="register-submit-btn"
+            onclick="doRegister()"
+          >
+            <span id="register-btn-text">CREATE ACCOUNT</span>
+            <span id="register-btn-spinner" class="btn-spinner hidden"></span>
+          </button>
+          <p class="auth-note">First account will receive admin privileges.</p>
+        </div>
+        <div id="auth-form-forgot" class="hidden">
+          <h4 style="text-align: center; margin-bottom: 10px">
+            RESET PASSWORD
+          </h4>
+          <div class="field">
+            <label>EMAIL</label>
+            <input
+              id="forgot-email"
+              type="email"
+              placeholder="operator@system.local"
+              onkeydown="if (event.key === 'Enter') doForgot();"
+            />
+          </div>
+          <button
+            class="btn btn-full"
+            id="forgot-submit-btn"
+            onclick="doForgot()"
+          >
+            <span id="forgot-btn-text">SEND RESET LINK</span>
+            <span id="forgot-btn-spinner" class="btn-spinner hidden"></span>
+          </button>
+          <div style="text-align: center; margin-top: 10px">
+            <a
+              href="#"
+              class="auth-note"
+              onclick="
+                showAuthTab('login');
+                return false;
+              "
+              style="text-decoration: underline"
+              >Back to Login</a
+            >
+          </div>
+        </div>
+        <div id="auth-form-reset" class="hidden">
+          <h4 style="text-align: center; margin-bottom: 10px">NEW PASSWORD</h4>
+          <div class="field">
+            <label>NEW PASSWORD</label>
+            <input
+              id="reset-password"
+              type="password"
+              placeholder="min 6 chars"
+              onkeydown="if (event.key === 'Enter') doReset();"
+            />
+          </div>
+          <button
+            class="btn btn-full"
+            id="reset-submit-btn"
+            onclick="doReset()"
+          >
+            <span id="reset-btn-text">UPDATE PASSWORD</span>
+            <span id="reset-btn-spinner" class="btn-spinner hidden"></span>
+          </button>
         </div>
       </div>
     </div>
 
-  </div><!-- /main-content -->
-</div><!-- /layout -->
+    <div id="app-root" class="hidden">
+      <div id="header">
+        <span id="logo">LATTICE MIND</span>
+        <span id="hdr-version">v0.1.0</span>
+        <span id="hdr-live"><span class="live-dot"></span>LIVE</span>
+        <span id="hdr-hitl-badge" onclick="switchTab('hitl')">HITL</span>
+        <span id="hdr-spacer"></span>
+        <span id="hdr-user"></span>
+        <span
+          id="hdr-dirscan-toggle"
+          title="Toggle directory scanning"
+          onclick="toggleDirScan()"
+        >
+          <span class="flag-dot flag-dot-off" id="dirscan-dot"></span>DIR SCAN
+        </span>
+        <span id="hdr-clock"></span>
+        <button
+          class="btn btn-sm"
+          id="hdr-change-pw"
+          onclick="showChangePasswordModal()"
+          title="Change Password"
+        >
+          CHANGE PW
+        </button>
+        <button
+          class="btn btn-sm"
+          id="hdr-toggle-token"
+          onclick="showTokenModal()"
+          title="Show API token for MCP setup"
+        >
+          API TOKEN
+        </button>
+        <button
+          class="btn btn-sm btn-danger"
+          id="hdr-logout"
+          onclick="doLogout()"
+          title="Sign out"
+        >
+          LOGOUT
+        </button>
+      </div>
 
-<!-- RUN DETAIL MODAL -->
-<div id="run-detail-modal" class="modal-overlay hidden">
-  <div class="modal-box">
-    <div class="modal-hdr">
-      <span id="modal-title" class="modal-title-text">RUN DETAIL</span>
-      <button class="btn btn-sm" onclick="closeRunModal()">&#x2715; CLOSE</button>
-    </div>
-    <div class="modal-tabs-bar">
-      <button class="modal-tab active" onclick="switchModalTab('overview')">OVERVIEW</button>
-      <button class="modal-tab" onclick="switchModalTab('steps')">STEPS</button>
-      <button class="modal-tab" onclick="switchModalTab('intel')">INTEL</button>
-    </div>
-    <div id="modal-tab-overview" class="modal-tab-panel">
-      <div id="modal-overview-content"></div>
-    </div>
-    <div id="modal-tab-steps" class="modal-tab-panel hidden">
-      <div id="modal-steps-content"></div>
-    </div>
-    <div id="modal-tab-intel" class="modal-tab-panel hidden">
-      <div id="modal-intel-content"></div>
-    </div>
-  </div>
-</div>
+      <div id="layout">
+        <!-- SIDEBAR -->
+        <div id="sidebar">
+          <div class="sb-section">
+            <div class="sb-label">New Challenge</div>
+            <div class="field">
+              <label>Name</label
+              ><input id="ch-name" type="text" value="Demo Challenge" />
+            </div>
+            <div class="field">
+              <label>Type</label>
+              <select id="ch-type" onchange="onTypeChange()">
+                <option value="web">Web</option>
+                <option value="pwn">Pwn</option>
+                <option value="crypto">Crypto</option>
+                <option value="forensics">Forensics</option>
+                <option value="steganography">Steganography</option>
+                <option value="reverse_engineering">Reverse Engineering</option>
+                <option value="osint">OSINT</option>
+                <option value="network">Network</option>
+                <option value="misc">Misc</option>
+              </select>
+            </div>
+            <div class="field" id="field-url">
+              <label>URL</label
+              ><input
+                id="ch-url"
+                type="text"
+                placeholder="http://target:8080"
+              />
+            </div>
+            <div class="field hidden" id="field-filepath">
+              <label>File Path</label
+              ><input
+                id="ch-filepath"
+                type="text"
+                placeholder="/path/to/binary"
+              />
+            </div>
+            <div class="field hidden" id="field-upload">
+              <label>Upload File</label><input id="ch-upload" type="file" />
+            </div>
+            <div class="field hidden" id="field-crypto-text">
+              <label>Ciphertext</label
+              ><textarea
+                id="ch-crypto-text"
+                placeholder="Paste ciphertext here..."
+              ></textarea>
+            </div>
+            <div class="field">
+              <label>Flag Format</label
+              ><input id="ch-flagfmt" type="text" value="flag{" />
+            </div>
+            <button
+              class="btn btn-full"
+              id="solve-btn"
+              onclick="submitChallenge()"
+            >
+              &#9654; SOLVE
+            </button>
+          </div>
+          <div class="sb-section">
+            <div class="sb-label">Recent Runs</div>
+            <div id="recent-runs"></div>
+          </div>
+        </div>
+        <div
+          id="sidebar-resizer"
+          class="resizer resizer-h"
+          title="Drag to resize sidebar"
+        ></div>
 
-<script src="/static/script.js"></script>
-</body>
+        <!-- MAIN CONTENT -->
+        <div id="main-content">
+          <div id="tabs-bar">
+            <button class="tab-btn active" onclick="switchTab('active')">
+              ACTIVE RUN
+            </button>
+            <button class="tab-btn" onclick="switchTab('history')">
+              HISTORY
+            </button>
+            <button
+              class="tab-btn"
+              id="tab-hitl-btn"
+              onclick="switchTab('hitl')"
+            >
+              HITL<span class="tab-badge" id="hitl-count" style="display: none"
+                >0</span
+              >
+            </button>
+            <button class="tab-btn" onclick="switchTab('rules')">RULES</button>
+            <button class="tab-btn" onclick="switchTab('crypto')">
+              CRYPTO TOOLS
+            </button>
+          </div>
+
+          <!-- ACTIVE RUN TAB -->
+          <div class="tab-panel active" id="tab-active">
+            <div id="run-statusbar">
+              <span id="run-status-badge" class="status-badge idle">IDLE</span>
+              <span id="run-id-display"></span>
+              <span id="run-target"></span>
+              <span id="flag-banner"
+                >&#10003; <span id="flag-banner-text"></span
+              ></span>
+            </div>
+            <div id="run-split">
+              <div id="tree-panel">
+                <div id="tree-header">DECISION TREE</div>
+                <div id="tree-svg-wrap">
+                  <svg id="tree-svg" width="600" height="400"></svg>
+                </div>
+              </div>
+              <div
+                id="tree-resizer"
+                class="resizer resizer-h"
+                title="Drag to resize panels"
+              ></div>
+              <div id="right-panel">
+                <div id="node-details-panel">
+                  <div class="nd-empty">Click a node to inspect it.</div>
+                </div>
+                <div
+                  id="intel-resizer"
+                  class="resizer resizer-v"
+                  title="Drag to resize intel panel"
+                ></div>
+                <div id="intel-panel">
+                  <div class="intel-section">
+                    <div class="intel-section-title">CONFIDENCE SCORES</div>
+                    <div id="confidence-list">
+                      <div class="nd-empty">No data yet.</div>
+                    </div>
+                  </div>
+                  <div class="intel-section">
+                    <div class="intel-section-title">INTEL</div>
+                    <div id="observations-content">
+                      <div class="nd-empty">No data yet.</div>
+                    </div>
+                  </div>
+                </div>
+                <div id="terminal-out"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- HISTORY TAB -->
+          <div class="tab-panel" id="tab-history">
+            <div id="history-panel">
+              <div style="display: flex; gap: 8px; align-items: center">
+                <input
+                  id="history-search"
+                  type="text"
+                  placeholder="Search runs..."
+                  oninput="filterHistory()"
+                />
+                <button class="btn btn-sm" onclick="loadHistory()">
+                  REFRESH
+                </button>
+              </div>
+              <div id="history-table-wrap">
+                <table id="history-table">
+                  <thead>
+                    <tr>
+                      <th>RUN ID</th>
+                      <th>TYPE</th>
+                      <th>TARGET</th>
+                      <th>STATUS</th>
+                      <th>FLAG</th>
+                      <th>STARTED</th>
+                      <th>DURATION</th>
+                      <th>ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="history-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- HITL TAB -->
+          <div class="tab-panel" id="tab-hitl">
+            <div id="hitl-panel">
+              <div class="hitl-intro">
+                Review risky crawl actions here. Safe submissions can be approved
+                directly; ambiguous ones stay in the queue until you decide.
+              </div>
+              <div id="hitl-questions">
+                <div class="hitl-empty">No pending questions.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RULES TAB -->
+          <div class="tab-panel" id="tab-rules">
+            <div id="history-panel">
+              <div style="display: flex; gap: 8px; align-items: center">
+                <input
+                  id="rules-search"
+                  type="text"
+                  placeholder="Search rules..."
+                  oninput="filterRules()"
+                />
+                <button class="btn btn-sm" onclick="reloadRules()">
+                  RELOAD RULES
+                </button>
+              </div>
+              <div id="history-table-wrap">
+                <table id="rules-table">
+                  <thead>
+                    <tr>
+                      <th>RULE ID</th>
+                      <th>NAME</th>
+                      <th>CATEGORY</th>
+                      <th>VER</th>
+                      <th>DET. PATHS</th>
+                      <th>EXP. PATHS</th>
+                      <th>STATUS</th>
+                      <th>ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rules-tbody"></tbody>
+                </table>
+              </div>
+              <div
+                id="rule-detail-view"
+                class="hidden"
+                style="
+                  margin-top: 16px;
+                  border-top: 1px solid var(--border);
+                  padding-top: 16px;
+                "
+              >
+                <h4 id="rd-name" style="color: var(--green)"></h4>
+                <pre
+                  id="rd-yaml"
+                  style="
+                    font-size: 11px;
+                    background: #050505;
+                    padding: 12px;
+                    margin-top: 8px;
+                    max-height: 400px;
+                    overflow: auto;
+                  "
+                ></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- CRYPTO TOOLS TAB -->
+          <div class="tab-panel" id="tab-crypto">
+            <div id="crypto-panel">
+              <div id="crypto-input-pane">
+                <div class="field">
+                  <label>Cipher Type</label>
+                  <select id="cr-type" onchange="onCrTypeChange()">
+                    <option value="auto">AUTO-DETECT</option>
+                    <option value="base64">Base64</option>
+                    <option value="hex">Hex</option>
+                    <option value="url">URL Encode</option>
+                    <option value="caesar">Caesar / ROT</option>
+                    <option value="xor">XOR</option>
+                    <option value="rsa">RSA</option>
+                    <option value="binary">Binary</option>
+                    <option value="morse">Morse</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Input</label>
+                  <textarea
+                    id="cr-input"
+                    style="min-height: 120px; font-size: 11px"
+                    placeholder="Paste ciphertext / encoded data..."
+                  ></textarea>
+                </div>
+                <div id="cr-params-caesar" class="crypto-params hidden">
+                  <div class="field" style="margin: 0">
+                    <label>Shift (blank = try all)</label
+                    ><input id="cr-shift" type="text" placeholder="13" />
+                  </div>
+                </div>
+                <div id="cr-params-xor" class="crypto-params hidden">
+                  <div class="field" style="margin: 0">
+                    <label>Key (blank = brute force)</label
+                    ><input
+                      id="cr-xor-key"
+                      type="text"
+                      placeholder="0x1f or mykey"
+                    />
+                  </div>
+                </div>
+                <div id="cr-params-rsa" class="crypto-params hidden">
+                  <div class="rsa-fields">
+                    <div class="field">
+                      <label>n</label><input id="cr-n" type="text" />
+                    </div>
+                    <div class="field">
+                      <label>e</label
+                      ><input id="cr-e" type="text" value="65537" />
+                    </div>
+                    <div class="field">
+                      <label>c</label><input id="cr-c" type="text" />
+                    </div>
+                    <div class="field">
+                      <label>d (opt)</label><input id="cr-d" type="text" />
+                    </div>
+                    <div class="field">
+                      <label>p (opt)</label><input id="cr-p" type="text" />
+                    </div>
+                    <div class="field">
+                      <label>q (opt)</label><input id="cr-q" type="text" />
+                    </div>
+                  </div>
+                </div>
+                <button class="btn btn-full" onclick="cryptoSolve()">
+                  SOLVE
+                </button>
+              </div>
+              <div id="crypto-results-pane">
+                <div
+                  id="cr-flag-top"
+                  style="display: none"
+                  class="crypto-flag-found"
+                ></div>
+                <div id="cr-results-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /main-content -->
+      </div>
+      <!-- /layout -->
+
+      <!-- CHANGE PASSWORD MODAL -->
+      <div id="change-pw-modal" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width: 400px; height: auto">
+          <div class="modal-hdr">
+            <span class="modal-title-text">CHANGE PASSWORD</span>
+            <button
+              class="btn btn-sm"
+              id="cpw-close-btn"
+              onclick="closeChangePasswordModal()"
+            >
+              &#x2715; CLOSE
+            </button>
+          </div>
+          <div style="padding: 16px">
+            <div
+              id="change-pw-error"
+              class="hidden"
+              style="color: var(--red); margin-bottom: 12px; text-align: center"
+            ></div>
+            <div
+              id="change-pw-success"
+              class="hidden"
+              style="
+                color: var(--green);
+                margin-bottom: 12px;
+                text-align: center;
+              "
+            ></div>
+            <div class="field">
+              <label for="cpw-current">CURRENT PASSWORD</label>
+              <input id="cpw-current" type="password" />
+            </div>
+            <div class="field">
+              <label for="cpw-new">NEW PASSWORD</label>
+              <input id="cpw-new" type="password" />
+            </div>
+            <div class="field">
+              <label for="cpw-confirm">CONFIRM NEW PASSWORD</label>
+              <input id="cpw-confirm" type="password" />
+            </div>
+            <button
+              class="btn btn-full"
+              id="cpw-submit-btn"
+              onclick="doChangePassword()"
+            >
+              <span id="cpw-btn-text">UPDATE PASSWORD</span>
+              <span id="cpw-btn-spinner" class="btn-spinner hidden"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- API TOKEN MODAL -->
+      <div id="token-modal" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width: 520px; height: auto">
+          <div class="modal-hdr">
+            <span class="modal-title-text">API TOKEN</span>
+            <button class="btn btn-sm" onclick="closeTokenModal()">
+              &#x2715; CLOSE
+            </button>
+          </div>
+          <div style="padding: 16px">
+            <div style="margin-bottom: 10px; color: var(--fg-dim); font-size: 10px; letter-spacing: 1px">
+              USE THIS TOKEN TO CONNECT AI AGENTS VIA MCP
+            </div>
+            <textarea
+              id="token-modal-value"
+              readonly
+              onclick="this.select()"
+              rows="4"
+              style="
+                width: 100%;
+                box-sizing: border-box;
+                resize: none;
+                background: var(--panel-deep);
+                color: var(--amber);
+                border: 1px solid var(--border-hi);
+                border-radius: var(--radius);
+                font-family: var(--font-mono);
+                font-size: 10px;
+                padding: 8px;
+                outline: none;
+                word-break: break-all;
+              "
+            ></textarea>
+            <div style="margin-top: 12px; font-size: 10px; color: var(--fg-dim); letter-spacing: 1px">
+              MCP CONFIG SNIPPET
+            </div>
+            <pre
+              id="token-modal-config"
+              onclick="this.ownerDocument.getSelection().selectAllChildren(this)"
+              style="
+                margin-top: 6px;
+                background: var(--panel-deep);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 8px;
+                font-size: 9px;
+                color: var(--cyan);
+                font-family: var(--font-mono);
+                overflow-x: auto;
+                white-space: pre;
+                cursor: pointer;
+              "
+            ></pre>
+            <div style="margin-top: 12px; text-align: right">
+              <button class="btn btn-sm" onclick="closeTokenModal()">
+                &#x2715; CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RUN DETAIL MODAL -->
+      <div id="run-detail-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-hdr">
+            <span id="modal-title" class="modal-title-text">RUN DETAIL</span>
+            <button class="btn btn-sm" onclick="closeRunModal()">
+              &#x2715; CLOSE
+            </button>
+          </div>
+          <div class="modal-tabs-bar">
+            <button
+              class="modal-tab active"
+              onclick="switchModalTab('overview')"
+            >
+              OVERVIEW
+            </button>
+            <button class="modal-tab" onclick="switchModalTab('steps')">
+              STEPS
+            </button>
+            <button class="modal-tab" onclick="switchModalTab('intel')">
+              INTEL
+            </button>
+          </div>
+          <div id="modal-tab-overview" class="modal-tab-panel">
+            <div id="modal-overview-content"></div>
+          </div>
+          <div id="modal-tab-steps" class="modal-tab-panel hidden">
+            <div id="modal-steps-content"></div>
+          </div>
+          <div id="modal-tab-intel" class="modal-tab-panel hidden">
+            <div id="modal-intel-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <script src="/static/script.js?v=2"></script>
+    </div>
+    <!-- /app-root -->
+  </body>
 </html>

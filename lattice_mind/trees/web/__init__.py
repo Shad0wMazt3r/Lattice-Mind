@@ -48,6 +48,7 @@ from .additional import (
     SSRFDetectURLParamNode,
     SSRFDetectRequestNode,
 )
+from .client_decode import WebClientDecodeNode
 
 __all__ = [
     # SQLi
@@ -80,4 +81,6 @@ __all__ = [
     # SSRF
     "SSRFDetectURLParamNode",
     "SSRFDetectRequestNode",
+    # Client-side decode
+    "WebClientDecodeNode",
 ]

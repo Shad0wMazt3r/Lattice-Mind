@@ -2,9 +2,14 @@
 
 Demonstrates autonomous vulnerability detection and exploitation
 across all challenge categories using integrated decision trees.
+
+NOTE: This implementation uses separate Orchestrator (Python trees) and
+TreeExecutor (YAML trees). For new code, consider using UnifiedTreeOrchestrator
+from lattice_mind.core.unified_orchestrator which provides a single interface
+for both Python and YAML trees with shared SignalBus and ConfidencePool.
 """
 import logging
-from typing import Optional, Dict, Any
+from typing import List, Optional
 
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
 from lattice_mind.core.orchestrator import Orchestrator
@@ -13,19 +18,16 @@ from lattice_mind.core.flag_recognizer import get_flag_recognizer
 from lattice_mind.core.tree_loader import get_tree_registry
 from lattice_mind.core.confidence import ConfidencePool
 from lattice_mind.core.executor import TreeExecutor
+from lattice_mind.web.strategy_memory import (
+    endpoint_pattern_from_url,
+    host_fingerprint_from_url,
+    record_strategy_outcomes,
+)
 
 # ... (imports)
 
 from lattice_mind.trees.asset.classify import AssetClassifyNetworkNode
 from lattice_mind.trees.web.recon import WebReconProbeNode
-from lattice_mind.trees.web.sqli import SQLiDetectReflectionNode
-from lattice_mind.trees.web.lfi import LFIDetectTraversalNode
-from lattice_mind.trees.web.xss import XSSDetectReflectedNode
-from lattice_mind.trees.web.cmd import CMDDetectOutputNode
-from lattice_mind.trees.web.additional import AuthBypassDetectNode
-from lattice_mind.trees.pwn.detect import PwnDetectMetadataNode
-from lattice_mind.trees.crypto.detect import CryptoDetectEncodingNode
-from lattice_mind.trees.forensics.detect import ForensicsDetectArtifactNode
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +46,19 @@ class MVPSolver:
         self.confidence_pool = ConfidencePool()
         self.executor = TreeExecutor(self.confidence_pool)
 
-    def solve(self, challenge: ChallengeDescriptor) -> Optional[str]:
+    def solve(
+        self,
+        challenge: ChallengeDescriptor,
+        *,
+        selected_tree_ids: Optional[List[str]] = None,
+        run_id: Optional[str] = None,
+    ) -> Optional[str]:
         """Solve a challenge autonomously.
         
         Steps:
         1. Classify asset type (web, binary, crypto, forensics)
         2. Evaluate and run declarative YAML trees
-        3. Fallback to legacy Python trees if needed
-        4. Monitor for flag detection throughout
+        3. Monitor for flag detection throughout
         """
         logger.info(f"\n{'='*70}")
         logger.info(f"[MVP] Starting autonomous challenge solve")
@@ -60,6 +67,10 @@ class MVPSolver:
         # Set challenge in orchestrator and executor
         self.orchestrator.set_challenge(challenge)
         self.confidence_pool.clear()
+        # Ensure no stale HITL hints/overrides leak across runs.
+        from lattice_mind.core.human_loop import get_human_loop_manager
+
+        get_human_loop_manager().clear()
         
         # Step 1: Asset classification
         logger.info("\n[Step 1] Classifying asset type...")
@@ -95,6 +106,22 @@ class MVPSolver:
         # Build context for expression evaluation
         context = self.orchestrator.execution_context
         obs = context["observations"]
+        if run_id:
+            context["run_id"] = run_id
+        # Merge MCP-managed session cookies (set via API) for YAML / executor probes
+        if run_id:
+            try:
+                from lattice_mind.core.session_epoch import get_session_epoch_manager
+
+                sess = get_session_epoch_manager().read(run_id)
+                if sess and sess.cookies:
+                    base = obs.get("session_cookies")
+                    base = dict(base) if isinstance(base, dict) else {}
+                    merged = dict(base)
+                    merged.update(sess.cookies)
+                    obs["session_cookies"] = merged
+            except Exception as e:
+                raise RuntimeError(f"session cookie merge failed: {e}") from e
 
         # Translate legacy recon keys to YAML-expected names.
         # WebReconProbeNode writes "technologies" (dict) and "directories" (list of dicts);
@@ -131,6 +158,10 @@ class MVPSolver:
         obs.setdefault("tech_stack", [])
         obs.setdefault("found_paths", [])
         obs.setdefault("params", [])
+        obs.setdefault("request_candidates", [])
+        obs.setdefault("form_reviews", [])
+        obs.setdefault("crawl_graph", [])
+        obs.setdefault("crawl_stats", {})
 
         # Mirror to top-level context so ExpressionEvaluator can resolve
         # "context.found_paths" (seeds use top-level keys, not nested observations).
@@ -141,15 +172,52 @@ class MVPSolver:
         # Find applicable trees
         candidate_trees = []
         for tree in self.registry.list_trees():
-            if not tree.enabled: continue
-            
+            if not tree.enabled:
+                continue
+
             # Check applies_when
             from lattice_mind.core.expressions import ExpressionEvaluator
+
             evaluator = ExpressionEvaluator(context)
             if all(evaluator.evaluate(cond) for cond in tree.applies_when):
                 # Evaluate seeds to get initial confidence
                 self.executor.evaluate_seeds(tree, context)
                 candidate_trees.append(tree)
+
+        execution_plan: dict = {
+            "mode": "full",
+            "ordered_tree_ids": [t.id for t in candidate_trees],
+            "skipped_not_applicable": [],
+            "dependency_warnings": [],
+        }
+
+        if selected_tree_ids is not None:
+            sel_set = set(selected_tree_ids)
+            id_to_candidate = {t.id: t for t in candidate_trees}
+            skipped_na = [tid for tid in selected_tree_ids if tid not in id_to_candidate]
+            from lattice_mind.core.tree_catalog import validate_tree_dependencies
+
+            dep_graph = {t.id: t.depends_on for t in self.registry.list_trees()}
+            dep_res = validate_tree_dependencies(
+                [tid for tid in selected_tree_ids if tid in id_to_candidate],
+                dep_graph,
+            )
+            ordered = [tid for tid in dep_res.ordered_ids if tid in id_to_candidate]
+            candidate_trees = [id_to_candidate[tid] for tid in ordered if tid in id_to_candidate]
+            warnings = [f"DEPENDENCY_MISSING:{a}_needs_{b}" for a, b in dep_res.missing_dependencies]
+            if dep_res.cycle:
+                warnings.append("DEPENDENCY_CYCLE")
+            execution_plan = {
+                "mode": "selected",
+                "ordered_tree_ids": [t.id for t in candidate_trees],
+                "skipped_not_applicable": skipped_na,
+                "dependency_warnings": warnings,
+            }
+            logger.info(
+                "[MVP] Selected-tree mode: running %s trees (skipped_not_applicable=%s)",
+                len(candidate_trees),
+                skipped_na,
+            )
         
         # Sort candidate trees by initial confidence score (highest first)
         candidate_trees.sort(
@@ -157,47 +225,90 @@ class MVPSolver:
             reverse=True
         )
 
-        logger.info(f"[MVP] Found {len(candidate_trees)} applicable declarative trees")
+        logger.info(f"[MVP] Found {len(candidate_trees)} declarative trees to execute")
         for t in candidate_trees:
             score = self.confidence_pool.get_tree_confidence(t.id).score
             logger.info(f"  - {t.id} (initial confidence: {score:.2f})")
         
-        # Execute each tree
+        # Execute trees by repeatedly picking the highest-confidence unexecuted tree
+        # (scores may change after each run, e.g. detection boosts on the active tree).
+        id_to_tree = {t.id: t for t in candidate_trees}
+        remaining = set(id_to_tree.keys())
+        tie_rank = {t.id: i for i, t in enumerate(candidate_trees)}
+
         import asyncio
-        COMMITMENT_THRESHOLD = 0.8
-        for tree in candidate_trees:
+
+        async def _normalize_exec_result(v):
+            if asyncio.iscoroutine(v):
+                return await v
+            return v
+
+        def _next_tree_id() -> str:
+            return max(
+                remaining,
+                key=lambda tid: (
+                    self.confidence_pool.get_tree_confidence(tid).score,
+                    -tie_rank[tid],
+                ),
+            )
+
+        while remaining:
+            tid = _next_tree_id()
+            tree = id_to_tree[tid]
+            remaining.remove(tid)
             current_score = self.confidence_pool.get_tree_confidence(tree.id).score
             logger.info(f"\n[MVP] Executing tree: {tree.id} (confidence: {current_score:.2f})")
-            
-            # We need to bridge sync solve() with async executor
-            flag = asyncio.run(self.executor.execute_tree(tree, context))
-            if flag:
-                return flag
-            
-            # Commitment logic: if another tree already reached high confidence
-            # during its detection phase, we might want to prioritize it or
-            # re-evaluate. For now, if any tree has score > threshold, we
-            # can be "decisive".
-            max_other_score = max([self.confidence_pool.get_tree_confidence(t.id).score 
-                                  for t in candidate_trees if t.id != tree.id] + [0])
-            
-            if max_other_score >= COMMITMENT_THRESHOLD:
-                logger.info(f"[MVP] High confidence ({max_other_score:.2f}) reached for another tree, prioritizing...")
-                # We could re-sort here, but for now we'll just continue and the 
-                # next iteration will pick the highest one anyway because we 
-                # should re-sort or just pick the max.
-                
-            # If we just finished a tree and it failed, but another tree is now 
-            # very likely, we'll continue. 
 
-        # Step 3: Fallback to Legacy Trees
-        logger.info("\n[Step 3] Running legacy detection trees...")
-        flag = self._run_detection_tree(asset_type, challenge)
-        
-        if flag:
-            return flag
-        
+            raw_result = self.executor.execute_tree(tree, context)
+            flag = asyncio.run(_normalize_exec_result(raw_result))
+            if flag:
+                self._record_strategy_memory(context, challenge, flag)
+                context["execution_plan"] = execution_plan
+                return flag
+
+        self._record_strategy_memory(
+            context,
+            challenge,
+            self.orchestrator.execution_context.get("flag_found"),
+        )
+        context["execution_plan"] = execution_plan
         return self.orchestrator.execution_context.get("flag_found")
+
+    def _record_strategy_memory(
+        self,
+        context: dict,
+        challenge: ChallengeDescriptor,
+        found_flag: Optional[str],
+    ) -> None:
+        obs = context.get("observations", {})
+        outcomes_raw = obs.get("strategy_outcomes") or []
+        outcomes = []
+        chall_type = challenge.type.value if challenge and challenge.type else "web"
+        for row in outcomes_raw:
+            if not isinstance(row, dict):
+                continue
+            mk = row.get("mutation_kind")
+            if not mk or mk == "baseline":
+                continue
+            url = str(row.get("request_url") or challenge.url or "")
+            outcomes.append(
+                {
+                    "challenge_type": chall_type,
+                    "host_fingerprint": str(row.get("host_fingerprint") or host_fingerprint_from_url(url)),
+                    "endpoint_pattern": str(row.get("endpoint_pattern") or endpoint_pattern_from_url(url)),
+                    "mutation_kind": str(mk),
+                    "meaningful_delta": bool(row.get("meaningful_delta")),
+                    "strong_candidate": bool(row.get("strong_candidate")),
+                    "led_to_flag": bool(found_flag),
+                    "notes": str(row.get("notes") or "")[:200],
+                }
+            )
+        if outcomes:
+            try:
+                count = record_strategy_outcomes(outcomes)
+                obs["strategy_memory_updates"] = count
+            except Exception as e:
+                logger.warning("[MVP] strategy memory write failed: %s", e)
     
     def _classify_asset(self, challenge: ChallengeDescriptor) -> Optional[ChallengeType]:
         """Run asset classification tree (D-0)."""
@@ -214,186 +325,6 @@ class MVPSolver:
             logger.error(f"[asset] Classification failed: {str(e)}")
             return None
     
-    def _run_detection_tree(self, asset_type: ChallengeType, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Route to specialized detection tree based on asset type."""
-        
-        try:
-            if asset_type == ChallengeType.WEB:
-                logger.info("[detection] Running WEB vulnerability detection...")
-                return self._detect_web_vulns(challenge)
-            
-            elif asset_type == ChallengeType.PWN:
-                logger.info("[detection] Running BINARY exploitation detection...")
-                return self._detect_binary_vulns(challenge)
-            
-            elif asset_type == ChallengeType.CRYPTO:
-                logger.info("[detection] Running CRYPTO detection...")
-                return self._detect_crypto_vulns(challenge)
-            
-            elif asset_type == ChallengeType.FORENSICS:
-                logger.info("[detection] Running FORENSICS detection...")
-                return self._detect_forensics(challenge)
-            
-            else:
-                logger.warning(f"[detection] No tree for asset type: {asset_type}")
-                return None
-        
-        except Exception as e:
-            logger.error(f"[detection] Tree execution failed: {str(e)}")
-            return None
-    
-    def _detect_web_vulns(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run web vulnerability detection, then dispatch exploitation trees."""
-        try:
-            # Phase 1: Recon (probe + dir scan + vuln analysis)
-            # Skip if the Step 2 pre-pass already populated observations.
-            observations = self.orchestrator.execution_context.get("observations", {})
-            if not observations.get("directories"):
-                root_node = WebReconProbeNode()
-                flag = self.orchestrator.run_tree(root_node)
-                if flag:
-                    return flag
-                observations = self.orchestrator.execution_context.get("observations", {})
-
-            # Phase 2: Read candidates written by WebReconAnalyzeVulnsNode
-            vuln_candidates = observations.get("vuln_candidates", {})
-
-            if not vuln_candidates:
-                logger.warning("[web] No vulnerability candidates identified — stopping")
-                return self.orchestrator.execution_context.get("flag_found")
-
-            # Apply initial confidence boosts to the pool for legacy types
-            for vuln_type in vuln_candidates:
-                # Map legacy names to potential YAML tree IDs if they exist, 
-                # or just use them to track confidence in the pool.
-                self.confidence_pool.apply_boost(vuln_type, 0.4, "recon_analysis", phase="legacy_detection")
-
-            # Sort legacy candidates by their current confidence in the pool
-            sorted_candidates = sorted(
-                vuln_candidates.items(),
-                key=lambda x: self.confidence_pool.get_tree_confidence(x[0]).score,
-                reverse=True
-            )
-
-            logger.info(f"[web] Phase 2 — dispatching sorted trees: {[c[0] for c in sorted_candidates]}")
-
-            # Phase 3: Dispatch exploitation trees per candidate
-            for vuln_type, evidence in sorted_candidates:
-                flag = self._dispatch_web_exploit(vuln_type, evidence, challenge)
-                if flag:
-                    return flag
-
-            return self.orchestrator.execution_context.get("flag_found")
-
-        except Exception as e:
-            logger.error(f"[web] Detection failed: {str(e)}")
-            return None
-
-    def _dispatch_web_exploit(
-        self, vuln_type: str, evidence: list, challenge: ChallengeDescriptor
-    ) -> Optional[str]:
-        """Run the exploitation tree for a single vuln type."""
-        ctx = self.orchestrator.execution_context
-        logger.info(f"[web] Running {vuln_type} tree (evidence={evidence})")
-
-        # Pin all exploitation trees as branches of the analysis node in the UI tree
-        self.orchestrator.set_branch_parent("web_recon_analyze_vulns")
-
-        try:
-            if vuln_type == "auth_bypass":
-                return self.orchestrator.run_tree(AuthBypassDetectNode())
-
-            if vuln_type == "sql_injection":
-                # evidence entries are either "parameter" (generic) or param names
-                params = [e for e in evidence if e != "parameter"] or ["id", "page", "query"]
-                for param in params[:3]:
-                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
-                    flag = self.orchestrator.run_tree(SQLiDetectReflectionNode())
-                    if flag:
-                        return flag
-                return None
-
-            if vuln_type == "lfi":
-                for entry in evidence[:3]:
-                    if entry == "parameter":
-                        test_params = ["file", "path", "include", "page"]
-                    else:
-                        # entry is a directory path containing upload/file
-                        test_params = ["file"]
-                        challenge_url_orig = challenge.url
-                        challenge.url = f"{challenge.url.rstrip('/')}/{entry}"
-                    for param in test_params:
-                        ctx["target_param"] = {"name": param, "endpoint": challenge.url}
-                        flag = self.orchestrator.run_tree(LFIDetectTraversalNode())
-                        if flag:
-                            return flag
-                    if entry != "parameter":
-                        challenge.url = challenge_url_orig
-                return None
-
-            if vuln_type == "xss":
-                obs = ctx.get("observations", {})
-                params = list(obs.get("potential_params", [])) or ["search", "q", "query", "name"]
-                for param in params[:3]:
-                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
-                    flag = self.orchestrator.run_tree(XSSDetectReflectedNode())
-                    if flag:
-                        return flag
-                return None
-
-            if vuln_type == "command_injection":
-                for param in evidence[:3]:
-                    if param == "parameter":
-                        continue
-                    ctx["target_param"] = {"name": param, "endpoint": challenge.url}
-                    flag = self.orchestrator.run_tree(CMDDetectOutputNode())
-                    if flag:
-                        return flag
-                return None
-
-        except Exception as e:
-            logger.error(f"[web] {vuln_type} dispatch error: {str(e)}")
-
-        return None
-    
-    def _detect_binary_vulns(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run binary exploitation detection (P-Detect)."""
-        try:
-            # Use PwnDetectMetadataNode as entry point to binary detection tree
-            root_node = PwnDetectMetadataNode()
-            flag = self.orchestrator.run_tree(root_node)
-            
-            return flag or self.orchestrator.execution_context.get("flag_found")
-        
-        except Exception as e:
-            logger.error(f"[pwn] Detection failed: {str(e)}")
-            return None
-    
-    def _detect_crypto_vulns(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run cryptography detection (C-Detect)."""
-        try:
-            # Use CryptoDetectEncodingNode as entry point to crypto detection tree
-            root_node = CryptoDetectEncodingNode()
-            flag = self.orchestrator.run_tree(root_node)
-            
-            return flag or self.orchestrator.execution_context.get("flag_found")
-        
-        except Exception as e:
-            logger.error(f"[crypto] Detection failed: {str(e)}")
-            return None
-    
-    def _detect_forensics(self, challenge: ChallengeDescriptor) -> Optional[str]:
-        """Run forensics/steganography detection (F-Detect)."""
-        try:
-            # Use ForensicsDetectArtifactNode as entry point to forensics detection tree
-            root_node = ForensicsDetectArtifactNode()
-            flag = self.orchestrator.run_tree(root_node)
-            
-            return flag or self.orchestrator.execution_context.get("flag_found")
-        
-        except Exception as e:
-            logger.error(f"[forensics] Detection failed: {str(e)}")
-            return None
 
 
 def main():
@@ -408,38 +339,33 @@ def main():
     
     # Example 1: Web challenge
     web_challenge = ChallengeDescriptor(
-        id="ctf_001",
         name="SQL Injection Challenge",
         type=ChallengeType.WEB,
         url="http://vulnerable-app.com/search",
-        description="Find the flag by exploiting SQL injection"
+        metadata={"description": "Find the flag by exploiting SQL injection"},
     )
     
     # Example 2: Binary challenge
     binary_challenge = ChallengeDescriptor(
-        id="ctf_002",
         name="Buffer Overflow Challenge",
         type=ChallengeType.PWN,
         file_path="/tmp/pwn_binary",
-        description="Exploit stack overflow to leak flag"
+        metadata={"description": "Exploit stack overflow to leak flag"},
     )
     
     # Example 3: Crypto challenge
     crypto_challenge = ChallengeDescriptor(
-        id="ctf_003",
         name="Cipher Challenge",
         type=ChallengeType.CRYPTO,
         metadata={"content": "HELLO_FLAG_HERE_ENCRYPTED"},
-        description="Decrypt the message"
     )
     
     # Example 4: Forensics challenge
     forensics_challenge = ChallengeDescriptor(
-        id="ctf_004",
         name="Steganography Challenge",
         type=ChallengeType.FORENSICS,
         file_path="/tmp/image.png",
-        description="Extract hidden flag from image"
+        metadata={"description": "Extract hidden flag from image"},
     )
     
     # Run MVP solver

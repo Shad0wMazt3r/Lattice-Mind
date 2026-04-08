@@ -978,6 +978,17 @@ a {
   flex: 1
 }
 
+.hitl-intro {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .02), rgba(255, 255, 255, 0));
+}
+
 .hitl-q {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1003,6 +1014,39 @@ a {
   line-height: 1.5
 }
 
+.hitl-q-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.hitl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-hi);
+  background: var(--panel-alt);
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.hitl-q-list {
+  margin: 0 0 10px;
+  padding-left: 16px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.hitl-q-list li {
+  margin-bottom: 3px;
+}
+
 .hitl-q-input {
   display: flex;
   gap: 6px;
@@ -1024,6 +1068,17 @@ a {
 
 .hitl-q-input input:focus {
   border-color: var(--amber)
+}
+
+.hitl-q-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.hitl-q-actions .btn {
+  min-width: 90px;
 }
 
 .hitl-empty {
@@ -1342,4 +1397,404 @@ a {
 .modal-step-data .nd-val {
   white-space: pre-wrap;
   word-break: break-all
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   APP ROOT (hidden until auth confirmed)
+═══════════════════════════════════════════════════════════════ */
+#app-root {
+  display: contents
+}
+
+#app-root.hidden {
+  display: none
+}
+
+#app-root.fade-in {
+  animation: appFadeIn .4s ease both
+}
+
+@keyframes appFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BOOT SCREEN
+═══════════════════════════════════════════════════════════════ */
+#boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity .5s ease;
+}
+
+#boot-screen.fade-out {
+  opacity: 0;
+  pointer-events: none
+}
+
+#boot-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: min(480px, 90vw);
+}
+
+#boot-logo-text {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  text-shadow: 0 0 30px rgba(0, 200, 212, .35);
+  margin-bottom: 6px;
+}
+
+#boot-version {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  margin-bottom: 28px;
+}
+
+#boot-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 120px
+}
+
+.boot-line {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-mid);
+  opacity: 0;
+  transform: translateX(-8px);
+  animation: bootLineIn .25s ease forwards;
+}
+
+.boot-line .boot-prefix {
+  color: var(--cyan-dim)
+}
+
+.boot-line.ok .boot-status {
+  color: var(--teal)
+}
+
+.boot-line.warn .boot-status {
+  color: var(--amber)
+}
+
+@keyframes bootLineIn {
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+#boot-cursor {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--cyan);
+  margin-top: 10px;
+  animation: cursorBlink .8s step-end infinite;
+}
+
+@keyframes cursorBlink {
+
+  0%,
+  100% {
+    opacity: 1
+  }
+
+  50% {
+    opacity: 0
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN OVERLAY
+═══════════════════════════════════════════════════════════════ */
+#login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+#login-overlay.hidden {
+  display: none
+}
+
+#login-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: .18;
+}
+
+#login-card {
+  position: relative;
+  z-index: 1;
+  width: min(400px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  padding: 36px 32px 28px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, .7), 0 0 0 1px rgba(0, 200, 212, .06);
+  animation: cardIn .4s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(.97)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+#login-card-logo {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  text-shadow: 0 0 20px rgba(0, 200, 212, .3);
+  margin-bottom: 4px;
+}
+
+#login-card-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 28px;
+  font-family: var(--font-mono);
+}
+
+#auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.auth-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 8px 16px 8px 0;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+
+.auth-tab:hover {
+  color: var(--text)
+}
+
+.auth-tab.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan)
+}
+
+#auth-error {
+  background: rgba(217, 64, 64, .08);
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  color: var(--red);
+  font-size: 11px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  animation: errorShake .3s ease;
+}
+
+@keyframes errorShake {
+
+  0%,
+  100% {
+    transform: none
+  }
+
+  25% {
+    transform: translateX(-4px)
+  }
+
+  75% {
+    transform: translateX(4px)
+  }
+}
+
+#auth-error.hidden {
+  display: none
+}
+
+.auth-note {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 12px;
+  letter-spacing: .5px;
+}
+
+/* spinner in buttons */
+.btn-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 0, 0, .2);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg)
+  }
+}
+
+/* user chip in header */
+#hdr-user {
+  font-size: 10px;
+  color: var(--text-mid);
+  font-family: var(--font-mono);
+  letter-spacing: .5px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-alt);
+}
+
+#hdr-logout {
+  margin-left: 4px
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MICRO-ANIMATIONS
+═══════════════════════════════════════════════════════════════ */
+/* tab panel fade transition */
+.tab-panel.active {
+  animation: panelFadeIn .18s ease both
+}
+
+@keyframes panelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+/* run items stagger in */
+.run-item {
+  animation: itemSlideIn .2s ease both
+}
+
+@keyframes itemSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+/* confidence bars stagger */
+.conf-row {
+  animation: rowFadeIn .25s ease both
+}
+
+@keyframes rowFadeIn {
+  from {
+    opacity: 0
+  }
+
+  to {
+    opacity: 1
+  }
+}
+
+/* node details slide in */
+#node-details-panel {
+  transition: opacity .15s ease
+}
+
+/* solve button running pulse */
+#solve-btn.running {
+  background: rgba(240, 165, 0, .12);
+  border-color: var(--amber);
+  color: var(--amber);
+  animation: solvePulse 1.4s ease-in-out infinite;
+}
+
+@keyframes solvePulse {
+
+  0%,
+  100% {
+    box-shadow: none
+  }
+
+  50% {
+    box-shadow: 0 0 0 3px rgba(240, 165, 0, .15)
+  }
+}
+
+/* history table row fade */
+#history-tbody tr {
+  animation: rowFadeIn .2s ease both
+}
+
+/* modal entrance */
+.modal-box {
+  animation: modalIn .2s cubic-bezier(.22, 1, .36, 1) both
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(.96)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
 }

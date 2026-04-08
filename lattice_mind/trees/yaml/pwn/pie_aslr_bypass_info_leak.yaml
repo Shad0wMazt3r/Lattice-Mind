@@ -1,0 +1,119 @@
+id: pwn_pie_aslr_bypass_info_leak
+name: PIE/ASLR Bypass via Info Leak
+category: pwn
+version: "1.0"
+author: system
+description: >
+  Bypasses Position Independent Executable (PIE) and Address Space Layout Randomization (ASLR)
+  by exploiting information disclosure vulnerabilities to leak memory addresses. This
+  allows an attacker to calculate base addresses and construct reliable ROP/ret2libc payloads.
+
+applies_when:
+  - "context.challenge.type == 'pwn'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['c', 'cpp', 'assembly', 'linux'])"
+    boost: 0.20
+    label: "C/C++/Assembly binary detected"
+  - if: "context.binary_properties.pie_enabled == true and context.binary_properties.aslr_enabled == true" # Hypothetical context properties
+    boost: 0.30
+    label: "PIE and ASLR protections enabled"
+
+detection_paths:
+  - id: format_string_leak_probe_pie_aslr
+    name: Format String Information Leak Probe
+    description: >
+      Sends format string specifiers (e.g., %p, %x) to a program, looking for leaked
+      memory addresses (stack, libc, or binary base) in the response.
+    min_confidence: 0.15
+    steps:
+      - id: send_format_string_payload_pie_aslr
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/echo' # Example endpoint that reflects user input
+          body: 'Test: %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p %p'
+        signals:
+          - match: '0x[0-9a-fA-F]{8,16}' # Matches hexadecimal addresses
+            match_type: regex
+            on_match:
+              confidence_boost: 0.50
+              emit: memory_address_leaked
+
+  - id: buffer_over_read_leak_probe_pie_aslr
+    name: Buffer Over-read Information Leak Probe
+    description: >
+      Sends an input designed to slightly over-read a buffer's boundary, expecting
+      to inadvertently print nearby memory contents (e.g., stack or GOT addresses).
+    min_confidence: 0.15
+    steps:
+      - id: send_over_read_payload_pie_aslr
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/read_data' # Example endpoint that reads data
+          body: 'A' * 512 # Input larger than expected buffer
+        signals:
+          - match: '0x[0-9a-fA-F]{8,16}' # Look for leaked addresses in the oversized output
+            match_type: regex
+            on_match:
+              confidence_boost: 0.45
+              emit: memory_address_leaked
+
+  - id: ret2plt_libc_leak_probe_pie_aslr
+    name: Ret2plt Libc Address Leak Probe (Conceptual)
+    description: >
+      Conceptual step outlining the use of a ret2plt primitive to leak a libc address,
+      which is then used to defeat ASLR. This assumes a separate buffer overflow vulnerability.
+    min_confidence: 0.20
+    steps:
+      - id: conceptual_ret2plt_leak
+        action: http_probe # Placeholder for binary interaction
+        params:
+          comment: "This step would involve crafting a payload to trigger puts@plt(puts@got) to leak a libc address."
+        signals:
+          - match: '0x[0-9a-fA-F]{8,16}' # Leaked libc address
+            match_type: regex
+            on_match:
+              confidence_boost: 0.50
+              emit: libc_address_leaked
+
+exploitation_paths:
+  - id: calculate_bases_and_rce
+    name: Calculate Base Addresses and Achieve RCE
+    requires_signal: memory_address_leaked # Or libc_address_leaked
+    technique: pie_aslr_bypass_rce
+    description: >
+      A memory address has been leaked, allowing the calculation of binary and/or libc base addresses.
+      This enables the construction of a reliable ROP chain or ret2libc payload for RCE.
+    steps:
+      - id: calculate_offsets_from_leak
+        action: http_probe # Conceptual action for calculation
+        params:
+          comment: "Determine the exact type of leaked address (binary, stack, libc) and calculate base offsets."
+        capture:
+          - pattern: '(?i)binary_base: (0x[0-9a-fA-F]+)'
+            as: binary_base_address
+          - pattern: '(?i)libc_base: (0x[0-9a-fA-F]+)'
+            as: libc_base_address
+          - pattern: '(?i)stack_base: (0x[0-9a-fA-F]+)'
+            as: stack_base_address
+
+      - id: construct_and_send_rce_payload
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/exploit' # Example endpoint for sending the final payload
+          # This payload is conceptual. It would be a full ROP/ret2libc payload
+          # dynamically generated using the calculated base addresses and gadgets.
+          body: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' # Placeholder
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)whoami|uid=\d+' # Confirm shell execution
+            as: shell_access_confirmed

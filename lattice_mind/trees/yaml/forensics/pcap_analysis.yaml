@@ -1,0 +1,114 @@
+id: forensics_pcap_analysis
+name: PCAP Analysis Patterns
+category: forensics
+version: "1.0"
+author: system
+description: >
+  Identifies hidden data, cleartext credentials, DNS tunneling, or malicious activity
+  by inspecting recorded network traffic (PCAP files).
+
+applies_when:
+  - "context.challenge.type == 'forensics'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(f.endswith('.pcap') or f.endswith('.pcapng') for f in context.challenge.provided_files)"
+    boost: 0.50
+    label: "PCAP file provided"
+  - if: "any(keyword in context.challenge.description for keyword in ['network traffic', 'wireshark', 'tshark', 'packet capture'])"
+    boost: 0.25
+    label: "Challenge description indicates network analysis"
+
+detection_paths:
+  - id: cleartext_credentials_detection
+    name: Cleartext Credentials Detection
+    description: >
+      Analyzes network traffic for sensitive information (passwords, API keys) transmitted
+      over insecure protocols (HTTP, FTP, Telnet) or in easily reversible formats (Base64)
+      within Authorization headers.
+    min_confidence: 0.20
+    steps:
+      - id: search_for_cleartext_creds
+        action: http_probe # Conceptual: run tshark/grep on PCAP
+        params:
+          comment: "Execute tshark or grep commands on the PCAP to find common credential patterns."
+          command: "tshark -r {{context.pcap_file}} -Y 'http.request.method == "POST" || ftp || telnet || http.authorization' -T fields -e http.file_data -e ftp.request.command -e data.text" # Conceptual
+        signals:
+          - match: '(?i)pass|pwd|password|auth|login' # Keywords in extracted data
+            on_match:
+              confidence_boost: 0.45
+              emit: cleartext_credentials_found
+          - match: 'Authorization: Basic ([a-zA-Z0-9+/=]+)' # Base64 encoded Basic Auth
+            match_type: regex
+            on_match:
+              confidence_boost: 0.40
+              emit: base64_credentials_found
+
+  - id: dns_tunneling_detection
+    name: DNS Tunneling Detection
+    description: >
+      Analyzes DNS traffic within the PCAP for indicators of DNS tunneling, such as
+      unusually long subdomains, high entropy, frequent TXT/NULL queries, or high
+      volume from a single host to a specific domain.
+    min_confidence: 0.25
+    steps:
+      - id: analyze_dns_traffic
+        action: http_probe # Conceptual: run tshark/python script
+        params:
+          comment: "Execute tshark to extract DNS query names and analyze for length, entropy, and frequency."
+          command: "tshark -r {{context.pcap_file}} -Y 'dns.qry.name' -T fields -e dns.qry.name" # Conceptual
+        signals:
+          - match: '(?i)([a-zA-Z0-9]{30,}\.(?!com|org|net|io|co|uk|gov))' # Long, high-entropy subdomain patterns
+            match_type: regex
+            on_match:
+              confidence_boost: 0.50
+              emit: dns_tunneling_indicators
+          - match: 'dns.qry.type == 16 || dns.qry.type == 10' # TXT or NULL record queries
+            on_match:
+              confidence_boost: 0.40
+              emit: unusual_dns_queries
+
+exploitation_paths:
+  - id: extract_and_decode_credentials
+    name: Extract and Decode Credentials
+    requires_signal: cleartext_credentials_found # Or base64_credentials_found
+    technique: pcap_credential_extraction
+    description: >
+      Cleartext or Base64 encoded credentials have been detected in the network traffic.
+      This path outlines extracting and decoding them.
+    steps:
+      - id: extract_creds
+        action: http_probe # Conceptual: run forensics tool
+        params:
+          comment: "Use a tool like `strings` or `grep` on the PCAP, or analyze in Wireshark to extract full credentials."
+          command: "grep -oP '(?i)(user|pass|password)[=:]\K[^\s&]+' {{context.pcap_file}}" # Conceptual
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)username:\s*(.+)\s*password:\s*(.+)'
+            as: extracted_credentials
+
+  - id: decode_dns_tunneled_data
+    name: Decode DNS Tunneled Data
+    requires_signal: dns_tunneling_indicators
+    technique: pcap_dns_tunnel_decoding
+    description: >
+      Indicators of DNS tunneling have been found. This path outlines extracting and
+      decoding the covertly transmitted data.
+    steps:
+      - id: extract_and_decode_dns
+        action: http_probe # Conceptual: run python script/tool
+        params:
+          comment: "Extract all suspicious DNS query names and attempt Base64/Base32 decoding."
+          command: "python decode_dns_tunnel.py {{context.pcap_file}}" # Conceptual
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)decoded_data:\s*(.+)'
+            as: decoded_dns_tunnel_data

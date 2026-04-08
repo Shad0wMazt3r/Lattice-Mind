@@ -1,0 +1,77 @@
+id: web_open_redirect
+name: Open Redirect
+category: web
+version: "1.1"
+author: system
+description: >
+  Detects when an application uses user-supplied input to determine the destination of a redirect without proper validation.
+  This can lead to phishing attacks or be chained with other vulnerabilities.
+
+tags:
+  - open_redirect
+  - redirect
+  - url_validation
+estimated_duration_seconds: 20
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(p in context.params for p in ['redirect','next','url','dest','return','continue','goto','path'])"
+    boost: 0.15
+    label: "Common redirect parameter found"
+
+detection_paths:
+  - id: basic_external_redirect_probe
+    name: Basic external redirect probe
+    description: >
+      Injects a controlled external URL into known redirect parameters and looks for a redirect to that URL.
+    min_confidence: 0.10
+    steps:
+      - id: inject_external_url
+        action: http_probe
+        params:
+          inject_into: all_params
+          payloads:
+            - 'https://example.com'
+            - 'http://example.com'
+            - '//example.com' # protocol-relative
+            - 'example.com' # no protocol
+        signals:
+          - match:
+              condition: "response.status in [301, 302, 303, 307, 308] and 'Location' in response.headers and re.search(r'(?i)(?:https?:)?//(?:www\\.)?example\\.com(?:/|$)', response.headers['Location'])"
+            on_match:
+              confidence_boost: 0.40
+              emit: open_redirect_confirmed
+          - match:
+              condition: "response.status in [301, 302, 303, 307, 308]"
+            on_match:
+              confidence_boost: 0.30
+              emit: redirect_status_detected
+
+exploitation_paths:
+  - id: potential_phishing_scenario
+    name: Potential Phishing/Chaining Scenario
+    requires_signal: open_redirect_confirmed
+    technique: open_redirect_phishing
+    description: >
+      An open redirect vulnerability was confirmed, indicating potential for phishing or chaining with other attacks.
+      While direct flag capture isn't typical for open redirects, this confirms the presence of the vulnerability.
+    steps:
+      - id: verify_redirect_behavior
+        action: http_probe
+        params:
+          inject_into: vulnerable_param # Assuming the detected vulnerable parameter is used here
+          payloads:
+            - 'https://attacker.com/collect_data?param=value' # Example of a malicious redirect
+        capture:
+          # Open redirects rarely capture flags directly, but this confirms exploitability
+          - pattern: 'Location: https://attacker.com'
+            as: redirect_to_attacker_site
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value # Placeholder for potential flag capture in chained attacks
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value # Placeholder for potential flag capture in chained attacks

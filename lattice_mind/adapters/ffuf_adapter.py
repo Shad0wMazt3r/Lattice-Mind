@@ -2,6 +2,8 @@
 from typing import Dict, Any, List, Optional
 import json
 import logging
+import os
+import tempfile
 
 from lattice_mind.adapters.base import CommandToolAdapter
 
@@ -30,7 +32,6 @@ class FFUFAdapter(CommandToolAdapter):
     """
     
     OUTPUT_FILE = "/tmp/ffuf_output.json"
-
     DEFAULT_WORDLIST = "/usr/share/dirb/wordlists/common.txt"
 
     def __init__(self, timeout: float = 300.0):
@@ -55,8 +56,9 @@ class FFUFAdapter(CommandToolAdapter):
         Returns:
             ffuf command as list
         """
+        output_file = str(args.get("_output_file", "")).strip() or self.OUTPUT_FILE
         cmd = ["ffuf",
-               "-o", "/tmp/ffuf_output.json", "-of", "json",
+               "-o", output_file, "-of", "json",
                "-noninteractive",   # never prompt — critical for subprocess
                "-ac",               # auto-calibrate: filter uniform responses
                "-ic",               # ignore wordlist comments
@@ -102,28 +104,49 @@ class FFUFAdapter(CommandToolAdapter):
     
     def run(self, target: str, args: Dict[str, Any]) -> Dict[str, Any]:
         """Execute ffuf and parse from the JSON output file."""
-        import os
-        # Remove stale output file so we never read a previous run's data
+        # Backward compatibility: clear known output file before each run.
         try:
             os.remove(self.OUTPUT_FILE)
         except FileNotFoundError:
             pass
-
-        cmd = self.build_command(target, args)
+        # Per-run tempfile prevents cross-run result clobbering in concurrent scans.
+        fd, output_file = tempfile.mkstemp(prefix="ffuf_", suffix=".json")
+        os.close(fd)
+        merged_args = dict(args)
+        merged_args["_output_file"] = output_file
+        cmd = self.build_command(target, merged_args)
         try:
             self.execute_command(cmd)
         except RuntimeError as e:
+            try:
+                os.remove(output_file)
+            except FileNotFoundError:
+                pass
             return {"target": target, "wordlist": "", "results": [], "error": str(e)}
 
         # Read JSON results file written by ffuf -of json
         try:
-            with open(self.OUTPUT_FILE, "r") as f:
+            with open(output_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            logger.warning(f"[ffuf] Output file unreadable ({e}), falling back to text parse")
-            return self._parse_text_output(self.last_output or "", {
-                "target": target, "wordlist": "", "results": [], "error": None
-            })
+        except (FileNotFoundError, json.JSONDecodeError):
+            try:
+                with open(self.OUTPUT_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                logger.warning(
+                    f"[ffuf] Output file unreadable ({e}), falling back to text parse"
+                )
+                fallback = self._parse_text_output(
+                    self.last_output or "",
+                    {"target": target, "wordlist": "", "results": [], "error": None},
+                )
+                self.last_result = fallback
+                return fallback
+        finally:
+            try:
+                os.remove(output_file)
+            except FileNotFoundError:
+                pass
 
         results = []
         for item in data.get("results", []):

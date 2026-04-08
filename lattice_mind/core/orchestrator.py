@@ -1,12 +1,14 @@
 """Central orchestrator for challenge analysis and exploitation."""
 import logging
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from lattice_mind.core.types import ChallengeDescriptor, NodeResult, NodeStatus
 from lattice_mind.core.nodes import DecisionNode
 from lattice_mind.core.flag_recognizer import get_flag_recognizer
 from lattice_mind.core.knowledge_base import get_knowledge_base
+from lattice_mind.core.node_registry import get_node_registry
+from lattice_mind.core.context_schema import normalize_context, validate_context
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +22,15 @@ class Orchestrator:
         self.tree_history: List[str] = []
         self.flag_recognizer = get_flag_recognizer()
         self.knowledge_base = get_knowledge_base()
+        self.node_registry = get_node_registry()
         self._progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
         # Tree parent tracking — used to build the tree in the UI
         self._last_node_id: Optional[str] = None
         self._branch_parent: Optional[str] = None
+        # Signal bus and confidence pool for Python nodes
+        self.signal_bus: Optional[Any] = None  # Type: SignalBus (avoid circular import)
+        self.confidence_pool: Optional[Any] = None  # Type: ConfidencePool
+        self.current_tree_id: Optional[str] = None
 
     def set_challenge(self, challenge: ChallengeDescriptor):
         """Set the challenge to solve.
@@ -71,6 +78,11 @@ class Orchestrator:
         is_root_node = True
 
         while current_node:
+            # Inject dependencies into node
+            current_node.signal_bus = self.signal_bus
+            current_node.confidence_pool = self.confidence_pool
+            current_node.tree_id = self.current_tree_id or root_node.node_id
+            
             logger.info(f"Executing node: {current_node}")
             self.tree_history.append(current_node.node_id)
 
@@ -89,10 +101,32 @@ class Orchestrator:
             result = current_node.run(self.execution_context)
             self._last_node_id = current_node.node_id
             
+            # Validate and normalize context after node execution
+            errors = validate_context(self.execution_context, strict=False)
+            if errors:
+                logger.debug(f"Context validation warnings: {errors}")
+            
+            # Normalize deprecated field names
+            self.execution_context = normalize_context(self.execution_context)
+            
             # Determine next node BEFORE emitting node_end so we can include it
-            next_node = current_node.next_node(result) if hasattr(current_node, "next_node") else None
-            if next_node:
+            # Support both old-style (return instance) and new-style (return string ID)
+            next_node_or_id = current_node.next_node(result) if hasattr(current_node, "next_node") else None
+            
+            if isinstance(next_node_or_id, str):
+                # New-style: string ID, resolve via registry
+                next_node = self.node_registry.create(next_node_or_id)
+                if next_node:
+                    result.next_node = next_node_or_id
+                else:
+                    logger.error(f"Node ID not found in registry: {next_node_or_id}")
+                    next_node = None
+            elif isinstance(next_node_or_id, DecisionNode):
+                # Old-style: direct instance
+                next_node = next_node_or_id
                 result.next_node = getattr(next_node, "node_id", next_node.__class__.__name__)
+            else:
+                next_node = None
             
             self._emit_progress("node_end", current_node, result, parent_node_id=parent_id)
 
@@ -131,6 +165,7 @@ class Orchestrator:
             "challenge": self.challenge,
             "tree_history": self.tree_history,
             "observations": self.execution_context.get("observations", {}),
+            "evidence_records": self.execution_context.get("evidence_records", []),
             "flag_found": self.execution_context.get("flag_found"),
         }
 

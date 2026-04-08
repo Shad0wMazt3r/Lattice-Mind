@@ -31,6 +31,9 @@ detection:
               - "<img src=x onerror=alert('XSS_TEST')>"
               - "<svg onload=alert('XSS_TEST')>"
             inject_into: all_params
+            mutation_families: [param_remove, value_empty]
+            target_selector: all_inputs
+            max_variants: 12
           signals:
             - match: '<script>alert\(''XSS_TEST''\)</script>|alert\(''XSS_TEST''\)|<img src=x onerror=|<svg onload='
               on_match:

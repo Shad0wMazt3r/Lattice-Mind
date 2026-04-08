@@ -1,0 +1,52 @@
+id: web_client_side_decode
+name: Client-Side Decode
+category: web
+version: "1.0"
+author: system
+description: >
+  Detects and decodes client-side encoded flags embedded in HTML/JS (e.g. bookmarklets,
+  charCodeAt loops, atob() patterns).
+
+applies_when:
+  - "context.challenge.type == 'web'"
+
+confidence_seeds:
+  - if: "context.observations.http_response and 'javascript:(function()' in context.observations.http_response.body"
+    boost: 0.25
+    label: "Bookmarklet pattern"
+  - if: "context.observations.http_response and 'charCodeAt' in context.observations.http_response.body"
+    boost: 0.20
+    label: "JS charCodeAt loop"
+  - if: "context.observations.http_response and 'atob(' in context.observations.http_response.body"
+    boost: 0.15
+    label: "Base64 decode hint"
+
+detection:
+  min_confidence: 0.05
+  paths:
+    - id: decode_probe
+      name: "Decode Client-Side Payloads"
+      steps:
+        - id: decode_attempt
+          action: client_decode
+          with:
+            inject_into: none
+          signals:
+            - match:
+                condition: "len(response.decoded_candidates) > 0"
+              on_match:
+                confidence_boost: 0.90
+                emit: client_decode_ready
+
+exploitation:
+  stop_on_flag: true
+  paths:
+    - id: decode_and_extract
+      name: "Decode and Extract Flag"
+      requires_signal: client_decode_ready
+      technique: client_side_decode
+      steps:
+        - id: decode_extract
+          action: client_decode
+          with:
+            inject_into: none

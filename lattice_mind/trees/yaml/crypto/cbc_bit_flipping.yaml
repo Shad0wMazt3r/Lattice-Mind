@@ -1,0 +1,102 @@
+id: crypto_cbc_bit_flipping
+name: CBC Bit-Flipping
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Exploits block ciphers in Cipher Block Chaining (CBC) mode to precisely alter bits
+  in the decrypted plaintext by manipulating the preceding ciphertext block or IV.
+  This allows an attacker to change values (e.g., `admin=0` to `admin=1`) without
+  knowing the encryption key, provided no integrity check is present.
+
+applies_when:
+  - "context.challenge.type == 'crypto' or context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['aes', 'cbc', 'block_cipher', 'encryption'])"
+    boost: 0.20
+    label: "Block cipher in CBC mode detected or indicated"
+  - if: "any(p in context.params for p in ['data', 'ciphertext', 'encrypted_data', 'cookie', 'token', 'iv'])"
+    boost: 0.15
+    label: "Encrypted data or IV parameter found"
+  - if: "not context.security_features.authenticated_encryption" # Hypothetical context property
+    boost: 0.25
+    label: "Absence of authenticated encryption (e.g., HMAC) indicated"
+
+detection_paths:
+  - id: cbc_mode_confirmation_probe
+    name: CBC Mode Confirmation Probe
+    description: >
+      Sends two ciphertexts: one original, one with a modified IV (or first ciphertext block),
+      and observes if only the first decrypted block is affected, confirming CBC mode operation.
+    min_confidence: 0.20
+    steps:
+      - id: compare_iv_modified_decryption
+        action: http_probe
+        params:
+          method: POST
+          path: '/decrypt_and_display' # Endpoint that decrypts and shows (part of) plaintext
+          # Conceptual: Send an original ciphertext and another with a modified IV.
+          # Compare the first block of plaintext. If they differ, but subsequent blocks match
+          # the original, it's a strong indicator of CBC.
+          body: 'ciphertext_original=...&iv_original=...' # Placeholder for original request
+          body_modified: 'ciphertext_modified=...&iv_modified=...' # Placeholder for modified IV request
+        signals:
+          - match: '(?i)plaintext_block_1_differs_but_others_match' # Conceptual signal indicating CBC behavior
+            on_match:
+              confidence_boost: 0.50
+              emit: cbc_mode_confirmed
+
+  - id: bit_flip_effect_observation_probe
+    name: Bit-Flip Effect Observation Probe
+    description: >
+      Sends a ciphertext with a single bit flipped in an intermediate ciphertext block
+      and observes the decrypted output. A predictable corruption in the *next* plaintext
+      block (rather than an immediate decryption failure) indicates lack of integrity protection
+      and potential for bit-flipping.
+    min_confidence: 0.25
+    steps:
+      - id: send_single_bit_flipped_ciphertext
+        action: http_probe
+        params:
+          method: POST
+          path: '/decrypt_and_display'
+          # Conceptual: take a valid ciphertext, flip one bit in C[n-1], send, observe P[n]
+          body: 'ciphertext=BASE64_CIPHERTEXT_WITH_BIT_FLIPPED' # Conceptual
+        signals:
+          - match: '(?i)corrupted_block_found_but_next_block_intact' # Conceptual signal
+            on_match:
+              confidence_boost: 0.45
+              emit: cbc_bit_flipping_potential
+          - match: '(?i)error' # If it results in a generic decryption error but not a specific MAC error
+            on_match:
+              confidence_boost: 0.20
+              emit: cbc_no_integrity_check
+
+exploitation_paths:
+  - id: forge_value_via_bit_flipping
+    name: Forge Value via CBC Bit-Flipping
+    requires_signal: cbc_bit_flipping_potential # Or cbc_mode_confirmed combined with no integrity
+    technique: cbc_plaintext_manipulation
+    description: >
+      CBC bit-flipping is possible due to the lack of integrity protection. This path
+      outlines the process of calculating the necessary bit flips in a preceding ciphertext
+      block to change a target value in the plaintext (e.g., `admin=0` to `admin=1`).
+    steps:
+      - id: calculate_and_send_flipped_ciphertext
+        action: http_probe # Conceptual action
+        params:
+          comment: "Calculate XOR difference between target and current plaintext bits, apply to preceding ciphertext block."
+          # This requires precise knowledge of block boundaries and the target plaintext.
+          # Example: target 'admin=1', current 'admin=0', calculate diff, apply to C[n-1].
+          body: 'ciphertext=CONSTRUCTED_FLIPPED_CIPHERTEXT'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)logged in as admin|value_changed_to_target'
+            as: exploitation_success

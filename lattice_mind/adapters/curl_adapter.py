@@ -1,9 +1,17 @@
 """HTTP request adapter using curl."""
 from typing import Dict, Any, Optional
+import json
 import re
 import logging
+import time
+from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 
 from lattice_mind.adapters.base import CommandToolAdapter
+from lattice_mind.core.adapter_types import (
+    AdapterResult,
+    AdapterStatus,
+    HttpDataKeys
+)
 
 logger = logging.getLogger(__name__)
 
@@ -11,13 +19,11 @@ logger = logging.getLogger(__name__)
 class CurlAdapter(CommandToolAdapter):
     """HTTP request wrapper using curl.
     
-    Normalizes curl output to:
-    {
-        "status": 200,
-        "headers": {"Content-Type": "text/html", ...},
-        "body": "...",
-        "error": None
-    }
+    Returns AdapterResult with normalized HTTP response data:
+    - data[status_code]: HTTP status code
+    - data[headers]: Response headers dict
+    - data[body]: Response body string
+    - metadata[response_time_ms]: Request duration
     """
     
     def __init__(self, timeout: float = 10.0):
@@ -45,21 +51,47 @@ class CurlAdapter(CommandToolAdapter):
         if method != "GET":
             cmd.extend(["-X", method])
         
-        # Headers
-        headers = args.get("headers", {})
+        headers = dict(args.get("headers", {}))
+        post_body: Optional[str] = None
+        if "json" in args and args["json"] is not None:
+            post_body = json.dumps(args["json"], separators=(",", ":"))
+            if not any(k.lower() == "content-type" for k in headers):
+                headers["Content-Type"] = "application/json"
+        elif "data" in args:
+            data = args["data"]
+            if isinstance(data, dict):
+                post_body = urlencode(data)
+                if not any(k.lower() == "content-type" for k in headers):
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
+            elif isinstance(data, list):
+                post_body = urlencode(data)
+                if not any(k.lower() == "content-type" for k in headers):
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
+            else:
+                post_body = str(data)
+
         for key, value in headers.items():
             cmd.extend(["-H", f"{key}: {value}"])
+
+        cookies = args.get("cookies")
+        if cookies:
+            cookie_hdr = "; ".join(f"{k}={v}" for k, v in cookies.items())
+            cmd.extend(["-b", cookie_hdr])
+
+        if post_body is not None:
+            cmd.extend(["-d", post_body])
         
-        # Data (POST body)
-        if "data" in args:
-            cmd.extend(["-d", args["data"]])
-        
-        # Query parameters
+        # Query parameters (dict or list of (key, value) for duplicate keys)
         if "params" in args:
-            params_str = "&".join(
-                f"{k}={v}" for k, v in args["params"].items()
-            )
-            target = f"{target}?{params_str}"
+            p = args["params"]
+            if isinstance(p, list):
+                new_pairs = p
+            else:
+                new_pairs = list(p.items())
+            parts = urlsplit(target)
+            existing = parse_qsl(parts.query, keep_blank_values=True)
+            merged = existing + new_pairs
+            target = urlunsplit(parts._replace(query=urlencode(merged)))
         
         # Redirects
         if args.get("follow_redirects", False):
@@ -72,8 +104,8 @@ class CurlAdapter(CommandToolAdapter):
         cmd.append(target)
         return cmd
     
-    def normalize_output(self, raw_output: str) -> Dict[str, Any]:
-        """Parse curl verbose output.
+    def normalize_output(self, raw_output: str) -> AdapterResult:
+        """Parse curl verbose output into AdapterResult.
         
         Curl with -v outputs headers to stderr, body to stdout.
         We parse both to extract status code and headers.
@@ -82,67 +114,81 @@ class CurlAdapter(CommandToolAdapter):
             raw_output: Raw curl output
         
         Returns:
-            Normalized response dict
+            AdapterResult with normalized HTTP response
         """
-        result = {
-            "status": None,
-            "headers": {},
-            "body": "",
-            "error": None,
-        }
-        
         try:
             lines = raw_output.split("\n")
             body_start = -1
-            
+            status_code = None
+            headers = {}
+
             for i, line in enumerate(lines):
-                # Extract HTTP status code
+                # Extract HTTP status code; reset headers on each new response
+                # (handles redirect chains where multiple status lines appear)
                 if line.startswith("< HTTP/"):
                     # Format: "< HTTP/1.1 200 OK"
                     match = re.search(r"HTTP/[\d\.]+ (\d+)", line)
                     if match:
-                        result["status"] = int(match.group(1))
-                
-                # Extract headers (lines starting with "<")
+                        status_code = int(match.group(1))
+                        headers = {}  # discard previous response's headers
+
+                # Extract headers (lines starting with "< " that contain ":")
                 elif line.startswith("< ") and ":" in line:
                     # Format: "< Content-Type: text/html"
                     header_line = line[2:].strip()
                     if header_line and ":" in header_line:
                         key, value = header_line.split(":", 1)
-                        result["headers"][key.strip()] = value.strip()
-                
-                # Body typically comes after the last empty line
-                # In curl -v output, body comes after all headers
-                elif not line.startswith("<") and not line.startswith(">") and \
-                     not line.startswith("*") and body_start == -1 and \
-                     result["status"] is not None:
-                    body_start = i
-            
+                        headers[key.strip()] = value.strip()
+
+                # The bare "<" line terminates response headers in curl -v output.
+                # Body starts on the very next line.  We update body_start each
+                # time so that redirects (multiple response blocks) are handled
+                # correctly: we always end up at the final response's body.
+                elif line.strip() == "<" and status_code is not None:
+                    body_start = i + 1
+
             # Combine remaining lines as body
+            body = ""
             if body_start >= 0:
-                result["body"] = "\n".join(lines[body_start:]).strip()
+                body = "\n".join(lines[body_start:]).strip()
             
             # If no status was found, it's an error
-            if result["status"] is None:
-                result["error"] = "Could not parse HTTP response"
-                result["status"] = 0
+            if status_code is None:
+                return AdapterResult(
+                    status=AdapterStatus.ERROR,
+                    error="Could not parse HTTP response",
+                    data={
+                        HttpDataKeys.STATUS_CODE: 0,
+                        HttpDataKeys.HEADERS: {},
+                        HttpDataKeys.BODY: raw_output[:1000]  # First 1k chars
+                    }
+                )
             
             logger.debug(
-                f"[curl] Parsed response: status={result['status']}, "
-                f"body_len={len(result['body'])}, "
-                f"headers={len(result['headers'])}"
+                f"[curl] Parsed response: status={status_code}, "
+                f"body_len={len(body)}, headers={len(headers)}"
             )
             
-            return result
+            return AdapterResult(
+                status=AdapterStatus.SUCCESS,
+                data={
+                    HttpDataKeys.STATUS_CODE: status_code,
+                    HttpDataKeys.HEADERS: headers,
+                    HttpDataKeys.BODY: body
+                }
+            )
         
         except Exception as e:
             logger.error(f"[curl] Error parsing output: {str(e)}")
-            return {
-                "status": None,
-                "headers": {},
-                "body": raw_output,
-                "error": str(e),
-            }
+            return AdapterResult(
+                status=AdapterStatus.ERROR,
+                error=str(e),
+                data={
+                    HttpDataKeys.STATUS_CODE: 0,
+                    HttpDataKeys.HEADERS: {},
+                    HttpDataKeys.BODY: raw_output[:1000]
+                }
+            )
 
 
 class RequestsAdapter(CommandToolAdapter):
@@ -154,8 +200,10 @@ class RequestsAdapter(CommandToolAdapter):
     
     def __init__(self, timeout: float = 10.0):
         super().__init__("requests", timeout=timeout)
+        self._session = None
         try:
             import requests
+            self._session = requests.Session()
             self.requests = requests
             self._use_requests = True
         except ImportError:
@@ -177,28 +225,45 @@ class RequestsAdapter(CommandToolAdapter):
         
         try:
             method = args.get("method", "GET").upper()
-            headers = args.get("headers", {})
+            headers = dict(args.get("headers", {}))
+            sni_hostname = str(args.get("sni_hostname", "")).strip()
+            if sni_hostname and "Host" not in headers:
+                headers["Host"] = sni_hostname
             data = args.get("data", None)
-            params = args.get("params", {})
+            json_body = args.get("json")
+            params = args.get("params", {}) or {}
+            cookies = args.get("cookies")
             allow_redirects = args.get("follow_redirects", False)
             verify = not args.get("insecure", False)
-            
-            request_func = getattr(self.requests, method.lower())
-            response = request_func(
-                target,
-                headers=headers,
-                data=data,
-                params=params,
-                allow_redirects=allow_redirects,
-                verify=verify,
-                timeout=self.timeout
-            )
-            
+
+            if json_body is not None and data is not None:
+                raise ValueError("Pass only one of 'json' or 'data' to RequestsAdapter.run")
+
+            req_kw: Dict[str, Any] = {
+                "headers": headers,
+                "params": params,
+                "allow_redirects": allow_redirects,
+                "verify": verify,
+                "timeout": self.timeout,
+            }
+            if cookies:
+                req_kw["cookies"] = cookies
+            if json_body is not None:
+                req_kw["json"] = json_body
+            else:
+                req_kw["data"] = data
+
+            response = self._session.request(method, target, **req_kw)
+
+            redirect_chain = [str(r.url) for r in response.history]
+            redirect_chain.append(str(response.url))
+
             result = {
                 "status": response.status_code,
                 "headers": dict(response.headers),
                 "body": response.text,
                 "error": None,
+                "redirect_chain": redirect_chain,
             }
             
             self.last_result = result
@@ -211,4 +276,11 @@ class RequestsAdapter(CommandToolAdapter):
                 "headers": {},
                 "body": "",
                 "error": str(e),
+                "redirect_chain": [],
             }
+
+    def get_session_cookies(self) -> Dict[str, str]:
+        """Return current requests-session cookies as a plain dict."""
+        if not self._use_requests:
+            return {}
+        return dict(self._session.cookies)

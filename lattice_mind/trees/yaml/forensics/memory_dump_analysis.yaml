@@ -1,0 +1,139 @@
+id: forensics_memory_dump_analysis
+name: Memory Dump Analysis (Volatility)
+category: forensics
+version: "1.0"
+author: system
+description: >
+  Analyzes memory dump files (e.g., .raw, .vmem) using tools like Volatility to extract
+  artifacts such as running processes, network connections, command history, injected code,
+  and files to uncover hidden information or malicious activity.
+
+applies_when:
+  - "context.challenge.type == 'forensics'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(f.endswith(('.mem', '.raw', '.vmem', '.bin')) for f in context.challenge.provided_files)"
+    boost: 0.50
+    label: "Memory dump file provided"
+  - if: "any(keyword in context.challenge.description for keyword in ['memory dump', 'RAM analysis', 'Volatility', 'forensic image'])"
+    boost: 0.25
+    label: "Challenge description indicates memory analysis"
+
+detection_paths:
+  - id: os_identification
+    name: Operating System Identification
+    description: >
+      Identifies the operating system and its profile (e.g., Windows 7 SP1 x64) from the memory dump,
+      which is crucial for subsequent Volatility plugin selection.
+    min_confidence: 0.10
+    steps:
+      - id: run_imageinfo_or_info
+        action: http_probe # Conceptual: run Volatility command
+        params:
+          comment: "Execute 'vol.py -f <dumpfile> imageinfo' (Vol2) or 'vol.py -f <dumpfile> windows.info' (Vol3)."
+          command: "vol.py -f {{context.memory_dump_file}} imageinfo" # Example for Vol2
+        signals:
+          - match: '(?i)Suggested Profile\(s\): (.+)'
+            match_type: regex
+            on_match:
+              confidence_boost: 0.40
+              emit: os_profile_identified
+              capture:
+                - pattern: 'Suggested Profile\(s\): (.+)'
+                  as: os_profile
+
+  - id: process_enumeration
+    name: Process Enumeration and Anomaly Detection
+    description: >
+      Lists running processes, their parent-child relationships, and scans for hidden or terminated processes
+      to identify suspicious activity or unusual process execution.
+    min_confidence: 0.15
+    steps:
+      - id: run_pslist_pstree_psscan
+        action: http_probe # Conceptual: run Volatility command
+        params:
+          comment: "Execute 'pslist', 'pstree', and 'psscan' plugins with identified OS profile."
+          command: "vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} pslist; vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} pstree; vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} psscan"
+        signals:
+          - match: '(?i)hidden process|unlinked process|suspicious name|unusual parent'
+            on_match:
+              confidence_boost: 0.50
+              emit: suspicious_process_detected
+
+  - id: command_history_extraction
+    name: Command History Extraction
+    description: >
+      Recovers command-line history (e.g., from `cmd.exe` or PowerShell consoles) to
+      find executed commands, potential user input, or flags.
+    min_confidence: 0.20
+    steps:
+      - id: run_cmdscan_consoles
+        action: http_probe # Conceptual: run Volatility command
+        params:
+          comment: "Execute 'cmdscan' or 'consoles' plugins with identified OS profile."
+          command: "vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} cmdscan; vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} consoles"
+        signals:
+          - match: '(?i)flag\{[^}]+\}|CTF\{[^}]+\}|secret_key|password' # Common flag/secret patterns
+            on_match:
+              confidence_boost: 0.55
+              emit: flag_in_command_history
+
+  - id: malfind_injected_code_detection
+    name: Malfind Injected Code Detection
+    description: >
+      Uses the `malfind` plugin to locate injected code or suspicious executable memory regions
+      within processes, a common indicator of malware or exploitation.
+    min_confidence: 0.25
+    steps:
+      - id: run_malfind
+        action: http_probe # Conceptual: run Volatility command
+        params:
+          comment: "Execute 'malfind' plugin with identified OS profile."
+          command: "vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} malfind"
+        signals:
+          - match: '(?i)PAGE_EXECUTE_READWRITE|injected code|shellcode'
+            on_match:
+              confidence_boost: 0.40
+              emit: injected_code_detected
+
+exploitation_paths:
+  - id: extract_flag_from_process_memory
+    name: Extract Flag from Process Memory
+    requires_signal: suspicious_process_detected # Or injected_code_detected
+    technique: volatility_memdump_strings
+    description: >
+      A suspicious process or injected code has been detected. This path outlines
+      dumping the memory of the identified process and extracting strings to find the flag.
+    steps:
+      - id: dump_and_grep_process_memory
+        action: http_probe # Conceptual: run Volatility command and grep
+        params:
+          comment: "Dump memory of suspicious PID(s) and run `strings` + `grep` for flag patterns."
+          command: "vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} procdump -p {{pid}} -D . && strings {{pid}}.dmp | grep -i 'flag\{[^}]+\}'"
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+
+  - id: extract_flag_from_cmd_history
+    name: Extract Flag from Command History
+    requires_signal: flag_in_command_history
+    technique: volatility_cmdscan_flag_extract
+    description: >
+      A flag or sensitive information was found directly in the command history.
+      This path outlines extracting it.
+    steps:
+      - id: retrieve_flag_from_history
+        action: http_probe # Conceptual: run Volatility command and grep
+        params:
+          comment: "Re-run 'cmdscan' or 'consoles' and extract the flag value."
+          command: "vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} cmdscan | grep -i 'flag\{[^}]+\}'"
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value

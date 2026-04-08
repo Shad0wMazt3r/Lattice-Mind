@@ -1,13 +1,63 @@
 services:
+  # ── Defaults (dev) ─────────────────────────────────────────────────────────
+  # `docker compose up` starts mailpit + lattice-mind-dev (hot reload).
+  # DO App Platform ignores docker-compose entirely (builds from Dockerfile).
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    environment:
+      MP_MAX_MESSAGES: 500
+
   lattice-mind-api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    command: uvicorn lattice_mind.api.server:app --host 0.0.0.0 --port 8000
+    command: python -m lattice_mind.api.serve_with_mcp
     environment:
       LATTICE_MIND_LOG_LEVEL: info
       LATTICE_MIND_DB: /data/runs.db
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      LATTICE_MIND_API_BASE_URL: http://127.0.0.1:8000
+      LATTICE_MIND_MCP_TOKEN: ${LATTICE_MIND_MCP_TOKEN:-}
+      LATTICE_MIND_MCP_TIMEOUT: 30
     volumes:
+      - lattice-mind-data:/data
+    profiles:
+      - prod
+
+  # ── Development (hot-reload) ────────────────────────────────────────────────
+  # Mounts local source into the container — edit any .py or .yaml and the
+  # server reloads instantly without a rebuild or restart.
+  #
+  # Usage:  docker compose up [--build]
+  #   or:   .\dev.ps1
+  lattice-mind-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    command: python -m lattice_mind.api.serve_with_mcp
+    environment:
+      LATTICE_MIND_LOG_LEVEL: debug
+      LATTICE_MIND_DB: /data/runs.db
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      LATTICE_MIND_API_BASE_URL: http://127.0.0.1:8000
+      LATTICE_MIND_MCP_TOKEN: ${LATTICE_MIND_MCP_TOKEN:-}
+      LATTICE_MIND_MCP_TIMEOUT: 30
+      LATTICE_MIND_RELOAD: "true"
+      LATTICE_MIND_RELOAD_DIR: /app
+      LATTICE_MIND_RELOAD_INCLUDE: "*.py,*.yaml,*.yml"
+    volumes:
+      # Live-mount the entire project — edits on disk = live in container
+      - .:/app
+      # Keep the data volume separate so it isn't overwritten by the mount
       - lattice-mind-data:/data
 
 volumes:

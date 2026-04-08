@@ -41,3 +41,22 @@ htmlcov/
 artifacts/
 *.log
 .DS_Store
+
+# Prompt files
+prompt.md
+
+
+# Models
+.gemini/
+
+# Cursor architecture knowledge
+.cursor/rules/*
+.cursor/
+
+# Github
+.github/
+ROADMAP.md
+
+
+# Playwright
+.playwright-mcp/

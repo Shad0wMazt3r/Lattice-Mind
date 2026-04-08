@@ -13,6 +13,9 @@ setup(
         "uvicorn[standard]>=0.27.0",
         "requests>=2.31.0",
         "python-multipart>=0.0.9",
+        "passlib[bcrypt]>=1.7.4",
+        "bcrypt>=3.2.0,<4.0.0",
+        "python-jose[cryptography]>=3.3.0",
     ],
     extras_require={
         "dev": [
@@ -26,6 +29,7 @@ setup(
         "console_scripts": [
             "Lattice-Mind=lattice_mind.cli:main",
             "Lattice-Mind-api=lattice_mind.api.server:main",
+            "Lattice-Mind-mcp=lattice_mind.mcp.server:main",
         ],
     },
     classifiers=[

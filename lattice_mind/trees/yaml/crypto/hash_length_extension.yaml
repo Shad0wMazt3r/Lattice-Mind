@@ -1,0 +1,99 @@
+id: crypto_hash_length_extension
+name: Hash Length Extension Attack
+category: crypto
+version: "1.0"
+author: system
+description: >
+  Exploits hash functions based on the Merkle-Damgård construction (e.g., MD5, SHA-1, SHA-256)
+  when used in `Hash(secret || message)` for authentication. An attacker can append
+  arbitrary data to a message and compute a valid hash for the extended message
+  without knowing the secret.
+
+applies_when:
+  - "context.challenge.type == 'crypto' or context.challenge.type == 'web'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['md5', 'sha1', 'sha256'])"
+    boost: 0.20
+    label: "Merkle-Damgård hash function detected"
+  - if: "any(p in context.params for p in ['message', 'data', 'token']) and any(p in context.params for p in ['signature', 'hash'])"
+    boost: 0.25
+    label: "Both message/data and a corresponding hash/signature parameter found"
+  - if: "not context.security_features.uses_hmac == true" # Hypothetical
+    boost: 0.15
+    label: "Absence of HMAC for message integrity"
+
+detection_paths:
+  - id: secret_length_bruteforce_and_hash_reconstruction
+    name: Secret Length Bruteforce and Hash Reconstruction
+    description: >
+      Given an original message and its hash, brute-forces possible secret lengths
+      and uses a hash length extension tool (e.g., `hash_extender`) to reconstruct the hash.
+      A match indicates the correct secret length and confirms the vulnerability type.
+    min_confidence: 0.20
+    steps:
+      - id: try_secret_lengths
+        action: http_probe # Conceptual for local computation/tool interaction
+        params:
+          comment: "Iterate through common secret lengths (1-32 bytes) and reconstruct the hash using hash_extender."
+          original_message: '{{context.original_message}}' # Hypothetical
+          original_hash: '{{context.original_hash}}' # Hypothetical
+          hash_algo: 'sha256' # Example
+        signals:
+          - match: '(?i)reconstructed_hash_matches_original_for_secret_length_(\d+)' # Conceptual
+            match_type: regex
+            on_match:
+              confidence_boost: 0.50
+              emit: hash_length_extension_vulnerable
+              capture:
+                - pattern: '(?i)secret_length_(\d+)'
+                  as: secret_length_discovered
+
+  - id: extended_message_validation_probe
+    name: Extended Message Validation Probe
+    description: >
+      Constructs a length-extended message and its corresponding hash (using a guessed secret length)
+      and submits it to the application to see if it's accepted as valid.
+    min_confidence: 0.25
+    steps:
+      - id: submit_extended_payload
+        action: http_probe
+        params:
+          method: POST
+          path: '/verify_token' # Example endpoint
+          # Conceptual: original_message, guessed_secret_length, appended_data
+          body: 'message={{context.original_message}}%00...padding...{{context.appended_data}}&signature={{context.extended_hash}}'
+        signals:
+          - match: '(?i)signature valid|access granted' # If the extended hash is accepted
+            on_match:
+              confidence_boost: 0.55
+              emit: hash_length_extension_confirmed
+
+exploitation_paths:
+  - id: forge_token_via_hash_extension
+    name: Forge Token/Message via Hash Length Extension
+    requires_signal: hash_length_extension_confirmed # Or hash_length_extension_vulnerable
+    technique: hash_extension_forgery
+    description: >
+      Hash length extension vulnerability confirmed. Forge a message that appends
+      arbitrary data (e.g., `admin=true`) and compute a valid signature for it to gain
+      unauthorized access or elevate privileges.
+    steps:
+      - id: construct_and_send_forged_payload
+        action: http_probe
+        params:
+          method: POST
+          path: '/authenticate' # Example endpoint
+          # Conceptual: full crafted message with padding and desired appended data
+          # and the corresponding forged signature.
+          body: 'message={{forged_message}}&signature={{forged_signature}}'
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)authentication successful|access granted|logged in as admin'
+            as: exploitation_success

