@@ -121,29 +121,32 @@ class CurlAdapter(CommandToolAdapter):
             body_start = -1
             status_code = None
             headers = {}
-            
+
             for i, line in enumerate(lines):
-                # Extract HTTP status code
+                # Extract HTTP status code; reset headers on each new response
+                # (handles redirect chains where multiple status lines appear)
                 if line.startswith("< HTTP/"):
                     # Format: "< HTTP/1.1 200 OK"
                     match = re.search(r"HTTP/[\d\.]+ (\d+)", line)
                     if match:
                         status_code = int(match.group(1))
-                
-                # Extract headers (lines starting with "<")
+                        headers = {}  # discard previous response's headers
+
+                # Extract headers (lines starting with "< " that contain ":")
                 elif line.startswith("< ") and ":" in line:
                     # Format: "< Content-Type: text/html"
                     header_line = line[2:].strip()
                     if header_line and ":" in header_line:
                         key, value = header_line.split(":", 1)
                         headers[key.strip()] = value.strip()
-                
-                # Body typically comes after the last empty line
-                elif not line.startswith("<") and not line.startswith(">") and \
-                     not line.startswith("*") and body_start == -1 and \
-                     status_code is not None:
-                    body_start = i
-            
+
+                # The bare "<" line terminates response headers in curl -v output.
+                # Body starts on the very next line.  We update body_start each
+                # time so that redirects (multiple response blocks) are handled
+                # correctly: we always end up at the final response's body.
+                elif line.strip() == "<" and status_code is not None:
+                    body_start = i + 1
+
             # Combine remaining lines as body
             body = ""
             if body_start >= 0:

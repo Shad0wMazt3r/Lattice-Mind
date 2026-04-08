@@ -194,7 +194,7 @@ class SimplePortScanAdapter(CommandToolAdapter):
         try:
             if "-" in ports_str:
                 start, end = ports_str.split("-")
-                ports = range(int(start), int(end) + 1)
+                ports = list(range(int(start), int(end) + 1))
             else:
                 ports = [int(p) for p in ports_str.split(",")]
         except (ValueError, AttributeError):

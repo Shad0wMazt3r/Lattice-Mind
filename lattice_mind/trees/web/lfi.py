@@ -297,7 +297,7 @@ class LFIExploitTraversalNode(DecisionNode):
                         url = f"{endpoint}?{param_name}={payload}"
                         result = self.curl.run(url, {})
                         
-                        if not result or result.get("error"):
+                        if not result or result.is_error or result.error:
                             continue
                         
                         body = result.get(HttpDataKeys.BODY, "")
