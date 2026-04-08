@@ -194,7 +194,7 @@ class SimplePortScanAdapter(CommandToolAdapter):
         try:
             if "-" in ports_str:
                 start, end = ports_str.split("-")
-                ports = range(int(start), int(end) + 1)
+                ports = list(range(int(start), int(end) + 1))
             else:
                 ports = [int(p) for p in ports_str.split(",")]
         except (ValueError, AttributeError):
@@ -202,7 +202,7 @@ class SimplePortScanAdapter(CommandToolAdapter):
             return result
         
         # Try to scan each port
-        total_ports = len(ports) if isinstance(ports, list) else (ports.stop - ports.start)
+        total_ports = len(ports)
         logger.info(f"[nc] Scanning {total_ports} ports on {target}")
         max_total_seconds = float(args.get("max_total_seconds", 30.0))
         started_at = time.monotonic()

@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from lattice_mind.adapters.curl_adapter import CurlAdapter, RequestsAdapter
+from lattice_mind.core.adapter_types import AdapterResult, AdapterStatus, HttpDataKeys
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -32,9 +33,37 @@ def _make_curl_verbose_output(status: int, headers: dict, body: str) -> str:
     # Response headers
     for k, v in headers.items():
         lines.append(f"< {k}: {v}")
+    # Blank "<" terminates response headers in curl -v; body follows
     lines.append("<")
     # Body
     lines.append(body)
+    return "\n".join(lines)
+
+
+def _make_redirect_output(
+    redirect_status: int,
+    redirect_location: str,
+    final_status: int,
+    final_headers: dict,
+    final_body: str,
+) -> str:
+    """Synthesise curl -v output for a redirect followed by a final response."""
+    lines = []
+    # First request / response
+    lines.append("> GET / HTTP/1.1")
+    lines.append(">")
+    lines.append(f"< HTTP/1.1 {redirect_status} Moved Permanently")
+    lines.append(f"< Location: {redirect_location}")
+    lines.append("<")
+    lines.append("* Following redirect...")
+    # Second request / response
+    lines.append("> GET / HTTP/1.1")
+    lines.append(">")
+    lines.append(f"< HTTP/1.1 {final_status} OK")
+    for k, v in final_headers.items():
+        lines.append(f"< {k}: {v}")
+    lines.append("<")
+    lines.append(final_body)
     return "\n".join(lines)
 
 
@@ -148,13 +177,10 @@ class TestCurlAdapterNormalizeOutput:
         self.adapter = CurlAdapter()
 
     def _assert_schema(self, result):
-        """Every result must have these four keys with the correct types."""
-        assert "status" in result
-        assert "headers" in result
-        assert "body" in result
-        assert "error" in result
-        assert isinstance(result["headers"], dict)
-        assert isinstance(result["body"], str)
+        """Every result must be an AdapterResult with properly typed data fields."""
+        assert isinstance(result, AdapterResult)
+        assert isinstance(result.get(HttpDataKeys.HEADERS, {}), dict)
+        assert isinstance(result.get(HttpDataKeys.BODY, ""), str)
 
     def test_schema_on_well_formed_output(self):
         raw = _make_curl_verbose_output(200, {"Content-Type": "text/html"}, "<html></html>")
@@ -163,20 +189,20 @@ class TestCurlAdapterNormalizeOutput:
 
     def test_status_200_parsed(self):
         raw = _make_curl_verbose_output(200, {}, "")
-        assert self.adapter.normalize_output(raw)["status"] == 200
+        assert self.adapter.normalize_output(raw).get(HttpDataKeys.STATUS_CODE) == 200
 
     def test_status_404_parsed(self):
         raw = _make_curl_verbose_output(404, {}, "Not Found")
-        assert self.adapter.normalize_output(raw)["status"] == 404
+        assert self.adapter.normalize_output(raw).get(HttpDataKeys.STATUS_CODE) == 404
 
     def test_status_301_parsed(self):
         raw = _make_curl_verbose_output(301, {"Location": "https://example.com/"}, "")
         res = self.adapter.normalize_output(raw)
-        assert res["status"] == 301
+        assert res.get(HttpDataKeys.STATUS_CODE) == 301
 
     def test_status_500_parsed(self):
         raw = _make_curl_verbose_output(500, {}, "Internal Server Error")
-        assert self.adapter.normalize_output(raw)["status"] == 500
+        assert self.adapter.normalize_output(raw).get(HttpDataKeys.STATUS_CODE) == 500
 
     def test_header_extracted(self):
         raw = _make_curl_verbose_output(
@@ -185,8 +211,9 @@ class TestCurlAdapterNormalizeOutput:
             ""
         )
         result = self.adapter.normalize_output(raw)
-        assert "Content-Type" in result["headers"]
-        assert result["headers"]["Content-Type"] == "text/html"
+        headers = result.get(HttpDataKeys.HEADERS)
+        assert "Content-Type" in headers
+        assert headers["Content-Type"] == "text/html"
 
     def test_multiple_headers_extracted(self):
         raw = _make_curl_verbose_output(
@@ -195,47 +222,87 @@ class TestCurlAdapterNormalizeOutput:
             '{"ok": true}'
         )
         result = self.adapter.normalize_output(raw)
-        assert "Content-Type" in result["headers"]
-        assert "Server" in result["headers"]
-        assert "Cache-Control" in result["headers"]
+        headers = result.get(HttpDataKeys.HEADERS)
+        assert "Content-Type" in headers
+        assert "Server" in headers
+        assert "Cache-Control" in headers
 
     def test_body_extracted(self):
         raw = _make_curl_verbose_output(200, {}, "Hello, World!")
         result = self.adapter.normalize_output(raw)
-        assert "Hello, World!" in result["body"]
+        assert "Hello, World!" in result.get(HttpDataKeys.BODY)
 
     def test_empty_input_gives_error(self):
         result = self.adapter.normalize_output("")
         self._assert_schema(result)
-        assert result["status"] == 0  # couldn't parse
-        assert result["error"] is not None
+        assert result.get(HttpDataKeys.STATUS_CODE) == 0
+        assert result.error is not None
 
     def test_garbage_input_returns_error_not_exception(self):
         result = self.adapter.normalize_output("zzz garbage lkajslkdj 123")
         self._assert_schema(result)
-        # Should not raise; status will be 0 or None
-        assert result["status"] in (0, None)
+        assert result.get(HttpDataKeys.STATUS_CODE) in (0, None)
 
     def test_no_status_line_sets_error(self):
         raw = "< Content-Type: text/html\n<\n<html/>"
         result = self.adapter.normalize_output(raw)
         self._assert_schema(result)
-        assert result["error"] is not None
+        assert result.error is not None
 
     def test_error_field_none_on_success(self):
         raw = _make_curl_verbose_output(200, {"Content-Type": "text/plain"}, "ok")
         result = self.adapter.normalize_output(raw)
-        assert result["error"] is None
+        assert result.error is None
 
     def test_http_1_0_status_parsed(self):
         raw = "< HTTP/1.0 200 OK\n<\nresponse body"
         result = self.adapter.normalize_output(raw)
-        assert result["status"] == 200
+        assert result.get(HttpDataKeys.STATUS_CODE) == 200
 
     def test_http2_status_parsed(self):
         raw = "< HTTP/2 200 \n<\nbody content"
         result = self.adapter.normalize_output(raw)
-        assert result["status"] == 200
+        assert result.get(HttpDataKeys.STATUS_CODE) == 200
+
+    # ── New tests requested by reviewer ───────────────────────────────────────
+
+    def test_html_body_starting_with_angle_bracket(self):
+        """Body detection must not be fooled by HTML that starts with '<'."""
+        raw = _make_curl_verbose_output(
+            200,
+            {"Content-Type": "text/html"},
+            "<html><head></head><body>Hello</body></html>"
+        )
+        result = self.adapter.normalize_output(raw)
+        assert result.status == AdapterStatus.SUCCESS
+        body = result.get(HttpDataKeys.BODY)
+        assert body is not None and "<html>" in body
+
+    def test_redirect_uses_final_status_code(self):
+        """When curl follows a redirect, the final status code must be reported."""
+        raw = _make_redirect_output(
+            redirect_status=301,
+            redirect_location="https://example.com/new",
+            final_status=200,
+            final_headers={"Content-Type": "text/html"},
+            final_body="<html>Final page</html>",
+        )
+        result = self.adapter.normalize_output(raw)
+        assert result.status == AdapterStatus.SUCCESS
+        assert result.get(HttpDataKeys.STATUS_CODE) == 200
+        body = result.get(HttpDataKeys.BODY)
+        assert body is not None and "Final page" in body
+        # Only final response headers should be present (not redirect ones)
+        headers = result.get(HttpDataKeys.HEADERS)
+        assert "Location" not in headers
+
+    def test_unparseable_response_yields_adapter_error(self):
+        """Completely unparseable input must return AdapterStatus.ERROR."""
+        raw = "this is not curl output at all\njust random text\n12345"
+        result = self.adapter.normalize_output(raw)
+        assert result.status == AdapterStatus.ERROR
+        assert result.error is not None
+        assert result.get(HttpDataKeys.STATUS_CODE) == 0
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -253,8 +320,8 @@ class TestCurlAdapterRun:
         with patch.object(self.adapter, "execute_command", return_value=fake_raw) as mock_exec:
             result = self.adapter.run("http://example.com", {})
         mock_exec.assert_called_once()
-        assert result["status"] == 200
-        assert isinstance(result["headers"], dict)
+        assert result.get(HttpDataKeys.STATUS_CODE) == 200
+        assert isinstance(result.get(HttpDataKeys.HEADERS), dict)
 
     def test_run_stores_last_result(self):
         fake_raw = _make_curl_verbose_output(200, {}, "body")
@@ -280,10 +347,11 @@ class TestCurlAdapterRun:
         fake_raw = _make_curl_verbose_output(404, {"Content-Type": "text/plain"}, "not here")
         with patch.object(self.adapter, "execute_command", return_value=fake_raw):
             result = self.adapter.run("http://example.com", {})
-        assert "status" in result
-        assert "headers" in result
-        assert "body" in result
-        assert "error" in result
+        assert isinstance(result, AdapterResult)
+        assert result.get(HttpDataKeys.STATUS_CODE) is not None
+        assert isinstance(result.get(HttpDataKeys.HEADERS), dict)
+        assert isinstance(result.get(HttpDataKeys.BODY), str)
+        assert result.error is None
 
 
 # ──────────────────────────────────────────────────────────────────────────────

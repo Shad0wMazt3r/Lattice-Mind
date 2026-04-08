@@ -198,7 +198,7 @@ class DecisionTree:
 class TreeRegistry:
     def __init__(self):
         self.trees: Dict[str, DecisionTree] = {}
-        self.validation_errors: Dict[str, str] = {}
+        self.validation_errors: Dict[str, Dict[str, str]] = {}
         self._validator = DAGValidator()
 
     def load_from_directory(self, directory: str):
@@ -224,20 +224,27 @@ class TreeRegistry:
             self.trees[tree.id] = tree
         except Exception as e:
             logger.error("Failed to load tree from %s: %s", path, e)
-            self.validation_errors[path] = str(e)
+            # Key by path for load failures (tree id may be unknown).
+            self.validation_errors[path] = {"error": str(e), "path": path}
 
     def _validate_graph(self) -> None:
         result = self._validator.validate(self.list_trees())
         for dup in result.duplicate_ids:
-            self.validation_errors[dup] = "duplicate tree id"
+            self.validation_errors[dup] = {"error": "duplicate tree id", "path": ""}
             self.trees.pop(dup, None)
         for orphan in result.orphaned_signals:
             tree_id = orphan.split(":", 1)[0]
-            self.validation_errors[tree_id] = f"orphaned signal reference: {orphan}"
+            self.validation_errors[tree_id] = {
+                "error": f"orphaned signal reference: {orphan}",
+                "path": "",
+            }
             self.trees.pop(tree_id, None)
         for cycle in result.cycles:
             for tid in cycle:
-                self.validation_errors[tid] = f"dependency cycle detected: {' -> '.join(cycle)}"
+                self.validation_errors[tid] = {
+                    "error": f"dependency cycle detected: {' -> '.join(cycle)}",
+                    "path": "",
+                }
                 self.trees.pop(tid, None)
 
     def get_tree(self, tree_id: str) -> Optional[DecisionTree]:

@@ -1,5 +1,5 @@
 """Human-in-the-loop interaction manager — thread-safe API queue."""
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 import uuid
 from typing import Any, Dict, List, Optional
@@ -49,7 +49,7 @@ class HumanLoopManager:
                 "node_id": node_id,
                 "details": details or {},
                 "kind": kind or "decision",
-                "created_at": datetime.utcnow().isoformat() + "Z",
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "answer": None,
                 "_event": event,
             }
