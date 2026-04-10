@@ -29,6 +29,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from contextlib import asynccontextmanager
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse
 from jose import JWTError
@@ -54,6 +55,7 @@ def _now() -> str:
 # ── Auth ─────────────────────────────────────────────────────────────────────
 _ALGORITHM = "HS256"
 _TOKEN_HOURS = int(os.environ.get("LATTICE_MIND_TOKEN_HOURS", "24"))
+_MCP_ALLOW_ANY_BEARER = os.environ.get("LATTICE_MIND_MCP_ALLOW_ANY_BEARER", "false").lower() in {"1", "true", "yes", "on"}
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY: str = ""  # populated after _init_db()
 
@@ -129,6 +131,27 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+_main_event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _schedule_broadcast(run_id: str, payload: Dict[str, Any]) -> None:
+    """Schedule websocket broadcasts safely from async and worker threads."""
+    loop = _main_event_loop
+    if loop is None or loop.is_closed():
+        return
+
+    def _dispatch() -> None:
+        asyncio.create_task(manager.broadcast(run_id, payload))
+
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+
+    if running_loop is loop:
+        _dispatch()
+        return
+    loop.call_soon_threadsafe(_dispatch)
 
 # ── SQLite persistence ────────────────────────────────────────────────────────
 DB_PATH = os.environ.get("LATTICE_MIND_DB", "/data/runs.db")
@@ -436,10 +459,33 @@ def _db_list(limit: int = 50) -> List[Dict[str, Any]]:
     return out
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application startup and shutdown."""
+    # Startup
+    global _main_event_loop
+    _main_event_loop = asyncio.get_running_loop()
+    yield
+    # Shutdown - cancel all pending tasks
+    current_task = asyncio.current_task()
+    tasks = [
+        task
+        for task in asyncio.all_tasks()
+        if task is not current_task and not task.done()
+    ]
+    if tasks:
+        logger.info(f"Cancelling {len(tasks)} pending tasks during shutdown")
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    _main_event_loop = None
+
+
 app = FastAPI(
     title="Lattice Mind API",
     description="REST API + web UI for the autonomous CTF solver",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 _PUBLIC_PATHS = {
@@ -461,6 +507,9 @@ async def _auth_middleware(request: Request, call_next):
     if path.startswith("/static/") or path.startswith("/ws/") or path in _PUBLIC_PATHS:
         return await call_next(request)
     auth = request.headers.get("Authorization", "")
+    # Dev-only MCP bypass: require Bearer presence but skip JWT verification.
+    if path == "/mcp" and _MCP_ALLOW_ANY_BEARER and auth.startswith("Bearer "):
+        return await call_next(request)
     if not auth.startswith("Bearer "):
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
     if not _decode_token(auth[7:]):
@@ -527,16 +576,7 @@ class RunState:
             self.steps.append(payload)
             self.updated_at = _now()
         _db_save(self)
-        # Broadcast via WebSocket
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.run_coroutine_threadsafe(
-                    manager.broadcast(self.run_id, {"type": "step", "data": payload}),
-                    loop,
-                )
-        except Exception:
-            pass
+        _schedule_broadcast(self.run_id, {"type": "step", "data": payload})
 
     def update(self, **kwargs):
         with self._lock:
@@ -544,18 +584,7 @@ class RunState:
                 setattr(self, key, value)
             self.updated_at = _now()
         _db_save(self)
-        # Broadcast via WebSocket
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.run_coroutine_threadsafe(
-                    manager.broadcast(
-                        self.run_id, {"type": "update", "data": self.to_dict()}
-                    ),
-                    loop,
-                )
-        except Exception:
-            pass
+        _schedule_broadcast(self.run_id, {"type": "update", "data": self.to_dict()})
 
 
 _runs: Dict[str, RunState] = {}
@@ -1299,7 +1328,10 @@ async def mcp_rpc(request: Request):
     )
     if not allow_unauth:
         auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer ") or not _decode_token(auth_header[7:]):
+        token_ok = auth_header.startswith("Bearer ") and (
+            _MCP_ALLOW_ANY_BEARER or bool(_decode_token(auth_header[7:]))
+        )
+        if not token_ok:
             return _ok({
                 "content": [{
                     "type": "text",

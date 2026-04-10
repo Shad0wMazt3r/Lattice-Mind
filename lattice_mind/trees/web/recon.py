@@ -122,27 +122,27 @@ class WebReconProbeNode(DecisionNode):
             logger.error(f"[web-recon] Probe failed: {str(e)}")
             return NodeResult(status=NodeStatus.FAILURE, error=str(e))
 
-    def _identify_technologies(self, http_result: dict) -> dict:
+    def _identify_technologies(self, http_result: dict) -> list:
         """Extract technology hints from HTTP response."""
         import re
 
-        techs = {}
+        techs = []
         headers = http_result.get("headers", {})
         body = http_result.get("body", "")
 
         if "Server" in headers:
-            techs["server"] = headers["Server"]
+            techs.append(headers["Server"])
         if "X-Powered-By" in headers:
-            techs["framework"] = headers["X-Powered-By"]
+            techs.append(headers["X-Powered-By"])
 
         for framework in ["Flask", "Django", "Rails", "Laravel"]:
             if framework.lower() in body.lower():
-                techs["framework"] = framework
+                techs.append(framework)
                 break
 
         for cms in ["WordPress", "Joomla", "Drupal"]:
             if cms.lower() in body.lower():
-                techs["cms"] = cms
+                techs.append(cms)
                 break
 
         return techs
@@ -228,7 +228,7 @@ class WebReconDirectoryScanNode(DecisionNode):
             logger.info(
                 "[web-recon] Directory scan skipped (disabled via feature flag)"
             )
-            context.setdefault("observations", {})["directories"] = []
+            context.setdefault("observations", {})["found_paths"] = []
             return NodeResult(
                 status=NodeStatus.SUCCESS,
                 data={"directories": [], "skipped": True},
@@ -254,7 +254,7 @@ class WebReconDirectoryScanNode(DecisionNode):
             if result.get("error"):
                 logger.warning(f"[web-recon] Directory scan failed: {result['error']}")
                 return NodeResult(
-                    status=NodeStatus.SUCCESS, data={"directories": [], "tech": tech}
+                    status=NodeStatus.SUCCESS, data={"found_paths": [], "tech": tech}
                 )
 
             directories = [
@@ -273,7 +273,7 @@ class WebReconDirectoryScanNode(DecisionNode):
             return NodeResult(
                 status=NodeStatus.SUCCESS,
                 data={
-                    "directories": directories,
+                    "found_paths": directories,
                     "count": len(directories),
                     "tech": tech,
                 },
@@ -303,7 +303,7 @@ class WebReconAnalyzeVulnsNode(DecisionNode):
         """Analyze for vulnerabilities."""
         observations = context.get("observations", {})
         params = observations.get("potential_params", [])
-        directories = observations.get("directories", [])
+        directories = observations.get("found_paths", [])
 
         candidates = {
             "sql_injection": [],

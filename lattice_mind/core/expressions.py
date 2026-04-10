@@ -95,6 +95,9 @@ class ExpressionEvaluator:
         elif isinstance(node, ast.Attribute):
             import enum as _enum
             value = self._eval_node(node.value)
+            if value is None:
+                # Gracefully handle missing nested attributes (e.g., context.security_features.authenticated_encryption when security_features is None)
+                return None
             if hasattr(value, node.attr):
                 result = getattr(value, node.attr)
                 # Unwrap enums so YAML conditions like "context.challenge.type == 'web'" work.
@@ -103,7 +106,8 @@ class ExpressionEvaluator:
                 return result
             elif isinstance(value, dict):
                 return value.get(node.attr)
-            raise AttributeError(f"Attribute {node.attr} not found")
+            # Return None instead of raising exception for missing attributes
+            return None
         
         elif isinstance(node, ast.Name):
             if node.id in self.context:

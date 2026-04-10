@@ -220,10 +220,10 @@ class MVPSolver:
                 raise RuntimeError(f"session cookie merge failed: {e}") from e
 
         # Translate legacy recon keys to YAML-expected names.
-        # WebReconProbeNode writes "technologies" (dict) and "directories" (list of dicts);
+        # WebReconProbeNode writes "technologies" (list) and "directories" (list of dicts);
         # YAML confidence seeds reference tech_stack, found_paths, params.
         if obs.get("technologies") and not obs.get("tech_stack"):
-            raw_tech = [v.lower() for v in obs["technologies"].values() if v]
+            raw_tech = [v.lower() for v in obs["technologies"] if v]
             # Expand server strings to known tech tokens so seeds like
             # "'jsp' in context.tech_stack" fire correctly.
             # e.g. "apache-coyote/1.1" → also add "jsp", "java"

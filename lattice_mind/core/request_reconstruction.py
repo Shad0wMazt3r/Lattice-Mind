@@ -7,6 +7,7 @@ import logging
 import re
 import secrets
 from typing import Any, Dict
+from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,12 @@ class RequestReconstructionEngine:
             body = out.get("json")
         if isinstance(body, (dict, list)) and json_source:
             body_bytes = _json.dumps(body, separators=(",", ":")).encode("utf-8")
+        elif isinstance(body, dict):
+            # Form data as dict - convert to URL-encoded
+            body_bytes = urlencode(body).encode("utf-8")
+        elif isinstance(body, list):
+            # Form data as list of tuples - convert to URL-encoded
+            body_bytes = urlencode(body).encode("utf-8")
         elif isinstance(body, str):
             body_bytes = body.encode("utf-8", errors="ignore")
         elif isinstance(body, (bytes, bytearray)):
@@ -40,6 +47,10 @@ class RequestReconstructionEngine:
         if json_source and not ctype:
             headers["Content-Type"] = "application/json"
             ctype = "application/json"
+        elif isinstance(body, (dict, list)) and not json_source and not ctype:
+            # Form data without explicit content type - set URL-encoded
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+            ctype = "application/x-www-form-urlencoded"
         if "multipart/form-data" in ctype and "boundary=" in ctype and body_bytes:
             boundary = ctype.split("boundary=", 1)[1].strip().strip('"')
             if boundary:
