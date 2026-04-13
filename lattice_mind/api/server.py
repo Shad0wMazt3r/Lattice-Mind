@@ -47,9 +47,19 @@ from lattice_mind.web.strategy_memory import (
 
 logger = logging.getLogger(__name__)
 
+_SCAN_MODE_CTF = "ctf"
+_SCAN_MODE_BUG_BOUNTY = "bug_bounty"
+_SCAN_MODES = {_SCAN_MODE_CTF, _SCAN_MODE_BUG_BOUNTY}
+_DEFAULT_SCAN_MODE = _SCAN_MODE_CTF
+
 
 def _now() -> str:
     return datetime.utcnow().isoformat() + "Z"
+
+
+def _normalize_scan_mode(value: Optional[str]) -> str:
+    mode = str(value or _SCAN_MODE_CTF).strip().lower()
+    return mode if mode in _SCAN_MODES else _SCAN_MODE_CTF
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -209,6 +219,26 @@ def _init_db():
             conn.execute("ALTER TABLE runs ADD COLUMN execution_plan TEXT")
         except Exception:
             pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN run_mode TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN impact_score REAL")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN impact_breakdown TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN poc_evidence TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN mutation_summary TEXT")
+        except Exception:
+            pass
         # settings table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS settings (
@@ -219,6 +249,9 @@ def _init_db():
         # seed default if missing
         conn.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES ('dir_scan_enabled', 'false')"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('scan_mode_default', 'ctf')"
         )
         from lattice_mind.config import (
             CRAWL_MAX_DEPTH,
@@ -274,6 +307,7 @@ def _init_db():
 
 def _load_settings():
     """Load persisted settings into FEATURE_FLAGS on startup."""
+    global _DEFAULT_SCAN_MODE
     from lattice_mind.config import (
         CRAWL_MAX_DEPTH,
         CRAWL_MAX_ENDPOINTS,
@@ -322,6 +356,11 @@ def _load_settings():
         FEATURE_FLAGS.max_probe_base_specs = _iget(
             "max_probe_base_specs", MAX_PROBE_BASE_SPECS
         )
+        mode_row = conn.execute(
+            "SELECT value FROM settings WHERE key='scan_mode_default'"
+        ).fetchone()
+        if mode_row:
+            _DEFAULT_SCAN_MODE = _normalize_scan_mode(mode_row["value"])
 
 
 def _get_secret_key() -> str:
@@ -382,9 +421,10 @@ def _db_save(state: RunState):
             """
             INSERT INTO runs
                 (run_id, status, challenge, steps, flag, error, log, observations, confidence,
+                 run_mode, impact_score, impact_breakdown, poc_evidence, mutation_summary,
                  selected_tree_ids, execution_plan,
                  started_at, finished_at, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(run_id) DO UPDATE SET
                 status       = excluded.status,
                 steps        = excluded.steps,
@@ -393,6 +433,11 @@ def _db_save(state: RunState):
                 log          = excluded.log,
                 observations = excluded.observations,
                 confidence   = excluded.confidence,
+                run_mode     = excluded.run_mode,
+                impact_score = excluded.impact_score,
+                impact_breakdown = excluded.impact_breakdown,
+                poc_evidence = excluded.poc_evidence,
+                mutation_summary = excluded.mutation_summary,
                 selected_tree_ids = excluded.selected_tree_ids,
                 execution_plan   = excluded.execution_plan,
                 started_at   = excluded.started_at,
@@ -409,6 +454,11 @@ def _db_save(state: RunState):
                 json.dumps(d["log"]) if d["log"] else None,
                 json.dumps(d["observations"]) if d["observations"] else None,
                 json.dumps(d["confidence"]) if d["confidence"] else None,
+                _normalize_scan_mode(d.get("run_mode")),
+                d.get("impact_score"),
+                json.dumps(d["impact_breakdown"]) if d.get("impact_breakdown") else None,
+                json.dumps(d["poc_evidence"]) if d.get("poc_evidence") else None,
+                json.dumps(d["mutation_summary"]) if d.get("mutation_summary") else None,
                 json.dumps(d["selected_tree_ids"]) if d.get("selected_tree_ids") else None,
                 json.dumps(d["execution_plan"]) if d.get("execution_plan") else None,
                 d["started_at"],
@@ -437,6 +487,14 @@ def _db_load(run_id: str) -> Optional[Dict[str, Any]]:
     d["log"] = json.loads(d["log"]) if d["log"] else None
     d["observations"] = json.loads(d["observations"]) if d["observations"] else None
     d["confidence"] = json.loads(d["confidence"]) if d.get("confidence") else None
+    d["run_mode"] = _normalize_scan_mode(d.get("run_mode"))
+    d["impact_breakdown"] = (
+        json.loads(d["impact_breakdown"]) if d.get("impact_breakdown") else None
+    )
+    d["poc_evidence"] = json.loads(d["poc_evidence"]) if d.get("poc_evidence") else None
+    d["mutation_summary"] = (
+        json.loads(d["mutation_summary"]) if d.get("mutation_summary") else None
+    )
     d["selected_tree_ids"] = (
         json.loads(d["selected_tree_ids"]) if d.get("selected_tree_ids") else None
     )
@@ -447,7 +505,7 @@ def _db_load(run_id: str) -> Optional[Dict[str, Any]]:
 def _db_list(limit: int = 50) -> List[Dict[str, Any]]:
     with _db() as conn:
         rows = conn.execute(
-            "SELECT run_id, status, flag, error, created_at, finished_at, challenge "
+            "SELECT run_id, status, flag, error, run_mode, impact_score, created_at, finished_at, challenge "
             "FROM runs ORDER BY created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
@@ -455,6 +513,7 @@ def _db_list(limit: int = 50) -> List[Dict[str, Any]]:
     for row in rows:
         d = dict(row)
         d["challenge"] = json.loads(d["challenge"])
+        d["run_mode"] = _normalize_scan_mode(d.get("run_mode"))
         out.append(d)
     return out
 
@@ -540,6 +599,11 @@ class RunState:
     log: Optional[Dict[str, Any]] = None
     observations: Optional[Dict[str, Any]] = None
     confidence: Optional[Dict[str, float]] = None
+    run_mode: str = _SCAN_MODE_CTF
+    impact_score: Optional[float] = None
+    impact_breakdown: Optional[Dict[str, Any]] = None
+    poc_evidence: Optional[List[Dict[str, Any]]] = None
+    mutation_summary: Optional[Dict[str, Any]] = None
     selected_tree_ids: Optional[List[str]] = None
     execution_plan: Optional[Dict[str, Any]] = None
     started_at: Optional[str] = None
@@ -559,6 +623,11 @@ class RunState:
                 "log": self.log,
                 "observations": self.observations,
                 "confidence": self.confidence,
+                "run_mode": self.run_mode,
+                "impact_score": self.impact_score,
+                "impact_breakdown": self.impact_breakdown,
+                "poc_evidence": self.poc_evidence,
+                "mutation_summary": self.mutation_summary,
                 "selected_tree_ids": self.selected_tree_ids,
                 "execution_plan": self.execution_plan,
                 "challenge": self.challenge,
@@ -617,6 +686,11 @@ def get_run_state(run_id: str) -> Optional[RunState]:
         log=row["log"],
         observations=row["observations"],
         confidence=row.get("confidence"),
+        run_mode=row.get("run_mode") or _SCAN_MODE_CTF,
+        impact_score=row.get("impact_score"),
+        impact_breakdown=row.get("impact_breakdown"),
+        poc_evidence=row.get("poc_evidence"),
+        mutation_summary=row.get("mutation_summary"),
         selected_tree_ids=row.get("selected_tree_ids"),
         execution_plan=row.get("execution_plan"),
         started_at=row["started_at"],
@@ -638,6 +712,7 @@ class SolveRequest(BaseModel):
     file_path: Optional[str] = None
     flag_format: str = Field(default="flag{")
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    mode: Optional[str] = Field(default=None, description="ctf or bug_bounty")
     # Targeted YAML execution (optional). When set, only these trees run after recon.
     selected_tree_ids: Optional[List[str]] = None
     tree_selection: Optional[Dict[str, Any]] = None
@@ -649,6 +724,8 @@ class SolveSubmissionResponse(BaseModel):
 
     run_id: str
     status: str
+    run_mode: str = _SCAN_MODE_CTF
+    impact_score: Optional[float] = None
     selected_tree_ids: Optional[List[str]] = None
     execution_plan: Optional[Dict[str, Any]] = None
 
@@ -664,6 +741,11 @@ class RunStatusResponse(BaseModel):
     log: Optional[Dict[str, Any]] = None
     observations: Optional[Dict[str, Any]] = None
     confidence: Optional[Dict[str, float]] = None
+    run_mode: str = _SCAN_MODE_CTF
+    impact_score: Optional[float] = None
+    impact_breakdown: Optional[Dict[str, Any]] = None
+    poc_evidence: Optional[List[Dict[str, Any]]] = None
+    mutation_summary: Optional[Dict[str, Any]] = None
     selected_tree_ids: Optional[List[str]] = None
     execution_plan: Optional[Dict[str, Any]] = None
     challenge: Dict[str, Any]
@@ -718,6 +800,12 @@ class ResumeRequestLifecycleRequest(BaseModel):
 
 class RetryNodeRequest(BaseModel):
     override_timeout: Optional[int] = Field(default=None, ge=1, le=300)
+
+
+class CustomTreeRequest(BaseModel):
+    yaml_text: str = Field(min_length=1, max_length=200000)
+    namespace: str = Field(default="mcp", min_length=1, max_length=64)
+    enable: bool = False
 
 
 # ── Auth endpoints ───────────────────────────────────────────────────────────
@@ -921,12 +1009,82 @@ async def reload_rules():
     return {"status": "ok", "count": len(solver.registry.list_trees())}
 
 
+@app.post("/custom-trees/validate")
+async def validate_custom_tree(payload: CustomTreeRequest) -> Dict[str, Any]:
+    import yaml
+    from lattice_mind.core.tree_loader import DecisionTree
+
+    try:
+        raw = yaml.safe_load(payload.yaml_text)
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}") from e
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=400, detail="Tree YAML must parse to an object")
+    tree_id = str(raw.get("id") or "").strip()
+    if not tree_id:
+        raise HTTPException(status_code=400, detail="Tree id is required")
+    if not tree_id.startswith("custom_"):
+        tree_id = f"custom_{payload.namespace}_{tree_id}"
+    raw = dict(raw)
+    raw["id"] = tree_id
+    try:
+        tree = DecisionTree(raw)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Tree validation failed: {e}") from e
+    return {
+        "valid": True,
+        "tree_id": tree.id,
+        "category": tree.category,
+        "applies_when": tree.applies_when,
+        "enabled": bool(payload.enable),
+    }
+
+
+@app.post("/custom-trees/register")
+async def register_custom_tree(payload: CustomTreeRequest) -> Dict[str, Any]:
+    import yaml
+    from lattice_mind.core.tree_loader import DecisionTree
+
+    try:
+        raw = yaml.safe_load(payload.yaml_text)
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}") from e
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=400, detail="Tree YAML must parse to an object")
+    source_id = str(raw.get("id") or "").strip()
+    if not source_id:
+        raise HTTPException(status_code=400, detail="Tree id is required")
+    tree_id = source_id if source_id.startswith("custom_") else f"custom_{payload.namespace}_{source_id}"
+    if solver.registry.get_tree(tree_id):
+        raise HTTPException(status_code=409, detail=f"Tree already exists: {tree_id}")
+    raw = dict(raw)
+    raw["id"] = tree_id
+    tags = list(raw.get("tags") or [])
+    tags.extend(["custom_tree", f"namespace:{payload.namespace}"])
+    raw["tags"] = list(dict.fromkeys(str(t) for t in tags))
+    raw["enabled"] = bool(payload.enable)
+    raw.setdefault("author", "mcp_operator")
+    raw.setdefault("description", "Runtime-registered custom tree")
+    try:
+        tree = DecisionTree(raw)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Tree validation failed: {e}") from e
+    solver.registry.trees[tree.id] = tree
+    return {
+        "registered": True,
+        "tree_id": tree.id,
+        "enabled": tree.enabled,
+        "requires_explicit_selection": not tree.enabled,
+    }
+
+
 @app.get("/settings")
 async def get_settings():
     """Return current feature flag settings."""
     from lattice_mind.config import FEATURE_FLAGS
 
     return {
+        "scan_mode_default": _DEFAULT_SCAN_MODE,
         "dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled,
         "crawl_max_depth": FEATURE_FLAGS.crawl_max_depth,
         "crawl_max_pages": FEATURE_FLAGS.crawl_max_pages,
@@ -946,6 +1104,15 @@ async def put_settings(payload: dict):
 
     changed = {}
     with _db() as conn:
+        if "scan_mode_default" in payload:
+            mode = _normalize_scan_mode(payload.get("scan_mode_default"))
+            global _DEFAULT_SCAN_MODE
+            _DEFAULT_SCAN_MODE = mode
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('scan_mode_default', ?)",
+                (mode,),
+            )
+            changed["scan_mode_default"] = mode
         if "dir_scan_enabled" in payload:
             val = bool(payload["dir_scan_enabled"])
             FEATURE_FLAGS.dir_scan_enabled = val
@@ -993,6 +1160,7 @@ async def put_settings(payload: dict):
     return {
         "updated": changed,
         "settings": {
+            "scan_mode_default": _DEFAULT_SCAN_MODE,
             "dir_scan_enabled": FEATURE_FLAGS.dir_scan_enabled,
             "crawl_max_depth": FEATURE_FLAGS.crawl_max_depth,
             "crawl_max_pages": FEATURE_FLAGS.crawl_max_pages,
@@ -1083,6 +1251,7 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
             file_path=arguments.get("file_path"),
             flag_format=arguments.get("flag_format", "flag{"),
             metadata=arguments.get("metadata", {}),
+            mode=arguments.get("mode"),
         )
         result = await solve_challenge(payload)
         return result.model_dump()
@@ -1126,6 +1295,24 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
     if name == "get_rule":
         return await get_rule(arguments["rule_id"])
 
+    if name == "validate_custom_tree":
+        return await validate_custom_tree(
+            CustomTreeRequest(
+                yaml_text=str(arguments["yaml_text"]),
+                namespace=str(arguments.get("namespace", "mcp")),
+                enable=bool(arguments.get("enable", False)),
+            )
+        )
+
+    if name == "register_custom_tree":
+        return await register_custom_tree(
+            CustomTreeRequest(
+                yaml_text=str(arguments["yaml_text"]),
+                namespace=str(arguments.get("namespace", "mcp")),
+                enable=bool(arguments.get("enable", False)),
+            )
+        )
+
     if name == "list_scan_trees":
         return await list_scan_trees_api(
             category=arguments.get("category"),
@@ -1141,6 +1328,7 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
             file_path=arguments.get("file_path"),
             flag_format=arguments.get("flag_format", "flag{"),
             metadata=arguments.get("metadata", {}),
+            mode=arguments.get("mode"),
             selected_tree_ids=arguments.get("selected_tree_ids"),
             tree_selection=arguments.get("tree_selection"),
             include_disabled_trees=bool(arguments.get("include_disabled_trees")),
@@ -1283,11 +1471,106 @@ def _run_summary(state: "RunState") -> Dict[str, Any]:
     return {
         "run_id": state.run_id,
         "status": state.status,
+        "run_mode": state.run_mode,
+        "impact_score": state.impact_score,
         "flag": state.flag,
         "error": state.error,
         "challenge": (state.challenge or {}).get("name", ""),
         "started_at": state.started_at,
         "finished_at": state.finished_at,
+    }
+
+
+def _summarize_mutations(run_id: str, observations: Dict[str, Any]) -> Dict[str, Any]:
+    from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    rows = get_request_lifecycle_manager().list_mutations(run_id, 500)
+    outcomes = observations.get("strategy_outcomes") or []
+    strong = sum(1 for row in outcomes if isinstance(row, dict) and row.get("strong_candidate"))
+    meaningful = sum(1 for row in outcomes if isinstance(row, dict) and row.get("meaningful_delta"))
+    return {
+        "total_mutations": len(rows),
+        "strong_outcomes": strong,
+        "meaningful_deltas": meaningful,
+        "last_mutation_record_id": rows[-1].get("mutation_record_id") if rows else None,
+    }
+
+
+def _compute_bug_bounty_impact(
+    run_id: str,
+    observations: Dict[str, Any],
+    steps: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    evidence_rows = observations.get("evidence_records") or []
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    dedupe = set()
+    poc_evidence: List[Dict[str, Any]] = []
+    for row in evidence_rows:
+        if not isinstance(row, dict):
+            continue
+        sev = str(row.get("severity") or "").lower()
+        if sev == "critical":
+            severity_counts["critical"] += 1
+        elif sev == "high":
+            severity_counts["high"] += 1
+        elif sev == "medium":
+            severity_counts["medium"] += 1
+        elif sev:
+            severity_counts["low"] += 1
+        key = (
+            str(row.get("tree_id") or ""),
+            str(row.get("step_id") or ""),
+            sev,
+            str(row.get("reason") or ""),
+        )
+        if key in dedupe:
+            continue
+        dedupe.add(key)
+        poc_evidence.append(
+            {
+                "tree_id": row.get("tree_id"),
+                "step_id": row.get("step_id"),
+                "severity": sev or "low",
+                "reason": str(row.get("reason") or "")[:300],
+                "kind": row.get("kind"),
+            }
+        )
+    sev_weights = {"critical": 9.5, "high": 8.0, "medium": 5.5, "low": 2.5}
+    total = sum(severity_counts.values())
+    weighted_sum = sum(severity_counts[k] * sev_weights[k] for k in severity_counts)
+    avg_severity = (weighted_sum / total) if total else 0.0
+    vectors = {
+        str(ev.get("kind") or "") for ev in poc_evidence if ev.get("kind")
+    }
+    vector_bonus = min(2.0, 0.4 * len(vectors))
+    mutation_summary = _summarize_mutations(run_id, observations)
+    mutation_bonus = min(
+        1.5,
+        0.5 * float(mutation_summary.get("strong_outcomes", 0)),
+    )
+    has_poc = bool(poc_evidence) or bool(observations.get("potential_vulns"))
+    poc_bonus = 1.0 if has_poc else 0.0
+    impact_score = round(min(10.0, avg_severity + vector_bonus + mutation_bonus + poc_bonus), 2)
+    threshold = 6.5
+    status_hint = (
+        "success"
+        if has_poc and impact_score >= threshold
+        else ("degraded_success" if has_poc else "completed")
+    )
+    return {
+        "impact_score": impact_score,
+        "impact_breakdown": {
+            "model": "cvss-like-v1",
+            "severity_counts": severity_counts,
+            "avg_severity_score": round(avg_severity, 2),
+            "vector_bonus": round(vector_bonus, 2),
+            "mutation_bonus": round(mutation_bonus, 2),
+            "poc_bonus": poc_bonus,
+            "poc_threshold": threshold,
+        },
+        "poc_evidence": poc_evidence[:100],
+        "mutation_summary": mutation_summary,
+        "status_hint": status_hint,
     }
 
 
@@ -1423,7 +1706,10 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 @app.get("/")
 async def read_index():
-    return FileResponse(str(FRONTEND_DIR / "index.html"))
+    return FileResponse(
+        str(FRONTEND_DIR / "index.html"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.get("/health")
@@ -1513,13 +1799,14 @@ async def list_scan_trees_api(
 @app.post("/solve", response_model=SolveSubmissionResponse)
 async def solve_challenge(payload: SolveRequest) -> SolveSubmissionResponse:
     """Queue a solver run and return a run identifier for polling."""
+    run_mode = _normalize_scan_mode(payload.mode or _DEFAULT_SCAN_MODE)
     descriptor = ChallengeDescriptor(
         type=payload.challenge_type,
         name=payload.name,
         url=payload.url,
         file_path=payload.file_path,
         flag_format=payload.flag_format,
-        metadata=dict(payload.metadata),
+        metadata={**dict(payload.metadata), "scan_mode": run_mode},
     )
 
     run_id = str(uuid.uuid4())
@@ -1528,14 +1815,17 @@ async def solve_challenge(payload: SolveRequest) -> SolveSubmissionResponse:
     state = RunState(
         run_id=run_id,
         challenge=challenge_snapshot or {},
+        run_mode=run_mode,
         selected_tree_ids=selected_ids,
         execution_plan=plan_preview,
     )
     _register_run(state)
-    _start_solver_task(run_id, descriptor, selected_tree_ids=selected_ids)
+    _start_solver_task(run_id, descriptor, selected_tree_ids=selected_ids, run_mode=run_mode)
     return SolveSubmissionResponse(
         run_id=run_id,
         status=state.status,
+        run_mode=state.run_mode,
+        impact_score=state.impact_score,
         selected_tree_ids=selected_ids,
         execution_plan=plan_preview,
     )
@@ -1652,6 +1942,11 @@ async def explain_run_confidence(run_id: str) -> Dict[str, Any]:
     return {
         "run_id": run_id,
         "status": payload.get("status"),
+        "run_mode": payload.get("run_mode"),
+        "impact_score": payload.get("impact_score"),
+        "impact_breakdown": payload.get("impact_breakdown") or {},
+        "poc_evidence": (payload.get("poc_evidence") or [])[:50],
+        "mutation_summary": payload.get("mutation_summary") or {},
         "ranked_confidence": [{"tree_id": k, "score": v} for k, v in ranked],
         "decision_receipts": receipts[-100:],
     }
@@ -1672,8 +1967,13 @@ async def export_attack_notebook(run_id: str) -> Dict[str, Any]:
         "",
         f"- Run ID: `{run.get('run_id')}`",
         f"- Status: `{run.get('status')}`",
+        f"- Mode: `{run.get('run_mode')}`",
+        f"- Impact Score: `{run.get('impact_score')}`",
         f"- Target: `{ch.get('url') or ch.get('file_path') or ''}`",
         f"- Challenge Type: `{ch.get('type')}`",
+        "",
+        "## Impact Summary",
+        f"- Breakdown: `{json.dumps(run.get('impact_breakdown') or {}, sort_keys=True)}`",
         "",
         "## Decision Receipts",
     ]
@@ -1884,9 +2184,15 @@ def _start_solver_task(
     descriptor: ChallengeDescriptor,
     *,
     selected_tree_ids: Optional[List[str]] = None,
+    run_mode: str = _SCAN_MODE_CTF,
 ):
     task = asyncio.create_task(
-        _run_solver(run_id, descriptor, selected_tree_ids=selected_tree_ids)
+        _run_solver(
+            run_id,
+            descriptor,
+            selected_tree_ids=selected_tree_ids,
+            run_mode=run_mode,
+        )
     )
     _tasks[run_id] = task
 
@@ -1895,6 +2201,7 @@ async def _run_solver(
     run_id: str,
     descriptor: ChallengeDescriptor,
     selected_tree_ids: Optional[List[str]] = None,
+    run_mode: str = _SCAN_MODE_CTF,
 ):
     state = get_run_state(run_id)
     if not state:
@@ -1912,7 +2219,7 @@ async def _run_solver(
             solver.orchestrator.set_progress_callback(progress_callback)
             try:
                 flag, log = await asyncio.to_thread(
-                    _execute_solver, descriptor, run_id, selected_tree_ids
+                    _execute_solver, descriptor, run_id, selected_tree_ids, run_mode
                 )
             finally:
                 solver.orchestrator.clear_progress_callback()
@@ -1926,12 +2233,20 @@ async def _run_solver(
             (observations or {}).get("recon_degraded")
             or solver.orchestrator.execution_context.get("degraded_mode")
         )
+        impact = _compute_bug_bounty_impact(run_id, observations or {}, state.steps)
         final_status = "success" if flag else ("degraded_success" if degraded else "completed")
+        if _normalize_scan_mode(run_mode) == _SCAN_MODE_BUG_BOUNTY and not flag:
+            final_status = impact["status_hint"]
         state.update(
             flag=flag,
             log=serialized_log,
             observations=observations,
             confidence=confidence,
+            run_mode=_normalize_scan_mode(run_mode),
+            impact_score=impact["impact_score"],
+            impact_breakdown=impact["impact_breakdown"],
+            poc_evidence=impact["poc_evidence"],
+            mutation_summary=impact["mutation_summary"],
             execution_plan=exec_plan if exec_plan is not None else state.execution_plan,
             status=final_status,
             finished_at=_now(),
@@ -1953,8 +2268,11 @@ def _execute_solver(
     challenge: ChallengeDescriptor,
     run_id: str,
     selected_tree_ids: Optional[List[str]] = None,
+    run_mode: str = _SCAN_MODE_CTF,
 ) -> Tuple[Optional[str], Dict[str, Any]]:
     """Run MVPSolver synchronously for use inside asyncio executors."""
+    challenge.metadata = dict(challenge.metadata or {})
+    challenge.metadata["scan_mode"] = _normalize_scan_mode(run_mode)
     flag = solver.solve(
         challenge,
         selected_tree_ids=selected_tree_ids,
@@ -2026,12 +2344,17 @@ async def rerun_challenge(run_id: str):
         metadata=ch.get("metadata", {}),
     )
     new_id = str(uuid.uuid4())
+    run_mode = _normalize_scan_mode(getattr(state, "run_mode", None) or _DEFAULT_SCAN_MODE)
+    descriptor.metadata = dict(descriptor.metadata or {})
+    descriptor.metadata["scan_mode"] = run_mode
     new_state = RunState(
-        run_id=new_id, challenge=_serialize_challenge(descriptor) or {}
+        run_id=new_id,
+        challenge=_serialize_challenge(descriptor) or {},
+        run_mode=run_mode,
     )
     _register_run(new_state)
-    _start_solver_task(new_id, descriptor)
-    return SolveSubmissionResponse(run_id=new_id, status=new_state.status)
+    _start_solver_task(new_id, descriptor, run_mode=run_mode)
+    return SolveSubmissionResponse(run_id=new_id, status=new_state.status, run_mode=run_mode)
 
 
 @app.get("/hitl/pending")

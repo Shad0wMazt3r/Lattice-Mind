@@ -28,6 +28,8 @@ def test_tools_list_contains_submit_scan():
     assert "get_run_status" in names
     assert "list_scan_trees" in names
     assert "run_selected_trees" in names
+    assert "validate_custom_tree" in names
+    assert "register_custom_tree" in names
     assert "set_scan_session" in names
     assert "tail_run_events" in names
     assert "get_tree_execution_trace" in names
@@ -56,7 +58,11 @@ def test_submit_scan_tool_call_success(monkeypatch):
             "method": "tools/call",
             "params": {
                 "name": "submit_scan",
-                "arguments": {"challenge_type": "web", "url": "http://target.local"},
+                "arguments": {
+                    "challenge_type": "web",
+                    "mode": "bug_bounty",
+                    "url": "http://target.local",
+                },
             },
         }
     )
@@ -67,6 +73,7 @@ def test_submit_scan_tool_call_success(monkeypatch):
     assert captured["url"] == "http://engine.local/solve"
     assert captured["headers"]["Authorization"] == "Bearer secret"
     assert captured["json"]["challenge_type"] == "web"
+    assert captured["json"]["mode"] == "bug_bounty"
 
 
 def test_unknown_tool_returns_tool_error():
@@ -165,6 +172,7 @@ def test_run_selected_trees_posts_solve(monkeypatch):
                 "name": "run_selected_trees",
                 "arguments": {
                     "challenge_type": "web",
+                    "mode": "bug_bounty",
                     "url": "http://t",
                     "selected_tree_ids": ["a"],
                 },
@@ -207,3 +215,30 @@ def test_new_operator_tools_routes(monkeypatch):
     assert any("/runs/r1/confidence/explain" in u for _, u, _ in calls)
     assert any("/runs/r1/export/notebook" in u for _, u, _ in calls)
 
+
+def test_custom_tree_tools_routes(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, headers, json, timeout):
+        calls.append((method, url, json))
+        return _FakeResponse(data={"ok": True})
+
+    monkeypatch.setattr("lattice_mind.mcp.server.requests.request", fake_request)
+    server = LatticeMindMCPServer(base_url="http://engine.local")
+
+    for name in ("validate_custom_tree", "register_custom_tree"):
+        response = server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 91,
+                "method": "tools/call",
+                "params": {
+                    "name": name,
+                    "arguments": {"yaml_text": "id: demo\nname: Demo\ncategory: web\nversion: '1.0'\ndetection_paths: []\nexploitation_paths: []"},
+                },
+            }
+        )
+        assert response["result"]["isError"] is False
+
+    assert any("/custom-trees/validate" in u for _, u, _ in calls)
+    assert any("/custom-trees/register" in u for _, u, _ in calls)

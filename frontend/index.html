@@ -292,6 +292,13 @@
               <label>Flag Format</label
               ><input id="ch-flagfmt" type="text" value="flag{" />
             </div>
+            <div class="field">
+              <label>Scan Mode</label>
+              <select id="ch-mode">
+                <option value="ctf">CTF</option>
+                <option value="bug_bounty">Bug Bounty</option>
+              </select>
+            </div>
             <button
               class="btn btn-full"
               id="solve-btn"
@@ -341,6 +348,8 @@
               <span id="run-status-badge" class="status-badge idle">IDLE</span>
               <span id="run-id-display"></span>
               <span id="run-target"></span>
+              <span id="run-mode-display"></span>
+              <span id="run-impact-display"></span>
               <span id="flag-banner"
                 >&#10003; <span id="flag-banner-text"></span
               ></span>

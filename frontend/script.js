@@ -102,6 +102,7 @@ function restorePanelSizes() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   restorePanelSizes();
+  ensureScanModeField();
   initResizer("sidebar-resizer", "sidebar", "h", 180, 500, "lm_sidebar_w");
   initResizer("tree-resizer", "tree-panel", "h", 200, 1400, "lm_tree_w");
   initResizer(
@@ -590,6 +591,7 @@ let currentRunId = null;
 let ws = null;
 let _allHistoryRows = [];
 let _allRules = [];
+let _scanModeDefault = "ctf";
 
 //  utils
 const $ = (id) => document.getElementById(id);
@@ -601,6 +603,21 @@ const fmtDur = (a, b) => {
 const esc = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+function ensureScanModeField() {
+  if ($("ch-mode")) return;
+  const flagInput = $("ch-flagfmt");
+  if (!flagInput) return;
+  const field = document.createElement("div");
+  field.className = "field";
+  field.innerHTML =
+    '<label>Scan Mode</label><select id="ch-mode"><option value="ctf">CTF</option><option value="bug_bounty">Bug Bounty</option></select>';
+  const flagField = flagInput.closest(".field");
+  if (flagField && flagField.parentNode) {
+    flagField.parentNode.insertBefore(field, flagField.nextSibling);
+  }
+  if ($("ch-mode")) $("ch-mode").value = _scanModeDefault;
+}
+
 //  dir-scan feature flag toggle ──────────────────────────────────────────────
 let _dirScanEnabled = false;
 
@@ -610,6 +627,9 @@ async function _loadSettings() {
     if (!r.ok) return;
     const d = await r.json();
     _dirScanEnabled = !!d.dir_scan_enabled;
+    _scanModeDefault = d.scan_mode_default || "ctf";
+    ensureScanModeField();
+    if ($("ch-mode")) $("ch-mode").value = _scanModeDefault;
     _renderDirScanBadge();
   } catch (e) {}
 }
@@ -703,6 +723,7 @@ async function submitChallenge() {
   const body = {
     name: $("ch-name").value || "Untitled",
     challenge_type: $("ch-type").value,
+    mode: $("ch-mode") ? $("ch-mode").value : "ctf",
     url: $("ch-url").value || null,
     file_path: filePath,
     flag_format: $("ch-flagfmt").value || "flag{",
@@ -774,6 +795,13 @@ function updateActiveRunUI(run) {
   const ch = run.challenge || {};
   const target = ch.url || ch.file_path || ch.name || "";
   $("run-target").textContent = target ? " " + target : "";
+  $("run-mode-display").textContent = run.run_mode
+    ? " mode=" + String(run.run_mode).toUpperCase()
+    : "";
+  $("run-impact-display").textContent =
+    run.impact_score !== undefined && run.impact_score !== null
+      ? " impact=" + Number(run.impact_score).toFixed(2)
+      : "";
 
   if (run.flag) {
     $("flag-banner").classList.add("visible");
@@ -1070,11 +1098,16 @@ function renderHistoryTable(rows) {
       const dur = fmtDur(run.created_at, run.finished_at);
       const st = run.status || "?";
       const sc = STATUS_COLOR[st] || "#444";
+      const runMode = run.run_mode ? String(run.run_mode).toUpperCase() : "";
+      const impact =
+        run.impact_score !== undefined && run.impact_score !== null
+          ? Number(run.impact_score).toFixed(2)
+          : "";
       return `<tr>
       <td style="color:#aaa;font-size:10px">${run.run_id.slice(0, 8)}</td>
       <td>${esc(ch.type || "?")}</td>
       <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(target)}">${esc(target.slice(0, 25))}</td>
-      <td><span style="color:${sc}">${esc(st)}</span></td>
+      <td><span style="color:${sc}">${esc(st)}</span>${runMode ? `<div style="color:#8aa;font-size:10px">${esc(runMode)}</div>` : ""}${impact ? `<div style="color:#8aa;font-size:10px">impact ${esc(impact)}</div>` : ""}</td>
       <td class="flag-cell">${run.flag ? esc(run.flag) : ""}</td>
       <td style="color:var(--dim)">${started}</td>
       <td style="color:var(--dim)">${dur}</td>

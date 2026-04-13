@@ -63,6 +63,7 @@ class LatticeMindMCPServer:
                     "properties": {
                         "name": {"type": "string"},
                         "challenge_type": {"type": "string"},
+                        "mode": {"type": "string", "enum": ["ctf", "bug_bounty"]},
                         "url": {"type": "string"},
                         "file_path": {"type": "string"},
                         "flag_format": {"type": "string"},
@@ -149,6 +150,32 @@ class LatticeMindMCPServer:
                 },
             },
             {
+                "name": "validate_custom_tree",
+                "description": "Validate a runtime custom YAML tree before registration.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "yaml_text": {"type": "string"},
+                        "namespace": {"type": "string"},
+                        "enable": {"type": "boolean"},
+                    },
+                    "required": ["yaml_text"],
+                },
+            },
+            {
+                "name": "register_custom_tree",
+                "description": "Register a validated custom YAML tree for explicit scan selection.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "yaml_text": {"type": "string"},
+                        "namespace": {"type": "string"},
+                        "enable": {"type": "boolean"},
+                    },
+                    "required": ["yaml_text"],
+                },
+            },
+            {
                 "name": "list_scan_trees",
                 "description": (
                     "List available YAML scan trees with metadata for targeted execution "
@@ -174,6 +201,7 @@ class LatticeMindMCPServer:
                     "properties": {
                         "name": {"type": "string"},
                         "challenge_type": {"type": "string"},
+                        "mode": {"type": "string", "enum": ["ctf", "bug_bounty"]},
                         "url": {"type": "string"},
                         "file_path": {"type": "string"},
                         "flag_format": {"type": "string"},
@@ -475,6 +503,7 @@ class LatticeMindMCPServer:
             payload = {
                 "name": arguments.get("name", "Untitled Challenge"),
                 "challenge_type": arguments["challenge_type"],
+                "mode": arguments.get("mode"),
                 "url": arguments.get("url"),
                 "file_path": arguments.get("file_path"),
                 "flag_format": arguments.get("flag_format", "flag{"),
@@ -521,6 +550,20 @@ class LatticeMindMCPServer:
         if name == "get_rule":
             rule_id = arguments["rule_id"]
             return self._request("GET", f"/rules/{rule_id}")
+        if name == "validate_custom_tree":
+            body = {
+                "yaml_text": arguments["yaml_text"],
+                "namespace": arguments.get("namespace", "mcp"),
+                "enable": bool(arguments.get("enable", False)),
+            }
+            return self._request("POST", "/custom-trees/validate", body)
+        if name == "register_custom_tree":
+            body = {
+                "yaml_text": arguments["yaml_text"],
+                "namespace": arguments.get("namespace", "mcp"),
+                "enable": bool(arguments.get("enable", False)),
+            }
+            return self._request("POST", "/custom-trees/register", body)
         if name == "list_scan_trees":
             q = []
             if arguments.get("category"):
@@ -540,6 +583,7 @@ class LatticeMindMCPServer:
             payload = {
                 "name": arguments.get("name", "Untitled Challenge"),
                 "challenge_type": arguments["challenge_type"],
+                "mode": arguments.get("mode"),
                 "url": arguments.get("url"),
                 "file_path": arguments.get("file_path"),
                 "flag_format": arguments.get("flag_format", "flag{"),
@@ -662,6 +706,8 @@ class LatticeMindMCPServer:
         return {
             "run_id": data.get("run_id"),
             "status": data.get("status"),
+            "run_mode": data.get("run_mode"),
+            "impact_score": data.get("impact_score"),
             "flag": data.get("flag"),
             "error": data.get("error"),
             "challenge": challenge.get("name", ""),
@@ -788,4 +834,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
