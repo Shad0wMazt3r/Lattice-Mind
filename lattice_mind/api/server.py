@@ -131,7 +131,13 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ── SQLite persistence ────────────────────────────────────────────────────────
-DB_PATH = os.environ.get("LATTICE_MIND_DB", "/data/runs.db")
+# Default to a workspace-writable location to avoid crashing on import in
+# non-container environments (e.g. local dev, test runners) where `/data` may
+# not exist or be writable.
+DB_PATH = os.environ.get(
+    "LATTICE_MIND_DB",
+    os.path.join(pathlib.Path.home(), ".lattice-mind", "runs.db"),
+)
 
 
 def _db_connect() -> sqlite3.Connection:

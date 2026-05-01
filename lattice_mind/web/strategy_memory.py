@@ -9,7 +9,14 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import urlparse
 
-DEFAULT_DB_PATH = os.environ.get("LATTICE_MIND_DB", "/data/runs.db")
+
+def _default_db_path() -> str:
+    # Keep in sync with `lattice_mind.api.server.DB_PATH` so the API and
+    # strategy memory share the same SQLite DB by default.
+    return os.path.join(os.path.expanduser("~"), ".lattice-mind", "runs.db")
+
+
+DEFAULT_DB_PATH = os.environ.get("LATTICE_MIND_DB", _default_db_path())
 
 
 def _now() -> str:
@@ -327,4 +334,3 @@ def record_strategy_outcomes(outcomes: Iterable[Dict[str, Any]]) -> int:
             )
             written += 1
     return written
-

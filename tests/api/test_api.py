@@ -31,7 +31,12 @@ def test_solve_endpoint(monkeypatch):
             "flag_found": expected_flag,
         }
 
-    def fake_start_solver(run_id: str, descriptor: ChallengeDescriptor):
+    def fake_start_solver(
+        run_id: str,
+        descriptor: ChallengeDescriptor,
+        *,
+        selected_tree_ids=None,
+    ):
         state = server.get_run_state(run_id)
         assert state
         state.update(status="running", started_at="now")

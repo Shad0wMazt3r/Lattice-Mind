@@ -121,7 +121,7 @@ class Orchestrator:
                 else:
                     logger.error(f"Node ID not found in registry: {next_node_or_id}")
                     next_node = None
-            elif isinstance(next_node_or_id, DecisionNode):
+            elif next_node_or_id is not None:
                 # Old-style: direct instance
                 next_node = next_node_or_id
                 result.next_node = getattr(next_node, "node_id", next_node.__class__.__name__)
