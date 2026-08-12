@@ -16,8 +16,11 @@ Covers:
 """
 
 import os
+import subprocess
+import sys
 import tempfile
 import textwrap
+from pathlib import Path
 
 import pytest
 import yaml
@@ -494,3 +497,79 @@ class TestTreeRegistry:
         r1 = get_tree_registry()
         r2 = get_tree_registry()
         assert r1 is r2
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Bundled corpus and startup smoke tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_bundled_yaml_corpus_loads_without_quarantine():
+    corpus_dir = (
+        Path(__file__).resolve().parents[1] / "lattice_mind" / "trees" / "yaml"
+    )
+    yaml_files = sorted((*corpus_dir.rglob("*.yaml"), *corpus_dir.rglob("*.yml")))
+
+    registry = TreeRegistry()
+    registry.load_from_directory(str(corpus_dir))
+
+    assert yaml_files, "bundled decision-tree corpus is empty"
+    assert registry.validation_errors == {}
+    assert len(registry.list_trees()) == len(yaml_files)
+
+
+def test_bundled_yaml_uses_only_executor_supported_step_contracts():
+    corpus_dir = (
+        Path(__file__).resolve().parents[1] / "lattice_mind" / "trees" / "yaml"
+    )
+    supported_actions = {"http_probe", "http_request", "exec_command", "client_decode"}
+    supported_injections = {
+        "none",
+        "all_params",
+        "vulnerable_param",
+        "path",
+        "header",
+        "cookie",
+    }
+    unsupported = []
+
+    def inspect_value(value, filename):
+        if isinstance(value, dict):
+            action = value.get("action")
+            inject_into = value.get("inject_into")
+            if action is not None and action not in supported_actions:
+                unsupported.append(f"{filename}: action={action!r}")
+            if inject_into is not None and inject_into not in supported_injections:
+                unsupported.append(f"{filename}: inject_into={inject_into!r}")
+            for nested in value.values():
+                inspect_value(nested, filename)
+        elif isinstance(value, list):
+            for nested in value:
+                inspect_value(nested, filename)
+
+    for path in corpus_dir.rglob("*.yaml"):
+        inspect_value(yaml.safe_load(path.read_text(encoding="utf-8")) or {}, path.name)
+
+    assert unsupported == []
+
+
+def test_tree_loader_imports_in_clean_python_process():
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import yaml; "
+            "from lattice_mind.core.tree_loader import TreeRegistry; "
+            "TreeRegistry()",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr

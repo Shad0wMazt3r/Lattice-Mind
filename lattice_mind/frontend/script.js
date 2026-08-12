@@ -326,8 +326,8 @@ async function doRegister() {
     setAuthError("Passwords do not match.");
     return;
   }
-  if (password.length < 6) {
-    setAuthError("Password must be at least 6 characters.");
+  if (password.length < 8) {
+    setAuthError("Password must be at least 8 characters.");
     return;
   }
   const btn = document.getElementById("register-submit-btn");
@@ -390,8 +390,8 @@ async function doForgot() {
 
 async function doReset() {
   const new_password = document.getElementById("reset-password").value;
-  if (new_password.length < 6) {
-    setAuthError("Password must be at least 6 characters.");
+  if (new_password.length < 8) {
+    setAuthError("Password must be at least 8 characters.");
     return;
   }
   const token = window.location.hash.replace("#reset=", "");
@@ -463,8 +463,8 @@ async function doChangePassword() {
     errEl.classList.remove("hidden");
     return;
   }
-  if (new_password.length < 6) {
-    errEl.textContent = "New password must be at least 6 characters.";
+  if (new_password.length < 8) {
+    errEl.textContent = "New password must be at least 8 characters.";
     errEl.classList.remove("hidden");
     return;
   }

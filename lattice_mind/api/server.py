@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import base64 as _b64
+import hashlib
 import json
 import logging
 import os
@@ -11,12 +13,13 @@ import secrets as _secrets
 import shutil
 import smtplib
 import sqlite3
+import tempfile
 import threading
 import urllib.parse
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -48,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -67,17 +70,62 @@ def _verify_pw(plain: str, hashed: str) -> bool:
 
 
 def _make_token(data: dict) -> str:
-    from datetime import timedelta
-
-    payload = {**data, "exp": datetime.utcnow() + timedelta(hours=_TOKEN_HOURS)}
+    payload = {
+        **data,
+        "typ": "access",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=_TOKEN_HOURS),
+    }
     return _jwt.encode(payload, SECRET_KEY, algorithm=_ALGORITHM)
+
+
+def _password_version(hashed_password: str) -> str:
+    return hashlib.sha256(hashed_password.encode("utf-8")).hexdigest()[:24]
+
+
+def _make_password_reset_token(email: str, hashed_password: str) -> str:
+    return _jwt.encode(
+        {
+            "sub": email,
+            "typ": "password_reset",
+            "pwdv": _password_version(hashed_password),
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=30),
+        },
+        SECRET_KEY,
+        algorithm=_ALGORITHM,
+    )
+
+
+def _decode_password_reset_token(token: str) -> Optional[str]:
+    try:
+        payload = _jwt.decode(token, SECRET_KEY, algorithms=[_ALGORITHM])
+    except JWTError:
+        return None
+    if payload.get("typ") != "password_reset":
+        return None
+    email = payload.get("sub")
+    if not email:
+        return None
+    user = _db_get_user_by_email(str(email))
+    if not user or not _secrets.compare_digest(
+        str(payload.get("pwdv") or ""),
+        _password_version(user["hashed_password"]),
+    ):
+        return None
+    return str(email)
 
 
 def _decode_token(token: str) -> Optional[dict]:
     try:
-        return _jwt.decode(token, SECRET_KEY, algorithms=[_ALGORITHM])
-    except Exception:
+        payload = _jwt.decode(token, SECRET_KEY, algorithms=[_ALGORITHM])
+    except JWTError:
         return None
+    if (
+        payload.get("typ") != "access"
+        or not isinstance(payload.get("sub"), str)
+        or payload.get("role") not in {"admin", "operator"}
+    ):
+        return None
+    return payload
 
 
 def _send_email(to_email: str, subject: str, content: str):
@@ -131,11 +179,56 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ── SQLite persistence ────────────────────────────────────────────────────────
-DB_PATH = os.environ.get("LATTICE_MIND_DB", "/data/runs.db")
+DB_PATH = os.environ.get(
+    "LATTICE_MIND_DB", str(pathlib.Path.home() / ".lattice-mind" / "runs.db")
+)
+_WORKER_LOCK_HANDLE = None
+
+
+def _acquire_single_worker_lock():
+    """Enforce the API's documented single-worker execution model.
+
+    Runs live in process memory while their snapshots live in SQLite. A second
+    worker cannot safely resume or own the first worker's tasks, so refusing a
+    shared database is safer than corrupting active rows during recovery.
+    """
+    global _WORKER_LOCK_HANDLE
+    lock_path = pathlib.Path(DB_PATH + ".worker.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+b")
+    if handle.tell() == 0:
+        handle.write(b"0")
+        handle.flush()
+    handle.seek(0)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, BlockingIOError) as exc:
+        handle.close()
+        raise RuntimeError(
+            "Lattice Mind requires one API worker per database; "
+            f"{DB_PATH!r} is already in use"
+        ) from exc
+    _WORKER_LOCK_HANDLE = handle
+
+
+def _release_single_worker_lock():
+    global _WORKER_LOCK_HANDLE
+    if _WORKER_LOCK_HANDLE is not None:
+        _WORKER_LOCK_HANDLE.close()
+        _WORKER_LOCK_HANDLE = None
 
 
 def _db_connect() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    parent = os.path.dirname(DB_PATH)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
@@ -184,6 +277,10 @@ def _init_db():
             pass
         try:
             conn.execute("ALTER TABLE runs ADD COLUMN execution_plan TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN owner TEXT")
         except Exception:
             pass
         # settings table
@@ -309,6 +406,24 @@ def _get_secret_key() -> str:
     return row["value"] if row else _secrets.token_hex(32)
 
 
+def _mark_interrupted_runs() -> int:
+    """Make restart state terminal instead of leaving pollers waiting forever."""
+    now = _now()
+    with _db() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE runs
+               SET status='error',
+                   error='Run interrupted by server restart',
+                   finished_at=?,
+                   updated_at=?
+             WHERE status IN ('queued', 'running')
+            """,
+            (now, now),
+        )
+    return int(cursor.rowcount or 0)
+
+
 def _db_get_user(username: str) -> Optional[dict]:
     with _db() as conn:
         row = conn.execute(
@@ -326,6 +441,13 @@ def _db_get_user_by_email(email: str) -> Optional[dict]:
 def _db_user_count() -> int:
     with _db() as conn:
         return conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()["cnt"]
+
+
+def _db_admin_count() -> int:
+    with _db() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) as cnt FROM users WHERE role = 'admin'"
+        ).fetchone()["cnt"]
 
 
 def _db_create_user(
@@ -359,9 +481,9 @@ def _db_save(state: RunState):
             """
             INSERT INTO runs
                 (run_id, status, challenge, steps, flag, error, log, observations, confidence,
-                 selected_tree_ids, execution_plan,
+                 selected_tree_ids, execution_plan, owner,
                  started_at, finished_at, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(run_id) DO UPDATE SET
                 status       = excluded.status,
                 steps        = excluded.steps,
@@ -372,6 +494,7 @@ def _db_save(state: RunState):
                 confidence   = excluded.confidence,
                 selected_tree_ids = excluded.selected_tree_ids,
                 execution_plan   = excluded.execution_plan,
+                owner          = excluded.owner,
                 started_at   = excluded.started_at,
                 finished_at  = excluded.finished_at,
                 updated_at   = excluded.updated_at
@@ -388,6 +511,7 @@ def _db_save(state: RunState):
                 json.dumps(d["confidence"]) if d["confidence"] else None,
                 json.dumps(d["selected_tree_ids"]) if d.get("selected_tree_ids") else None,
                 json.dumps(d["execution_plan"]) if d.get("execution_plan") else None,
+                d.get("owner"),
                 d["started_at"],
                 d["finished_at"],
                 d["created_at"],
@@ -421,13 +545,25 @@ def _db_load(run_id: str) -> Optional[Dict[str, Any]]:
     return d
 
 
-def _db_list(limit: int = 50) -> List[Dict[str, Any]]:
+def _db_list(
+    limit: int = 50,
+    *,
+    username: Optional[str] = None,
+    role: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     with _db() as conn:
-        rows = conn.execute(
-            "SELECT run_id, status, flag, error, created_at, finished_at, challenge "
-            "FROM runs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        if role == "admin":
+            rows = conn.execute(
+                "SELECT run_id, status, flag, error, created_at, finished_at, challenge "
+                "FROM runs ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT run_id, status, flag, error, created_at, finished_at, challenge "
+                "FROM runs WHERE owner = ? ORDER BY created_at DESC LIMIT ?",
+                (username, limit),
+            ).fetchall()
     out = []
     for row in rows:
         d = dict(row)
@@ -464,14 +600,48 @@ async def _auth_middleware(request: Request, call_next):
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
-    if not _decode_token(auth[7:]):
+    identity = _decode_token(auth[7:])
+    if not identity:
         return JSONResponse(
             status_code=401, content={"detail": "Invalid or expired token"}
         )
+    request.state.identity = identity
+    role = str(identity.get("role") or "operator")
+    username = str(identity.get("sub") or "")
+
+    global_admin_write = (
+        (path.startswith("/rules/") and request.method in {"PATCH", "POST", "DELETE"})
+        or (path == "/settings" and request.method != "GET")
+        or (path == "/strategy-memory" and request.method == "DELETE")
+    )
+    if path == "/strategy-memory" and role != "admin":
+        return JSONResponse(status_code=403, content={"detail": "Admin role required"})
+    if global_admin_write and role != "admin":
+        return JSONResponse(status_code=403, content={"detail": "Admin role required"})
+
+    run_match = _re.match(r"^/runs/([^/]+)", path)
+    if run_match:
+        state = get_run_state(run_match.group(1))
+        if state and not _can_access_run(state, username, role):
+            return JSONResponse(status_code=404, content={"detail": "Run not found"})
+    interception_match = _re.match(r"^/interception/([^/]+)", path)
+    if interception_match:
+        from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+        interception_run_id = get_request_lifecycle_manager().run_id_for_interception(
+            interception_match.group(1)
+        )
+        if interception_run_id:
+            state = get_run_state(interception_run_id)
+            if state and not _can_access_run(state, username, role):
+                return JSONResponse(status_code=404, content={"detail": "Interception not found"})
     return await call_next(request)
 
 
+_acquire_single_worker_lock()
+atexit.register(_release_single_worker_lock)
 _init_db()  # ensure schema exists at import time
+_mark_interrupted_runs()  # persisted tasks cannot survive a process restart
 _load_settings()  # restore persisted feature flags
 ensure_strategy_memory_schema()
 SECRET_KEY = _get_secret_key()  # load or create persistent JWT secret
@@ -494,6 +664,7 @@ class RunState:
     confidence: Optional[Dict[str, float]] = None
     selected_tree_ids: Optional[List[str]] = None
     execution_plan: Optional[Dict[str, Any]] = None
+    owner: Optional[str] = None
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     created_at: str = field(default_factory=_now)
@@ -513,6 +684,7 @@ class RunState:
                 "confidence": self.confidence,
                 "selected_tree_ids": self.selected_tree_ids,
                 "execution_plan": self.execution_plan,
+                "owner": self.owner,
                 "challenge": self.challenge,
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
@@ -590,11 +762,28 @@ def get_run_state(run_id: str) -> Optional[RunState]:
         confidence=row.get("confidence"),
         selected_tree_ids=row.get("selected_tree_ids"),
         execution_plan=row.get("execution_plan"),
+        owner=row.get("owner"),
         started_at=row["started_at"],
         finished_at=row["finished_at"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+    return state
+
+
+def _can_access_run(state: RunState, username: str, role: str) -> bool:
+    """Admins may inspect all runs; operators are confined to runs they created."""
+    return role == "admin" or bool(username and state.owner == username)
+
+
+def _assert_run_access(
+    run_id: str, username: Optional[str], role: Optional[str]
+) -> RunState:
+    state = get_run_state(run_id)
+    if not state or not _can_access_run(
+        state, str(username or ""), str(role or "")
+    ):
+        raise HTTPException(status_code=404, detail="Run not found")
     return state
 
 
@@ -697,6 +886,7 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
     email: str
+    admin_bootstrap_token: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -723,15 +913,24 @@ async def auth_login(payload: AuthRequest):
 
 @app.post("/auth/register", response_model=TokenResponse)
 async def auth_register(payload: RegisterRequest):
-    if len(payload.username) < 2 or len(payload.password) < 6:
+    if len(payload.username) < 2 or len(payload.password) < 8:
         raise HTTPException(
-            status_code=422, detail="Username ≥ 2 chars and password ≥ 6 chars required"
+            status_code=422, detail="Username ≥ 2 chars and password ≥ 8 chars required"
         )
     if _db_get_user(payload.username):
         raise HTTPException(status_code=409, detail="Username already exists")
     if _db_get_user_by_email(payload.email):
         raise HTTPException(status_code=409, detail="Email already exists")
-    role = "admin" if _db_user_count() == 0 else "operator"
+    bootstrap_token = os.environ.get("LATTICE_MIND_BOOTSTRAP_TOKEN")
+    role = "operator"
+    if payload.admin_bootstrap_token:
+        if not bootstrap_token or not _secrets.compare_digest(
+            payload.admin_bootstrap_token, bootstrap_token
+        ):
+            raise HTTPException(status_code=403, detail="Invalid admin bootstrap token")
+        if _db_admin_count() != 0:
+            raise HTTPException(status_code=409, detail="Admin account already initialized")
+        role = "admin"
     user = _db_create_user(payload.username, payload.password, payload.email, role)
     token = _make_token({"sub": user["username"], "role": user["role"]})
     return TokenResponse(
@@ -747,7 +946,7 @@ class ForgotPasswordRequest(BaseModel):
 async def auth_forgot_password(payload: ForgotPasswordRequest):
     user = _db_get_user_by_email(payload.email)
     if user:
-        token = _b64.b64encode(urllib.parse.quote(payload.email).encode()).decode()
+        token = _make_password_reset_token(payload.email, user["hashed_password"])
         reset_link = f"/#reset={token}"
         _send_email(
             payload.email,
@@ -764,9 +963,8 @@ class ResetPasswordRequest(BaseModel):
 
 @app.post("/auth/reset-password")
 async def auth_reset_password(payload: ResetPasswordRequest):
-    try:
-        email = urllib.parse.unquote(_b64.b64decode(payload.token).decode())
-    except Exception:
+    email = _decode_password_reset_token(payload.token)
+    if not email:
         raise HTTPException(status_code=400, detail="Invalid token")
 
     user = _db_get_user_by_email(email)
@@ -883,7 +1081,7 @@ async def reload_rules():
     """Rescan the YAML trees directory and hot-reload rules."""
     import pathlib
 
-    base_path = pathlib.Path(solver.__file__).parent / "trees" / "yaml"
+    base_path = pathlib.Path(__file__).resolve().parents[1] / "trees" / "yaml"
     solver.registry.load_from_directory(str(base_path))
     return {"status": "ok", "count": len(solver.registry.list_trees())}
 
@@ -991,6 +1189,7 @@ async def delete_strategy_memory(payload: Optional[StrategyResetRequest] = None)
     }
 
 
+@app.patch("/rules/{rule_id}")
 async def patch_rule(rule_id: str, payload: dict):
     """Enable or disable a specific rule."""
     tree = solver.registry.get_tree(rule_id)
@@ -1006,8 +1205,7 @@ from fastapi.staticfiles import StaticFiles
 
 from lattice_mind.mcp.server import LatticeMindMCPServer
 
-BASE_DIR = pathlib.Path(__file__).parent.parent.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
+FRONTEND_DIR = pathlib.Path(__file__).resolve().parents[1] / "frontend"
 
 
 @app.get("/mcp")
@@ -1025,7 +1223,13 @@ async def mcp_info():
 _MCP_TERMINAL_STATES = {"success", "completed", "error"}
 
 
-async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optional[str] = None) -> Any:
+async def _mcp_dispatch(
+    name: str,
+    arguments: Dict[str, Any],
+    *,
+    username: Optional[str] = None,
+    role: Optional[str] = None,
+) -> Any:
     """Call server functions directly — no HTTP roundtrip, no deadlock."""
     if name == "health_check":
         return await healthcheck()
@@ -1051,11 +1255,12 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
             flag_format=arguments.get("flag_format", "flag{"),
             metadata=arguments.get("metadata", {}),
         )
-        result = await solve_challenge(payload)
+        result = _submit_run(payload, str(username or ""))
         return result.model_dump()
 
     if name == "wait_for_run":
         run_id = arguments["run_id"]
+        _assert_run_access(run_id, username, role)
         timeout = max(1, min(600, int(arguments.get("timeout_seconds", 300))))
         interval = max(1, min(30, int(arguments.get("poll_interval_seconds", 3))))
         deadline = asyncio.get_event_loop().time() + timeout
@@ -1075,17 +1280,20 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
             await asyncio.sleep(interval)
 
     if name == "get_run_summary":
-        state = get_run_state(arguments["run_id"])
-        if not state:
-            raise HTTPException(status_code=404, detail="Run not found")
+        state = _assert_run_access(arguments["run_id"], username, role)
         return _run_summary(state)
 
     if name == "get_run_status":
+        _assert_run_access(arguments["run_id"], username, role)
         result = await get_run_status(arguments["run_id"])
         return result.model_dump() if hasattr(result, "model_dump") else dict(result)
 
     if name == "list_runs":
-        return await list_runs(limit=int(arguments.get("limit", 50)))
+        return _db_list(
+            limit=int(arguments.get("limit", 50)),
+            username=username,
+            role=role,
+        )
 
     if name == "list_rules":
         return await list_rules(include_quarantined=bool(arguments.get("include_quarantined")))
@@ -1112,10 +1320,11 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
             tree_selection=arguments.get("tree_selection"),
             include_disabled_trees=bool(arguments.get("include_disabled_trees")),
         )
-        result = await solve_challenge(payload)
+        result = _submit_run(payload, str(username or ""))
         return result.model_dump()
 
     if name == "set_scan_session":
+        _assert_run_access(arguments["run_id"], username, role)
         return await set_run_session(
             arguments["run_id"],
             SetRunSessionRequest(
@@ -1126,6 +1335,7 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
         )
 
     if name == "set_session_cookies":
+        _assert_run_access(arguments["run_id"], username, role)
         return await set_run_session(
             arguments["run_id"],
             SetRunSessionRequest(
@@ -1136,12 +1346,14 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
         )
 
     if name == "get_scan_session":
+        _assert_run_access(arguments["run_id"], username, role)
         return await get_run_session(
             arguments["run_id"],
             include_values=bool(arguments.get("include_values")),
         )
 
     if name == "rotate_scan_session":
+        _assert_run_access(arguments["run_id"], username, role)
         return await rotate_run_session(
             arguments["run_id"],
             RotateRunSessionRequest(
@@ -1152,6 +1364,7 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
         )
 
     if name == "enable_request_interception":
+        _assert_run_access(arguments["run_id"], username, role)
         return await enable_run_interception(
             arguments["run_id"],
             EnableInterceptionRequest(
@@ -1162,9 +1375,21 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
         )
 
     if name == "poll_interception":
+        from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+        iid = arguments["interception_id"]
+        interception_run_id = get_request_lifecycle_manager().run_id_for_interception(iid)
+        if interception_run_id:
+            _assert_run_access(interception_run_id, username, role)
         return await poll_interception_api(arguments["interception_id"])
 
     if name == "submit_request_mutation":
+        from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+        iid = arguments["interception_id"]
+        interception_run_id = get_request_lifecycle_manager().run_id_for_interception(iid)
+        if interception_run_id:
+            _assert_run_access(interception_run_id, username, role)
         return await submit_interception_mutation(
             arguments["interception_id"],
             SubmitMutationRequest(
@@ -1177,6 +1402,14 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
     if name == "mutate_request":
         action = str(arguments["action"]).strip().lower()
         run_id = arguments["run_id"]
+        _assert_run_access(run_id, username, role)
+        if action in {"mutate", "resume", "drop"}:
+            from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+            iid = str(arguments.get("interception_id") or "")
+            actual_run_id = get_request_lifecycle_manager().run_id_for_interception(iid)
+            if not actual_run_id or actual_run_id != run_id:
+                raise HTTPException(status_code=404, detail="Interception not found")
         if action == "inspect":
             return await pending_run_request(run_id)
         if action == "pause":
@@ -1210,6 +1443,7 @@ async def _mcp_dispatch(name: str, arguments: Dict[str, Any], *, username: Optio
         raise ValueError(f"Unsupported mutate_request action: {action!r}")
 
     if name == "list_mutation_history":
+        _assert_run_access(arguments["run_id"], username, role)
         return await list_run_mutations(
             arguments["run_id"],
             limit=int(arguments.get("limit", 100)),
@@ -1266,9 +1500,15 @@ async def mcp_rpc(request: Request):
     allow_unauth = method == "initialize" or (
         method == "tools/call" and (params.get("name") == "auth_login")
     )
+    identity: Dict[str, Any] = {}
     if not allow_unauth:
         auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer ") or not _decode_token(auth_header[7:]):
+        identity = (
+            _decode_token(auth_header[7:])
+            if auth_header.startswith("Bearer ")
+            else None
+        ) or {}
+        if not identity:
             return _ok({
                 "content": [{
                     "type": "text",
@@ -1285,7 +1525,12 @@ async def mcp_rpc(request: Request):
         arguments = params.get("arguments") or {}
 
         try:
-            result = await _mcp_dispatch(tool_name, arguments)
+            result = await _mcp_dispatch(
+                tool_name,
+                arguments,
+                username=identity.get("sub"),
+                role=identity.get("role"),
+            )
             return _ok({"content": [{"type": "text", "text": json.dumps(result, indent=2)}], "isError": False})
         except HTTPException as exc:
             return _ok(
@@ -1339,14 +1584,22 @@ async def mcp_rpc(request: Request):
 
 @app.websocket("/ws/{run_id}")
 async def websocket_endpoint(websocket: WebSocket, run_id: str, token: str = ""):
-    if not _decode_token(token):
+    identity = _decode_token(token)
+    state = get_run_state(run_id)
+    if (
+        not identity
+        or not state
+        or not _can_access_run(
+            state,
+            str(identity.get("sub") or ""),
+            str(identity.get("role") or "operator"),
+        )
+    ):
         await websocket.close(code=4001)
         return
     await manager.connect(websocket, run_id)
     try:
-        state = get_run_state(run_id)
-        if state:
-            await websocket.send_json({"type": "init", "data": state.to_dict()})
+        await websocket.send_json({"type": "init", "data": state.to_dict()})
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
@@ -1447,9 +1700,15 @@ async def list_scan_trees_api(
     return data
 
 
-@app.post("/solve", response_model=SolveSubmissionResponse)
-async def solve_challenge(payload: SolveRequest) -> SolveSubmissionResponse:
-    """Queue a solver run and return a run identifier for polling."""
+def _submit_run(payload: SolveRequest, owner: str) -> SolveSubmissionResponse:
+    if payload.file_path:
+        requested = pathlib.Path(payload.file_path).expanduser().resolve()
+        upload_root = UPLOAD_DIR.resolve()
+        if not requested.is_file() or requested.parent != upload_root:
+            raise HTTPException(
+                status_code=400,
+                detail="file_path must reference a file returned by POST /upload",
+            )
     descriptor = ChallengeDescriptor(
         type=payload.challenge_type,
         name=payload.name,
@@ -1467,9 +1726,13 @@ async def solve_challenge(payload: SolveRequest) -> SolveSubmissionResponse:
         challenge=challenge_snapshot or {},
         selected_tree_ids=selected_ids,
         execution_plan=plan_preview,
+        owner=owner,
     )
     _register_run(state)
-    _start_solver_task(run_id, descriptor, selected_tree_ids=selected_ids)
+    if selected_ids is None:
+        _start_solver_task(run_id, descriptor)
+    else:
+        _start_solver_task(run_id, descriptor, selected_tree_ids=selected_ids)
     return SolveSubmissionResponse(
         run_id=run_id,
         status=state.status,
@@ -1478,10 +1741,24 @@ async def solve_challenge(payload: SolveRequest) -> SolveSubmissionResponse:
     )
 
 
+@app.post("/solve", response_model=SolveSubmissionResponse)
+async def solve_challenge(
+    request: Request, payload: SolveRequest
+) -> SolveSubmissionResponse:
+    """Queue a solver run and bind it to the authenticated user."""
+    identity = request.state.identity
+    return _submit_run(payload, str(identity.get("sub") or ""))
+
+
 @app.get("/runs", response_model=List[Dict[str, Any]])
-async def list_runs(limit: int = 50) -> List[Dict[str, Any]]:
+async def list_runs(request: Request, limit: int = 50) -> List[Dict[str, Any]]:
     """Return the most recent runs (persisted across restarts)."""
-    return _db_list(limit=limit)
+    identity = request.state.identity
+    return _db_list(
+        limit=limit,
+        username=str(identity.get("sub") or ""),
+        role=str(identity.get("role") or "operator"),
+    )
 
 
 @app.get("/runs/{run_id}", response_model=RunStatusResponse)
@@ -1616,6 +1893,12 @@ async def resume_run_request(
     if not get_run_state(run_id):
         raise HTTPException(status_code=404, detail="Run not found")
     from lattice_mind.core.request_lifecycle import get_request_lifecycle_manager
+
+    actual_run_id = get_request_lifecycle_manager().run_id_for_interception(
+        body.interception_id
+    )
+    if not actual_run_id or actual_run_id != run_id:
+        raise HTTPException(status_code=404, detail="Interception not found")
 
     try:
         return get_request_lifecycle_manager().resume_without_mutation(
@@ -1790,22 +2073,32 @@ def _serialize_challenge(
     }
 
 
-UPLOAD_DIR = pathlib.Path("/tmp/lattice-mind-uploads")
+UPLOAD_DIR = pathlib.Path(
+    os.environ.get(
+        "LATTICE_MIND_UPLOAD_DIR",
+        str(pathlib.Path(tempfile.gettempdir()) / "lattice-mind-uploads"),
+    )
+)
 
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     """Save uploaded file and return its server path."""
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    safe_name = pathlib.Path(file.filename).name
-    dest = UPLOAD_DIR / f"{uuid.uuid4().hex}_{safe_name}"
+    safe_name = pathlib.Path(file.filename or "upload").name
+    # Uploaded paths are interpolated by local analysis tools. Keep only a
+    # conservative suffix so shell metacharacters never reach that boundary.
+    suffix = pathlib.Path(safe_name).suffix
+    if not _re.fullmatch(r"\.[A-Za-z0-9]{1,16}", suffix):
+        suffix = ""
+    dest = UPLOAD_DIR / f"{uuid.uuid4().hex}{suffix.lower()}"
     with dest.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     return {"path": str(dest), "filename": file.filename}
 
 
 @app.post("/runs/{run_id}/rerun", response_model=SolveSubmissionResponse)
-async def rerun_challenge(run_id: str):
+async def rerun_challenge(request: Request, run_id: str):
     """Clone an existing run's challenge and start a new run."""
     state = get_run_state(run_id)
     if not state:
@@ -1821,7 +2114,9 @@ async def rerun_challenge(run_id: str):
     )
     new_id = str(uuid.uuid4())
     new_state = RunState(
-        run_id=new_id, challenge=_serialize_challenge(descriptor) or {}
+        run_id=new_id,
+        challenge=_serialize_challenge(descriptor) or {},
+        owner=str(request.state.identity.get("sub") or ""),
     )
     _register_run(new_state)
     _start_solver_task(new_id, descriptor)
@@ -1829,20 +2124,49 @@ async def rerun_challenge(run_id: str):
 
 
 @app.get("/hitl/pending")
-async def hitl_pending():
+async def hitl_pending(request: Request):
     """Return pending human-in-the-loop questions."""
     from lattice_mind.core.human_loop import get_human_loop_manager
 
     mgr = get_human_loop_manager()
-    return {"questions": mgr.get_pending()}
+    identity = request.state.identity
+    username = str(identity.get("sub") or "")
+    role = str(identity.get("role") or "operator")
+    questions = []
+    for question in mgr.get_pending():
+        run_id = question.get("run_id")
+        state = get_run_state(str(run_id)) if run_id else None
+        if role == "admin" or (state and _can_access_run(state, username, role)):
+            questions.append(question)
+    return {"questions": questions}
 
 
 @app.post("/hitl/{question_id}/answer")
-async def hitl_answer(question_id: str, payload: dict):
+async def hitl_answer(request: Request, question_id: str, payload: dict):
     """Submit an answer to a pending HITL question."""
     from lattice_mind.core.human_loop import get_human_loop_manager
 
     mgr = get_human_loop_manager()
+    question = next(
+        (q for q in mgr.get_pending() if q.get("id") == question_id), None
+    )
+    identity = request.state.identity
+    role = str(identity.get("role") or "operator")
+    state = (
+        get_run_state(str(question.get("run_id")))
+        if question and question.get("run_id")
+        else None
+    )
+    if not question or (
+        role != "admin"
+        and not (
+            state
+            and _can_access_run(
+                state, str(identity.get("sub") or ""), role
+            )
+        )
+    ):
+        raise HTTPException(status_code=404, detail="Question not found or already answered")
     answer = payload.get("answer", "")
     ok = mgr.answer(question_id, answer)
     if not ok:

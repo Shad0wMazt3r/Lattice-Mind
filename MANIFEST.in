@@ -1,0 +1,2 @@
+recursive-include lattice_mind/frontend *.css *.html *.js
+recursive-include lattice_mind/trees/yaml *.yaml *.yml

@@ -112,7 +112,8 @@ exploitation_paths:
         action: http_probe # Conceptual: run Volatility command and grep
         params:
           comment: "Dump memory of suspicious PID(s) and run `strings` + `grep` for flag patterns."
-          command: "vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} procdump -p {{pid}} -D . && strings {{pid}}.dmp | grep -i 'flag\{[^}]+\}'"
+          command: >-
+            vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} procdump -p {{pid}} -D . && strings {{pid}}.dmp | grep -i 'flag\{[^}]+\}'
         capture:
           - pattern: 'flag\{[^}]+\}'
             as: flag_value
@@ -131,7 +132,8 @@ exploitation_paths:
         action: http_probe # Conceptual: run Volatility command and grep
         params:
           comment: "Re-run 'cmdscan' or 'consoles' and extract the flag value."
-          command: "vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} cmdscan | grep -i 'flag\{[^}]+\}'"
+          command: >-
+            vol.py -f {{context.memory_dump_file}} --profile={{os_profile}} cmdscan | grep -i 'flag\{[^}]+\}'
         capture:
           - pattern: 'flag\{[^}]+\}'
             as: flag_value

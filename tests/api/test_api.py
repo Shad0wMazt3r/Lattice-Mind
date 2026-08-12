@@ -1,6 +1,21 @@
+import json
+import os
+import tempfile
+import uuid
+from pathlib import Path
+
 """Sanity tests for the FastAPI interface."""
 
+# API import performs restart recovery. Keep test collection away from a
+# developer's live ~/.lattice-mind database and upload directory.
+_test_state_dir = tempfile.TemporaryDirectory(prefix="lattice-mind-api-tests-")
+os.environ["LATTICE_MIND_DB"] = str(Path(_test_state_dir.name) / "runs.db")
+os.environ["LATTICE_MIND_UPLOAD_DIR"] = str(Path(_test_state_dir.name) / "uploads")
+
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
+import pytest
+from starlette.websockets import WebSocketDisconnect
 
 from lattice_mind.api import server
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
@@ -149,3 +164,182 @@ def test_settings_include_and_update_form_submission_budget(monkeypatch):
             headers=headers,
             json={"crawl_max_form_submissions": original},
         )
+
+
+def test_password_reset_token_is_signed_scoped_and_single_use(monkeypatch):
+    user = {
+        "email": "alice@example.test",
+        "hashed_password": "hash-before-reset",
+    }
+    monkeypatch.setattr(
+        server,
+        "_db_get_user_by_email",
+        lambda email: user if email == user["email"] else None,
+    )
+
+    token = server._make_password_reset_token(
+        user["email"], user["hashed_password"]
+    )
+    assert server._decode_password_reset_token(token) == user["email"]
+    assert server._decode_token(token) is None
+    assert server._decode_password_reset_token(token + "tampered") is None
+    assert server._decode_password_reset_token(
+        server._make_token({"sub": user["email"], "role": "operator"})
+    ) is None
+
+    user["hashed_password"] = "hash-after-reset"
+    assert server._decode_password_reset_token(token) is None
+
+
+def test_run_access_is_owner_scoped_with_admin_override(monkeypatch):
+    run_id = f"test-{uuid.uuid4()}"
+    state = server.RunState(
+        run_id=run_id,
+        challenge={"name": "private"},
+        owner="alice",
+    )
+    server._runs[run_id] = state
+
+    identities = {
+        "alice-token": {"sub": "alice", "role": "operator"},
+        "bob-token": {"sub": "bob", "role": "operator"},
+        "admin-token": {"sub": "root", "role": "admin"},
+    }
+    monkeypatch.setattr(server, "_decode_token", identities.get)
+    try:
+        assert client.get(
+            f"/runs/{run_id}",
+            headers={"Authorization": "Bearer alice-token"},
+        ).status_code == 200
+        assert client.get(
+            f"/runs/{run_id}",
+            headers={"Authorization": "Bearer bob-token"},
+        ).status_code == 404
+        assert client.get(
+            f"/runs/{run_id}",
+            headers={"Authorization": "Bearer admin-token"},
+        ).status_code == 200
+    finally:
+        server._runs.pop(run_id, None)
+
+
+def test_mcp_and_websocket_run_access_are_owner_scoped(monkeypatch):
+    run_id = f"test-{uuid.uuid4()}"
+    state = server.RunState(run_id=run_id, challenge={"name": "private"}, owner="alice")
+    server._runs[run_id] = state
+    identities = {
+        "alice-token": {"sub": "alice", "role": "operator"},
+        "bob-token": {"sub": "bob", "role": "operator"},
+        "admin-token": {"sub": "root", "role": "admin"},
+    }
+    monkeypatch.setattr(server, "_decode_token", identities.get)
+    try:
+        with pytest.raises(HTTPException) as denied:
+            import asyncio
+
+            asyncio.run(
+                server._mcp_dispatch(
+                    "get_run_summary", {"run_id": run_id}, username="bob", role="operator"
+                )
+            )
+        assert denied.value.status_code == 404
+
+        with client.websocket_connect(f"/ws/{run_id}?token=alice-token") as websocket:
+            assert websocket.receive_json()["data"]["run_id"] == run_id
+        with client.websocket_connect(f"/ws/{run_id}?token=admin-token") as websocket:
+            assert websocket.receive_json()["data"]["run_id"] == run_id
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect(f"/ws/{run_id}?token=bob-token"):
+                pass
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect(f"/ws/missing?token=alice-token"):
+                pass
+    finally:
+        server._runs.pop(run_id, None)
+
+
+def test_global_rule_mutations_require_admin(monkeypatch):
+    identities = {
+        "operator-token": {"sub": "alice", "role": "operator"},
+        "admin-token": {"sub": "root", "role": "admin"},
+    }
+    monkeypatch.setattr(server, "_decode_token", identities.get)
+
+    denied = client.patch(
+        "/rules/not-a-rule",
+        json={"enabled": False},
+        headers={"Authorization": "Bearer operator-token"},
+    )
+    assert denied.status_code == 403
+
+    admin = client.patch(
+        "/rules/not-a-rule",
+        json={"enabled": False},
+        headers={"Authorization": "Bearer admin-token"},
+    )
+    assert admin.status_code == 404
+
+
+def test_registration_does_not_grant_admin_without_bootstrap_token(monkeypatch):
+    monkeypatch.delenv("LATTICE_MIND_BOOTSTRAP_TOKEN", raising=False)
+    monkeypatch.setattr(server, "_db_get_user", lambda username: None)
+    monkeypatch.setattr(server, "_db_get_user_by_email", lambda email: None)
+    monkeypatch.setattr(
+        server,
+        "_db_create_user",
+        lambda username, password, email, role: {
+            "username": username,
+            "email": email,
+            "role": role,
+        },
+    )
+
+    response = client.post(
+        "/auth/register",
+        json={
+            "username": "newuser",
+            "password": "safe-password",
+            "email": "new@example.test",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["role"] == "operator"
+
+
+def test_upload_uses_opaque_shell_safe_server_filename(monkeypatch):
+    monkeypatch.setattr(
+        server, "_decode_token", lambda token: {"sub": "alice", "role": "operator"}
+    )
+    response = client.post(
+        "/upload",
+        files={"file": ("payload&whoami&.BIN", b"sample")},
+        headers={"Authorization": "Bearer token"},
+    )
+
+    assert response.status_code == 200
+    stored = Path(response.json()["path"])
+    assert stored.parent == server.UPLOAD_DIR.resolve()
+    assert stored.suffix == ".bin"
+    assert "&" not in stored.name
+    assert stored.read_bytes() == b"sample"
+
+
+def test_startup_marks_persisted_inflight_runs_interrupted(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "DB_PATH", str(tmp_path / "runs.db"))
+    server._init_db()
+    now = server._now()
+    with server._db() as conn:
+        conn.execute(
+            """
+            INSERT INTO runs
+                (run_id, status, challenge, steps, created_at, updated_at, owner)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("queued-run", "queued", json.dumps({}), "[]", now, now, "alice"),
+        )
+
+    assert server._mark_interrupted_runs() == 1
+    row = server._db_load("queued-run")
+    assert row["status"] == "error"
+    assert row["error"] == "Run interrupted by server restart"
+    assert row["finished_at"]

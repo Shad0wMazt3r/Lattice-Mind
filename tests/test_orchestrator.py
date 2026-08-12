@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lattice_mind.core.executor import SignalBus
-from lattice_mind.core.nodes import SimpleNode
+from lattice_mind.core.nodes import DecisionNode, SimpleNode
 from lattice_mind.core.orchestrator import Orchestrator, get_orchestrator
 from lattice_mind.core.types import (
     ChallengeDescriptor,
@@ -92,7 +92,10 @@ def _make_challenge(url="http://test.local/"):
 
 def _make_node_with_result(status: NodeStatus, data=None, next_node=None):
     """Create a mock DecisionNode that returns a fixed result."""
-    node = MagicMock()
+    # ``run_tree`` intentionally accepts concrete DecisionNode instances for
+    # the legacy direct-node path, so keep the test double faithful to that
+    # public contract.
+    node = MagicMock(spec=DecisionNode)
     node.node_id = f"mock_node_{status.value}"
     node.name = f"Node({status.value})"
     result = NodeResult(status=status, data=data or {})

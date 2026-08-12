@@ -80,8 +80,8 @@ class TestCurlAdapterBuildCommand:
     def test_default_get_command(self):
         cmd = self.adapter.build_command("http://example.com", {})
         assert cmd[0] == "curl"
-        assert "-v" in cmd
-        assert "-s" in cmd
+        assert "-i" in cmd
+        assert "-sS" in cmd
         assert "http://example.com" in cmd
         # GET is default — no explicit -X GET
         assert "-X" not in cmd
@@ -231,6 +231,18 @@ class TestCurlAdapterNormalizeOutput:
         raw = _make_curl_verbose_output(200, {}, "Hello, World!")
         result = self.adapter.normalize_output(raw)
         assert "Hello, World!" in result.get(HttpDataKeys.BODY)
+
+    def test_real_i_output_preserves_headers_and_body_order(self):
+        raw = (
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "X-Test: yes\r\n\r\n"
+            "body text"
+        )
+        result = self.adapter.normalize_output(raw)
+        assert result.get(HttpDataKeys.STATUS_CODE) == 200
+        assert result.get(HttpDataKeys.HEADERS)["X-Test"] == "yes"
+        assert result.get(HttpDataKeys.BODY) == "body text"
 
     def test_empty_input_gives_error(self):
         result = self.adapter.normalize_output("")
@@ -547,3 +559,23 @@ class TestRequestsAdapterFallback:
         adapter = RequestsAdapter()
         with pytest.raises(NotImplementedError):
             adapter.build_command("http://example.com", {})
+
+
+class TestRequestsAdapterHeaderValidation:
+    def test_rejects_crlf_in_header_name(self):
+        adapter = RequestsAdapter()
+        result = adapter.run(
+            "http://example.com",
+            {"headers": {"X-Test\r\nInjected": "value"}},
+        )
+        assert result["status"] is None
+        assert "CR/LF" in result["error"]
+
+    def test_rejects_crlf_in_header_value(self):
+        adapter = RequestsAdapter()
+        result = adapter.run(
+            "http://example.com",
+            {"headers": {"X-Test": "value\r\nInjected: yes"}},
+        )
+        assert result["status"] is None
+        assert "CR/LF" in result["error"]

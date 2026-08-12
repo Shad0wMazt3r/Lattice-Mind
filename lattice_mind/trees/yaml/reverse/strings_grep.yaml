@@ -8,7 +8,7 @@ description: >
   hardcoded flags, base64 encoded strings, and obfuscated patterns.
 
 applies_when:
-  - "context.challenge.type == 'reverse'"
+  - "context.challenge.type == 'reverse_engineering'"
 
 confidence_seeds:
   - if: "any(ext in context.file_extensions for ext in ['.exe', '.elf', '.bin', '.out', ''])"

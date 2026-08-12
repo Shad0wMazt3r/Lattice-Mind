@@ -34,7 +34,8 @@ detection_paths:
         action: http_probe # Conceptual: run tshark/grep on PCAP
         params:
           comment: "Execute tshark or grep commands on the PCAP to find common credential patterns."
-          command: "tshark -r {{context.pcap_file}} -Y 'http.request.method == "POST" || ftp || telnet || http.authorization' -T fields -e http.file_data -e ftp.request.command -e data.text" # Conceptual
+          command: >-
+            tshark -r {{context.pcap_file}} -Y 'http.request.method == "POST" || ftp || telnet || http.authorization' -T fields -e http.file_data -e ftp.request.command -e data.text
         signals:
           - match: '(?i)pass|pwd|password|auth|login' # Keywords in extracted data
             on_match:
@@ -83,7 +84,8 @@ exploitation_paths:
         action: http_probe # Conceptual: run forensics tool
         params:
           comment: "Use a tool like `strings` or `grep` on the PCAP, or analyze in Wireshark to extract full credentials."
-          command: "grep -oP '(?i)(user|pass|password)[=:]\K[^\s&]+' {{context.pcap_file}}" # Conceptual
+          command: >-
+            grep -oP '(?i)(user|pass|password)[=:]\K[^\s&]+' {{context.pcap_file}}
         capture:
           - pattern: 'flag\{[^}]+\}'
             as: flag_value

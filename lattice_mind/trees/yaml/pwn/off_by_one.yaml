@@ -38,7 +38,8 @@ detection_paths:
         params:
           method: POST
           path: '/input_field' # Example endpoint for text input
-          body: 'A' * 129 # If buffer is 128 bytes, this is 1 byte over
+          body: >-
+            'A' * 129
         signals:
           - match: '(?i)segmentation fault|crash|stack smashing detected' # Direct crash indicators
             on_match:
@@ -64,7 +65,8 @@ detection_paths:
           path: '/allocate_and_copy' # Example endpoint
           # Payload that fills a buffer up to its limit, then has a null byte just after
           # Example: buffer size 0x100, send 0x100 'A's, then subsequent action reveals corruption.
-          body: 'A' * 256 # Conceptual: filling 256-byte buffer, expecting null byte after
+          body: >-
+            'A' * 256
         signals:
           - match: '(?i)double free|heap corruption|invalid next size|corrupted size vs. prev_size'
             on_match:

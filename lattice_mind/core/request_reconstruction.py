@@ -22,6 +22,12 @@ class RequestReconstructionEngine:
         json_source = body is None and "json" in out
         if body is None:
             body = out.get("json")
+        if isinstance(body, (dict, list)) and not json_source:
+            # Keep structured form fields structured. ``requests`` must encode
+            # these as application/x-www-form-urlencoded (including duplicate
+            # keys); stringifying the Python container corrupts the request.
+            out["headers"] = headers
+            return out
         if isinstance(body, (dict, list)) and json_source:
             body_bytes = _json.dumps(body, separators=(",", ":")).encode("utf-8")
         elif isinstance(body, str):

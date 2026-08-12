@@ -21,6 +21,12 @@ class HumanLoopManager:
         self.overrides: Dict[str, bool] = {}
         self._pending: Dict[str, Dict] = {}
         self._lock = threading.Lock()
+        self._current_run_id: Optional[str] = None
+
+    def begin_run(self, run_id: Optional[str]) -> None:
+        """Associate subsequently-created questions with the active solver run."""
+        with self._lock:
+            self._current_run_id = str(run_id) if run_id else None
 
     def ask_user(
         self,
@@ -49,6 +55,7 @@ class HumanLoopManager:
                 "node_id": node_id,
                 "details": details or {},
                 "kind": kind or "decision",
+                "run_id": (details or {}).get("run_id") or self._current_run_id,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "answer": None,
                 "_event": event,
@@ -97,6 +104,7 @@ class HumanLoopManager:
         self.hints.clear()
         self.overrides.clear()
         with self._lock:
+            self._current_run_id = None
             for q in self._pending.values():
                 q["_event"].set()
             self._pending.clear()

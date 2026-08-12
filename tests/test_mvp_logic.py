@@ -18,6 +18,7 @@ import pytest
 
 from lattice_mind.core.tree_loader import DecisionTree
 from lattice_mind.core.types import ChallengeDescriptor, ChallengeType
+from lattice_mind.mvp import normalize_recon_context
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -28,6 +29,27 @@ def _make_challenge(challenge_type=ChallengeType.WEB, url="http://test.local/"):
     return ChallengeDescriptor(type=challenge_type, name="Test", url=url)
 
 
+def test_normalize_recon_context_unifies_legacy_shapes():
+    context = {
+        "observations": {
+            "technologies": {"server": "Apache-Coyote/1.1"},
+            "found_paths": [{"path": "admin"}],
+            "crawled_endpoints": ["/login?next=/admin"],
+            "directories": [{"path": "/uploads"}],
+            "params": ["id"],
+            "potential_params": ["id", "file"],
+        }
+    }
+
+    normalize_recon_context(context)
+
+    assert context["found_paths"] == ["/admin", "/login", "/uploads"]
+    assert context["params"] == ["id", "file"]
+    assert {"apache-coyote/1.1", "jsp", "java", "apache"} <= set(
+        context["tech_stack"]
+    )
+
+
 def _make_tree(tree_id: str, enabled: bool = True):
     """Create a minimal mock DecisionTree."""
     t = MagicMock(spec=DecisionTree)
@@ -35,6 +57,7 @@ def _make_tree(tree_id: str, enabled: bool = True):
     t.enabled = enabled
     t.applies_when = []
     t.confidence_seeds = []
+    t.depends_on = []
     return t
 
 
@@ -217,6 +240,35 @@ class TestMVPSolverDynamicReranking:
 
         ids = [c[0][0].id for c in mock_executor.execute_tree.call_args_list]
         assert ids == ["tree_a", "tree_c", "tree_b"]
+
+    def test_selected_scan_preserves_dependency_order_over_confidence(self):
+        solver, mock_registry, mock_executor, mock_orch = _make_solver_with_mocks()
+        parent = _make_tree("parent")
+        child = _make_tree("child")
+        child.depends_on = ["parent"]
+        mock_registry.list_trees.return_value = [child, parent]
+        solver.confidence_pool.get_tree_confidence = MagicMock(
+            side_effect=self._score_getter({"parent": 0.1, "child": 0.9})
+        )
+        mock_executor.evaluate_seeds.return_value = None
+
+        with patch("asyncio.run", return_value=None):
+            solver._classify_asset = MagicMock(return_value=ChallengeType.WEB)
+            mock_orch.run_tree.return_value = None
+            solver.solve(
+                _make_challenge(),
+                selected_tree_ids=["child", "parent"],
+            )
+
+        ids = [c[0][0].id for c in mock_executor.execute_tree.call_args_list]
+        assert ids == ["parent", "child"]
+
+    @staticmethod
+    def _score_getter(scores):
+        def _get(tree_id):
+            return MagicMock(score=scores[tree_id])
+
+        return _get
 
 
 # ──────────────────────────────────────────────────────────────────────────────

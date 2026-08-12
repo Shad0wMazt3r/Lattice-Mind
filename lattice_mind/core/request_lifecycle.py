@@ -191,6 +191,17 @@ class RequestLifecycleManager:
             }
         return {"status": "none", "paused_request": None}
 
+    def run_id_for_interception(self, interception_id: str) -> Optional[str]:
+        """Resolve ownership without exposing the interception's request data."""
+        with self._lock:
+            arm = self._armed.get(interception_id)
+            pending = self._pending.get(interception_id)
+            if arm:
+                return arm.run_id
+            if pending:
+                return pending.run_id
+        return None
+
     def find_pending_for_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             iids = list(self._run_to_interceptions.get(run_id, []))

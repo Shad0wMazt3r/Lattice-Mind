@@ -31,6 +31,65 @@ from lattice_mind.trees.web.recon import WebReconProbeNode
 
 logger = logging.getLogger(__name__)
 
+
+def normalize_recon_context(context: dict) -> None:
+    """Normalize Python recon observations into the YAML expression contract."""
+    obs = context.setdefault("observations", {})
+
+    if obs.get("technologies") and not obs.get("tech_stack"):
+        technologies = obs["technologies"]
+        if isinstance(technologies, dict):
+            raw_tech = [str(v).lower() for v in technologies.values() if v]
+        else:
+            raw_tech = [str(v).lower() for v in technologies if v]
+        expanded = list(raw_tech)
+        for tech in raw_tech:
+            if "coyote" in tech or "tomcat" in tech:
+                expanded += ["jsp", "java"]
+            if "php" in tech:
+                expanded.append("php")
+            if "asp" in tech or "iis" in tech:
+                expanded += ["asp", "aspx"]
+            if "nginx" in tech or "apache" in tech:
+                expanded.append("apache")
+            if "werkzeug" in tech or "flask" in tech:
+                expanded += ["python", "flask", "jinja2"]
+            elif "python" in tech:
+                expanded.append("python")
+            if "django" in tech:
+                expanded += ["python", "django"]
+            if "ruby" in tech or "rails" in tech:
+                expanded += ["ruby", "rails"]
+        obs["tech_stack"] = list(dict.fromkeys(expanded))
+
+    directory_records = obs.get("directories") or []
+    raw_paths = [
+        *(obs.get("found_paths") or []),
+        *(obs.get("crawled_endpoints") or []),
+        *directory_records,
+    ]
+    normalized_paths = []
+    for item in raw_paths:
+        path = item.get("path") if isinstance(item, dict) else item
+        if not path:
+            continue
+        path = "/" + str(path).split("?", 1)[0].lstrip("/")
+        if path not in normalized_paths:
+            normalized_paths.append(path)
+    obs["found_paths"] = normalized_paths
+
+    params = [*(obs.get("params") or []), *(obs.get("potential_params") or [])]
+    obs["params"] = list(dict.fromkeys(str(p) for p in params if p))
+    obs.setdefault("tech_stack", [])
+    obs.setdefault("request_candidates", [])
+    obs.setdefault("form_reviews", [])
+    obs.setdefault("crawl_graph", [])
+    obs.setdefault("crawl_stats", {})
+
+    context["tech_stack"] = obs["tech_stack"]
+    context["found_paths"] = obs["found_paths"]
+    context["params"] = obs["params"]
+
 class MVPSolver:
     """MVP solver that chains asset classification to specialized detection trees."""
     
@@ -70,7 +129,9 @@ class MVPSolver:
         # Ensure no stale HITL hints/overrides leak across runs.
         from lattice_mind.core.human_loop import get_human_loop_manager
 
-        get_human_loop_manager().clear()
+        human_loop = get_human_loop_manager()
+        human_loop.clear()
+        human_loop.begin_run(run_id)
         
         # Step 1: Asset classification
         logger.info("\n[Step 1] Classifying asset type...")
@@ -123,51 +184,7 @@ class MVPSolver:
             except Exception as e:
                 raise RuntimeError(f"session cookie merge failed: {e}") from e
 
-        # Translate legacy recon keys to YAML-expected names.
-        # WebReconProbeNode writes "technologies" (dict) and "directories" (list of dicts);
-        # YAML confidence seeds reference tech_stack, found_paths, params.
-        if obs.get("technologies") and not obs.get("tech_stack"):
-            raw_tech = [v.lower() for v in obs["technologies"].values() if v]
-            # Expand server strings to known tech tokens so seeds like
-            # "'jsp' in context.tech_stack" fire correctly.
-            # e.g. "apache-coyote/1.1" → also add "jsp", "java"
-            expanded = list(raw_tech)
-            for t in raw_tech:
-                if "coyote" in t or "tomcat" in t:
-                    expanded += ["jsp", "java"]
-                if "php" in t:
-                    expanded.append("php")
-                if "asp" in t or "iis" in t:
-                    expanded += ["asp", "aspx"]
-                if "nginx" in t or "apache" in t:
-                    expanded.append("apache")
-                if "werkzeug" in t or "flask" in t:
-                    expanded += ["python", "flask", "jinja2"]
-                elif "python" in t:
-                    expanded.append("python")
-                if "django" in t:
-                    expanded += ["python", "django"]
-                if "ruby" in t or "rails" in t:
-                    expanded += ["ruby", "rails"]
-            obs["tech_stack"] = list(dict.fromkeys(expanded))  # dedupe, preserve order
-        if obs.get("directories") and not obs.get("found_paths"):
-            # Normalise to leading-slash format so seeds like "'/admin' in context.found_paths" match.
-            obs["found_paths"] = ["/" + d["path"].lstrip("/") for d in obs["directories"] if d.get("path")]
-        if obs.get("potential_params") and not obs.get("params"):
-            obs["params"] = obs["potential_params"]
-        obs.setdefault("tech_stack", [])
-        obs.setdefault("found_paths", [])
-        obs.setdefault("params", [])
-        obs.setdefault("request_candidates", [])
-        obs.setdefault("form_reviews", [])
-        obs.setdefault("crawl_graph", [])
-        obs.setdefault("crawl_stats", {})
-
-        # Mirror to top-level context so ExpressionEvaluator can resolve
-        # "context.found_paths" (seeds use top-level keys, not nested observations).
-        context["tech_stack"] = obs["tech_stack"]
-        context["found_paths"] = obs["found_paths"]
-        context["params"] = obs["params"]
+        normalize_recon_context(context)
         
         # Find applicable trees
         candidate_trees = []
@@ -219,21 +236,24 @@ class MVPSolver:
                 skipped_na,
             )
         
-        # Sort candidate trees by initial confidence score (highest first)
-        candidate_trees.sort(
-            key=lambda t: self.confidence_pool.get_tree_confidence(t.id).score, 
-            reverse=True
-        )
+        # Full scans are confidence-ranked. Explicit selections already carry a
+        # dependency-safe topological order and must preserve it.
+        if selected_tree_ids is None:
+            candidate_trees.sort(
+                key=lambda t: self.confidence_pool.get_tree_confidence(t.id).score,
+                reverse=True,
+            )
 
         logger.info(f"[MVP] Found {len(candidate_trees)} declarative trees to execute")
         for t in candidate_trees:
             score = self.confidence_pool.get_tree_confidence(t.id).score
             logger.info(f"  - {t.id} (initial confidence: {score:.2f})")
         
-        # Execute trees by repeatedly picking the highest-confidence unexecuted tree
-        # (scores may change after each run, e.g. detection boosts on the active tree).
+        # Full scans dynamically re-rank after every tree. Selected scans execute
+        # the dependency-safe order calculated above.
         id_to_tree = {t.id: t for t in candidate_trees}
         remaining = set(id_to_tree.keys())
+        selected_order = [t.id for t in candidate_trees]
         tie_rank = {t.id: i for i, t in enumerate(candidate_trees)}
 
         import asyncio
@@ -253,14 +273,25 @@ class MVPSolver:
             )
 
         while remaining:
-            tid = _next_tree_id()
+            tid = (
+                next(t for t in selected_order if t in remaining)
+                if selected_tree_ids is not None
+                else _next_tree_id()
+            )
             tree = id_to_tree[tid]
             remaining.remove(tid)
             current_score = self.confidence_pool.get_tree_confidence(tree.id).score
             logger.info(f"\n[MVP] Executing tree: {tree.id} (confidence: {current_score:.2f})")
 
             raw_result = self.executor.execute_tree(tree, context)
-            flag = asyncio.run(_normalize_exec_result(raw_result))
+            normalized = _normalize_exec_result(raw_result)
+            try:
+                flag = asyncio.run(normalized)
+            finally:
+                # Unit-test runners may mock asyncio.run. Explicitly close a
+                # never-awaited wrapper so those tests do not leak coroutines.
+                if getattr(normalized, "cr_frame", None) is not None:
+                    normalized.close()
             if flag:
                 self._record_strategy_memory(context, challenge, flag)
                 context["execution_plan"] = execution_plan

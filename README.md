@@ -6,7 +6,6 @@ Lattice Mind is an MCP (Model Context Protocol) server that gives LLM agents a c
 - Asset classification, web recon, technology fingerprinting
 - YAML-tree-driven detection (HTTP probing, signal evaluation, confidence scoring)
 - Exploit payload permutation and flag capture
-- Fallback Python decision trees for common vulnerability classes
 
 **What the LLM agent does:**
 - Submits challenges and monitors run progress via MCP tools
@@ -77,7 +76,15 @@ When deploying to DigitalOcean, build the same Docker image and push it to your 
    uvicorn lattice_mind.api.server:app --host 0.0.0.0 --port 8000
    ```
 
+   Run one API worker per database. The solver and restart recovery are
+   intentionally single-worker; startup fails clearly if another process is
+   already using the configured `LATTICE_MIND_DB`.
+
 3. Open `http://localhost:8000` to interact with the dashboard or issue `Lattice-Mind` CLI commands.
+
+### Authentication and roles
+
+Public registration creates an `operator`. Operators can access only the runs they create. To bootstrap the first administrator, set a strong `LATTICE_MIND_BOOTSTRAP_TOKEN` environment variable and include `admin_bootstrap_token` in the first `POST /auth/register` request. Global rule, settings, and strategy-memory mutations require the `admin` role. Password-reset links are signed, expire after 30 minutes, and become invalid after a password change.
 
 ## MCP integration (for AI tools)
 
@@ -107,18 +114,14 @@ In the web UI header, use **SHOW TOKEN** after login to reveal/hide the current 
 
 ### Exposed MCP tools
 
-- `health_check` — checks API readiness.
-- `submit_scan` — queues a challenge solve run (`challenge_type`, optional `url`/`file_path`, metadata).
-- `get_run_status` — retrieves full run status, node timeline, observations, and flag.
-- `list_runs` — returns recent runs.
-- `list_rules` and `get_rule` — inspect loaded decision-tree rules.
+The server exposes 20 tools covering authentication, scan submission and waiting, run/rule inspection, targeted tree execution, session rotation, request interception, and mutation history. Use `tools/list` for the authoritative schemas.
 
 ## Architecture
 
 Lattice Mind is composed of the following layers:
 
-1. **MCP interface** — `mcp/server.py` exposes 9 tools over stdio JSON-RPC 2.0 (also available at `POST /mcp`). This is the primary surface an LLM agent interacts with: submit scans, poll progress, inspect results, and mutate in-flight requests.
-2. **Core orchestration** — `core/` defines shared data types (`ChallengeDescriptor`, `NodeResult`), the DecisionNode base class, a knowledge base for vulnerability archetypes, the orchestrator, and the flag recognizer.
+1. **MCP interface** — `lattice_mind/mcp/server.py` exposes 20 tools over stdio JSON-RPC 2.0 (also available at `POST /mcp`). This is the primary surface an LLM agent interacts with: submit scans, poll progress, inspect results, and mutate in-flight requests.
+2. **Core orchestration** — `lattice_mind/core/` defines shared data types (`ChallengeDescriptor`, `NodeResult`), the DecisionNode base class, the orchestrator, and the flag recognizer.
 3. **Adapters** — Tool adapters (curl, ffuf, nmap, etc.) wrap command-line utilities to emit normalized JSON so decision nodes can reason about structured observations.
 4. **Decision trees** — Split between Python nodes (`trees/`) and YAML-driven trees (`lattice_mind/trees/yaml/`). Detection and exploitation paths read context, emit confidence boosts, and branch deterministically.
 5. **Execution engine** — `lattice_mind/core/executor.py` drives YAML trees, runs HTTP probes, applies exploit payloads, and checks flag patterns after every response.
@@ -145,14 +148,15 @@ flowchart LR
 
 | Path | Purpose |
 |------|---------|
-| `core/` | Shared orchestration logic, flag recognition, node abstractions, knowledge base. |
-| `adapters/` | Tool adapters (curl, ffuf, nmap, gdb wrappers) that return structured dictionaries. |
-| `trees/` | Legacy Python decision trees for reconnaissance, SQLi, SSTI, etc. |
+| `lattice_mind/core/` | Shared orchestration logic, flag recognition, node abstractions, knowledge base. |
+| `lattice_mind/adapters/` | Tool adapters (curl, ffuf, nmap, gdb wrappers) that return structured dictionaries. |
+| `lattice_mind/trees/` | Python asset classification and web reconnaissance nodes. |
 | `lattice_mind/trees/yaml/` | YAML-based detection/exploitation definitions (plug-and-play). |
-| `api/` | FastAPI server, REST endpoints, dashboard static assets. |
-| `templates/` | Exploit helper templates (ROP chains, RSA attacks) consumed by nodes. |
-| `config.py` | Global constants (flag regexes, tool paths, feature flags). |
-| `mvp.py` | Top-level solver loop that stitches asset classification, YAML dispatch, and legacy nodes. |
+| `lattice_mind/api/` | FastAPI server and REST endpoints. |
+| `lattice_mind/frontend/` | Packaged dashboard static assets. |
+| `lattice_mind/templates/` | Exploit helper templates consumed by nodes. |
+| `lattice_mind/config.py` | Global constants, tool paths, and feature flags. |
+| `lattice_mind/mvp.py` | Top-level solver loop for classification, recon, and YAML dispatch. |
 
 ## How it works
 
@@ -166,7 +170,7 @@ flowchart LR
    - Select specific trees upfront via `selected_tree_ids` in `submit_scan`
 6. **Exploit prioritization** — Exploitation paths are ordered by confidence. The executor applies payloads, captures values for multi-step chains via `{{ captures.KEY }}` substitution, and checks the flag recognizer after every response.
 7. **Agent monitors progress** — The agent calls `wait_for_run` or polls `get_run_status` to receive the flag, observations, and step timeline.
-8. **HITL escalation** — When automation is insufficient, the engine pauses and surfaces a question via `GET /hitl/pending`. The agent (or a human via the dashboard) answers to unblock the solver.
+8. **HITL support** — The API and dashboard expose pending-question and answer endpoints for decision nodes that explicitly request human input.
 
 ## Testing
 

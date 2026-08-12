@@ -8,7 +8,7 @@ description: >
   modified UPX headers and anti-unpacking techniques common in picoCTF.
 
 applies_when:
-  - "context.challenge.type == 'reverse'"
+  - "context.challenge.type == 'reverse_engineering'"
 
 confidence_seeds:
   - if: "any(ext in context.file_extensions for ext in ['.exe', '.elf', '.bin', ''])"

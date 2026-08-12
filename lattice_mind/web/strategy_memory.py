@@ -5,15 +5,18 @@ from __future__ import annotations
 import os
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import urlparse
 
-DEFAULT_DB_PATH = os.environ.get("LATTICE_MIND_DB", "/data/runs.db")
+DEFAULT_DB_PATH = os.environ.get(
+    "LATTICE_MIND_DB", str(Path.home() / ".lattice-mind" / "runs.db")
+)
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _db_path() -> str:

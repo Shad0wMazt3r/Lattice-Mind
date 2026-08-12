@@ -7,6 +7,16 @@ setup(
     description="Autonomous CTF exploitation and vulnerability detection toolkit",
     author="Lattice Mind Team",
     packages=find_packages(),
+    include_package_data=True,
+    package_data={
+        "lattice_mind": [
+            "frontend/*.css",
+            "frontend/*.html",
+            "frontend/*.js",
+            "trees/yaml/*.yaml",
+            "trees/yaml/*/*.yaml",
+        ],
+    },
     python_requires=">=3.11",
     install_requires=[
         "fastapi>=0.110.0",
@@ -16,10 +26,14 @@ setup(
         "passlib[bcrypt]>=1.7.4",
         "bcrypt>=3.2.0,<4.0.0",
         "python-jose[cryptography]>=3.3.0",
+        "PyYAML>=6.0",
     ],
     extras_require={
         "dev": [
             "pytest>=7.0",
+            "httpx2>=2.0.0",
+            "setuptools>=69",
+            "wheel>=0.43",
             "black>=22.0",
             "flake8>=4.0",
             "mypy>=0.950",

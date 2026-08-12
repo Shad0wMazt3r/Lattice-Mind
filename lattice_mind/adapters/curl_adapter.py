@@ -45,7 +45,10 @@ class CurlAdapter(CommandToolAdapter):
         Returns:
             curl command as list
         """
-        cmd = ["curl", "-v", "-s"]
+        # Keep headers and body on stdout in their wire order. ``-v`` writes
+        # headers to stderr, which CommandToolAdapter can only append after the
+        # stdout body and therefore cannot parse reliably.
+        cmd = ["curl", "-i", "-sS"]
         
         method = args.get("method", "GET").upper()
         if method != "GET":
@@ -117,6 +120,46 @@ class CurlAdapter(CommandToolAdapter):
             AdapterResult with normalized HTTP response
         """
         try:
+            # Current commands use ``curl -i``. Keep support for historical
+            # verbose fixtures while parsing real subprocess output from its
+            # final HTTP response block.
+            if not re.search(r"(?m)^< HTTP/", raw_output):
+                status_matches = list(
+                    re.finditer(
+                        r"(?m)^HTTP/[0-9.]+\s+(\d{3})[^\r\n]*\r?\n",
+                        raw_output,
+                    )
+                )
+                if not status_matches:
+                    return AdapterResult(
+                        status=AdapterStatus.ERROR,
+                        error="Could not parse HTTP response",
+                        data={
+                            HttpDataKeys.STATUS_CODE: 0,
+                            HttpDataKeys.HEADERS: {},
+                            HttpDataKeys.BODY: raw_output[:1000],
+                        },
+                    )
+                match = status_matches[-1]
+                status_code = int(match.group(1))
+                remainder = raw_output[match.end():]
+                parts = re.split(r"\r?\n\r?\n", remainder, maxsplit=1)
+                header_block = parts[0]
+                body = parts[1] if len(parts) == 2 else ""
+                headers = {}
+                for line in header_block.splitlines():
+                    if ":" in line:
+                        key, value = line.split(":", 1)
+                        headers[key.strip()] = value.strip()
+                return AdapterResult(
+                    status=AdapterStatus.SUCCESS,
+                    data={
+                        HttpDataKeys.STATUS_CODE: status_code,
+                        HttpDataKeys.HEADERS: headers,
+                        HttpDataKeys.BODY: body,
+                    },
+                )
+
             lines = raw_output.split("\n")
             body_start = -1
             status_code = None
@@ -217,6 +260,25 @@ class RequestsAdapter(CommandToolAdapter):
             "RequestsAdapter uses Python requests library, "
             "not shell commands. Use run() directly."
         )
+
+    @staticmethod
+    def _validated_headers(raw_headers: Any) -> Dict[str, str]:
+        """Return string headers after rejecting request-splitting characters."""
+        if raw_headers is None:
+            return {}
+        if not isinstance(raw_headers, dict):
+            raise ValueError("headers must be a mapping")
+
+        headers: Dict[str, str] = {}
+        for raw_name, raw_value in raw_headers.items():
+            name = str(raw_name)
+            value = str(raw_value)
+            if not name or any(ch in name for ch in "\r\n"):
+                raise ValueError("header names must be non-empty and cannot contain CR/LF")
+            if any(ch in value for ch in "\r\n"):
+                raise ValueError(f"header {name!r} cannot contain CR/LF")
+            headers[name] = value
+        return headers
     
     def run(self, target: str, args: Dict[str, Any]) -> Dict[str, Any]:
         """Execute HTTP request using requests library or fall back to curl."""
@@ -225,7 +287,7 @@ class RequestsAdapter(CommandToolAdapter):
         
         try:
             method = args.get("method", "GET").upper()
-            headers = dict(args.get("headers", {}))
+            headers = self._validated_headers(args.get("headers", {}))
             sni_hostname = str(args.get("sni_hostname", "")).strip()
             if sni_hostname and "Host" not in headers:
                 headers["Host"] = sni_hostname

@@ -1,12 +1,18 @@
 """Runtime executor for YAML-based decision trees."""
 import asyncio
+import base64
 import enum
 import logging
+import os
 import re
+import shlex
+import subprocess
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from urllib.parse import urljoin
 
 from lattice_mind.core.types import ChallengeDescriptor, NodeStatus
 from lattice_mind.core.tree_loader import DecisionTree, DetectionPath, ExploitationPath, DetectionStep, ExploitationStep
@@ -43,6 +49,30 @@ from lattice_mind.web.strategy_memory import (
 )
 
 logger = logging.getLogger(__name__)
+
+_COMMAND_TEMPLATE_FIELDS = {
+    "file_path",
+    "ciphertext",
+    "c1",
+    "n1",
+    "c2",
+    "n2",
+    "c3",
+    "n3",
+    "e",
+    "n",
+    "c",
+    "detected_offset",
+    "detected_keysizes",
+}
+
+
+class UnsupportedTreeAction(RuntimeError):
+    """A declarative step requests behavior the executor cannot faithfully run."""
+
+
+class StepExecutionError(RuntimeError):
+    """Every attempted operation for a declarative step failed."""
 
 
 class SignalBus:
@@ -115,6 +145,237 @@ class TreeExecutor:
                     self.confidence_pool.apply_boost(tree.id, seed.boost, seed.label, phase="seed")
             except Exception as e:
                 logger.error(f"Error evaluating seed in {tree.id}: {e}")
+
+    def _template_values(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        challenge = context.get("challenge")
+        values: Dict[str, Any] = {}
+        if challenge is not None:
+            values.update(
+                {
+                    "file_path": getattr(challenge, "file_path", None),
+                    "url": getattr(challenge, "url", None),
+                }
+            )
+            metadata = getattr(challenge, "metadata", None)
+            if isinstance(metadata, dict):
+                values.update(metadata)
+        values.update(context.get("observations") or {})
+        values.update(context.get("captures") or {})
+        values.update(self.captures)
+        values.update(
+            {
+                key: value
+                for key, value in context.items()
+                if key not in {"challenge", "observations", "captures"}
+                and not isinstance(value, (dict, set))
+            }
+        )
+        return values
+
+    def _interpolate(self, raw: Any, context: Dict[str, Any]) -> Any:
+        if not isinstance(raw, str) or "{" not in raw:
+            return raw
+        values = self._template_values(context)
+        result = raw
+        for field in set(re.findall(r"(?<![\\{])\{([A-Za-z_][A-Za-z0-9_]*)\}", raw)):
+            if field not in values or values[field] is None:
+                raise StepExecutionError(f"missing template value {field!r}")
+            result = result.replace("{" + field + "}", str(values[field]))
+        for key, value in self.captures.items():
+            result = result.replace("{{ captures." + key + " }}", str(value))
+        return result
+
+    def _command_interpolate(self, raw: str, context: Dict[str, Any]) -> str:
+        values = self._template_values(context)
+        command = raw
+        fields = set(re.findall(r"(?<![\\{])\{([A-Za-z_][A-Za-z0-9_]*)\}", raw))
+        for field in fields & _COMMAND_TEMPLATE_FIELDS:
+            if field not in values or values[field] is None:
+                raise StepExecutionError(f"missing command template value {field!r}")
+            value = str(values[field])
+            if field == "file_path":
+                # Python snippets in the corpus use open('{file_path}').
+                # Replace that quoted literal as Python data before applying
+                # shell quoting to the remaining command-argument occurrences.
+                quoted_pattern = re.compile(
+                    r"(['\"])\{file_path\}([^'\"]*)\1"
+                )
+                command = quoted_pattern.sub(
+                    lambda match: (
+                        "__import__('base64').b64decode('"
+                        + base64.b64encode(
+                            (value + match.group(2)).encode("utf-8")
+                        ).decode("ascii")
+                        + "').decode('utf-8')"
+                    ),
+                    command,
+                )
+                # list2cmdline follows CreateProcess quoting, not cmd.exe
+                # metacharacter rules. shell=True uses cmd.exe on Windows, so
+                # force a quoted token even when the path has no whitespace.
+                value = f'"{value}"' if os.name == "nt" else shlex.quote(value)
+            elif not re.fullmatch(r"[0-9, .+\-\[\]]+", value):
+                raise StepExecutionError(
+                    f"unsafe non-numeric command template value {field!r}"
+                )
+            command = command.replace("{" + field + "}", value)
+
+        # Legacy double-brace fields are permitted only when their resolved
+        # values can be safely represented as a shell token.
+        for field in set(
+            re.findall(r"\{\{(?:context\.)?([A-Za-z_][A-Za-z0-9_]*)\}\}", raw)
+        ):
+            if field not in values or values[field] is None:
+                raise StepExecutionError(f"missing command template value {field!r}")
+            value = str(values[field])
+            if field in {"memory_dump_file", "file_path"}:
+                rendered = f'"{value}"' if os.name == "nt" else shlex.quote(value)
+            elif field == "pid" and re.fullmatch(r"\d+", value):
+                rendered = value
+            elif field == "os_profile" and re.fullmatch(r"[A-Za-z0-9_.-]+", value):
+                rendered = value
+            else:
+                raise StepExecutionError(
+                    f"unsafe command template value {field!r}"
+                )
+            command = command.replace("{{context." + field + "}}", rendered)
+            command = command.replace("{{" + field + "}}", rendered)
+        return command
+
+    async def _run_exec_command_step(
+        self, step: Any, context: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        commands = step.params.get("commands")
+        if commands is None:
+            commands = [step.params.get("command")]
+        if not isinstance(commands, list) or not all(
+            isinstance(command, str) and command.strip() for command in commands
+        ):
+            raise StepExecutionError("exec_command requires command or commands")
+
+        challenge = context.get("challenge")
+        file_path = getattr(challenge, "file_path", None) if challenge else None
+        cwd = None
+        if file_path:
+            parent = Path(str(file_path)).expanduser().resolve().parent
+            cwd = str(parent) if parent.exists() else None
+
+        results: List[Dict[str, Any]] = []
+        for raw_command in commands:
+            command = self._command_interpolate(raw_command, context)
+
+            def _execute() -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=float(step.params.get("timeout", 30)),
+                )
+
+            try:
+                completed = await asyncio.to_thread(_execute)
+                output = completed.stdout + completed.stderr
+                results.append(
+                    {
+                        "status": completed.returncode,
+                        "body": output,
+                        "headers": {},
+                        "error": (
+                            output.strip()
+                            if completed.returncode in {126, 127}
+                            else None
+                        ),
+                        "command_failed": completed.returncode != 0,
+                        "command": command,
+                    }
+                )
+            except subprocess.TimeoutExpired as exc:
+                stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+                stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+                results.append(
+                    {
+                        "status": None,
+                        "body": stdout + stderr,
+                        "headers": {},
+                        "error": f"command timed out after {exc.timeout}s",
+                        "command": command,
+                    }
+                )
+        if results and all(result.get("error") for result in results):
+            raise StepExecutionError(
+                f"all commands failed for step {getattr(step, 'id', '')}: "
+                f"{results[0].get('error')}"
+            )
+        return results
+
+    def _apply_step_request_params(
+        self,
+        spec: HTTPRequestSpec,
+        params: Dict[str, Any],
+        payload: Any,
+        context: Dict[str, Any],
+    ) -> HTTPRequestSpec:
+        out = clone_http_request_spec(spec)
+        method = params.get("method")
+        if method:
+            out.method = str(method).upper()
+
+        path = params.get("path")
+        if path:
+            out.url = urljoin(out.url, str(self._interpolate(path, context)))
+
+        raw_headers = params.get("headers") or {}
+        if raw_headers:
+            headers = dict(out.headers or {})
+            headers.update(
+                {
+                    str(name): str(self._interpolate(value, context))
+                    for name, value in raw_headers.items()
+                }
+            )
+            lowered = {name.lower() for name in headers}
+            if "content-length" in lowered and "transfer-encoding" in lowered:
+                raise UnsupportedTreeAction(
+                    "raw HTTP boundary control requires a transport-specific adapter"
+                )
+            out.headers = headers
+
+        if "body" in params:
+            out.raw_body = self._interpolate(params["body"], context)
+            out.json_body = None
+            out.body_params = None
+            out.body_param_pairs = None
+
+        inject_into = str(params.get("inject_into", "none"))
+        if payload is None or inject_into in {"none", "all_params", "vulnerable_param"}:
+            return out
+
+        final_payload = str(self._interpolate(payload, context))
+        if inject_into == "path":
+            out.url = urljoin(out.url, final_payload)
+        elif inject_into == "header":
+            name = str(params.get("header_name") or "X-Lattice-Payload")
+            headers = dict(out.headers or {})
+            headers[name] = final_payload
+            out.headers = headers
+        elif inject_into == "cookie":
+            cookies = dict(out.cookies or {})
+            if "=" in final_payload and not final_payload.rstrip().endswith("="):
+                name, value = final_payload.split("=", 1)
+                cookies[name] = value
+            elif cookies:
+                first_name = next(iter(cookies))
+                cookies[first_name] = final_payload
+            else:
+                cookies["session"] = final_payload
+            out.cookies = cookies
+        else:
+            raise UnsupportedTreeAction(
+                f"unsupported inject_into mode {inject_into!r}"
+            )
+        return out
 
     async def execute_tree(self, tree: DecisionTree, context: Dict[str, Any]):
         """Run full tree lifecycle: Seeds -> Detection -> Exploitation."""
@@ -358,8 +619,15 @@ class TreeExecutor:
                 "injected_param": None,
                 "injected_payload": None,
             }]
+
+        if action == "exec_command":
+            return await self._run_exec_command_step(step, context)
+        if action not in {"http_probe", "http_request"}:
+            raise UnsupportedTreeAction(
+                f"unsupported tree action {action!r} in step {step.id!r}"
+            )
         
-        payloads = params.get("payloads", [])
+        payloads = list(params.get("payloads", []))
         if "payload" in params:
             payloads.append(params["payload"])
         
@@ -423,13 +691,13 @@ class TreeExecutor:
         for p in payloads:
             for param in target_params:
                 for base_spec in probe_specs:
+                    inj = self._apply_step_request_params(
+                        base_spec, params, p, context
+                    )
                     if param and p is not None:
-                        final_p = str(p)
-                        for k, v in self.captures.items():
-                            final_p = final_p.replace("{{ captures." + k + " }}", str(v))
-                        inj = apply_param_payload(base_spec, param, final_p)
-                    else:
-                        inj = clone_http_request_spec(base_spec)
+                        inj = apply_param_payload(
+                            inj, param, self._interpolate(p, context)
+                        )
 
                     if use_mutations:
                         base_req_view = {
@@ -493,12 +761,13 @@ class TreeExecutor:
                         if use_mutations and not pv.is_baseline:
                             mutation_id = str(uuid.uuid4())
 
-                        req_args = spec_to_adapter_args(run_spec)
-                        req_args = self.request_reconstructor.reconstruct(req_args)
-                        target_base, _ = normalize_request_url(run_spec.url)
-
                         try:
-                            resp = adapter.run(target_base, req_args)
+                            req_args = spec_to_adapter_args(run_spec)
+                            req_args = self.request_reconstructor.reconstruct(req_args)
+                            target_base, _ = normalize_request_url(run_spec.url)
+                            resp = await asyncio.to_thread(
+                                adapter.run, target_base, req_args
+                            )
                             elapsed = (time.time() - start_time) * 1000
                             resp["response_time"] = elapsed
                             resp["injected_param"] = param
@@ -517,8 +786,25 @@ class TreeExecutor:
                             resp["baseline_id"] = baseline_id
                             resp["mutation_id"] = mutation_id
                             batch.append(resp)
+                            if resp.get("error"):
+                                context.setdefault("scan_errors", []).append(
+                                    {
+                                        "tree_id": tree.id,
+                                        "step_id": getattr(step, "id", ""),
+                                        "url": target_base,
+                                        "error": str(resp["error"]),
+                                    }
+                                )
                         except Exception as e:
                             logger.error(f"Step execution failed: {e}")
+                            context.setdefault("scan_errors", []).append(
+                                {
+                                    "tree_id": tree.id,
+                                    "step_id": getattr(step, "id", ""),
+                                    "url": getattr(run_spec, "url", ""),
+                                    "error": str(e),
+                                }
+                            )
 
                     if use_mutations and batch:
                         attach_response_deltas_to_mutation_batch(batch)
@@ -551,6 +837,17 @@ class TreeExecutor:
                             )
                     results.extend(batch)
 
+        if results and all(result.get("error") for result in results):
+            raise StepExecutionError(
+                f"all requests failed for {tree.id}/{getattr(step, 'id', '')}: "
+                f"{results[0].get('error')}"
+            )
+        if not results:
+            errors = context.get("scan_errors") or []
+            detail = errors[-1]["error"] if errors else "no request variants were produced"
+            raise StepExecutionError(
+                f"step {tree.id}/{getattr(step, 'id', '')} did not execute: {detail}"
+            )
         return results
 
     def _safe_signal_search(self, pattern: str, body: str) -> bool:
@@ -608,9 +905,16 @@ class TreeExecutor:
         for param in target_params:
             for base_spec in probe_specs:
                 try:
+                    base_spec = self._apply_step_request_params(
+                        base_spec, params, None, context
+                    )
                     if param:
-                        true_spec = apply_param_payload(base_spec, param, true_payload)
-                        false_spec = apply_param_payload(base_spec, param, false_payload)
+                        true_spec = apply_param_payload(
+                            base_spec, param, self._interpolate(true_payload, context)
+                        )
+                        false_spec = apply_param_payload(
+                            base_spec, param, self._interpolate(false_payload, context)
+                        )
                     else:
                         true_spec = clone_http_request_spec(base_spec)
                         false_spec = clone_http_request_spec(base_spec)
@@ -630,17 +934,28 @@ class TreeExecutor:
                     ra_t = spec_to_adapter_args(true_spec)
                     tb_t, _ = normalize_request_url(true_spec.url)
                     t0 = time.time()
-                    true_resp = adapter.run(tb_t, ra_t)
+                    true_resp = await asyncio.to_thread(adapter.run, tb_t, ra_t)
                     true_resp["response_time"] = float(
                         true_resp.get("response_time") or ((time.time() - t0) * 1000)
                     )
                     ra_f = spec_to_adapter_args(false_spec)
                     tb_f, _ = normalize_request_url(false_spec.url)
                     t1 = time.time()
-                    false_resp = adapter.run(tb_f, ra_f)
+                    false_resp = await asyncio.to_thread(adapter.run, tb_f, ra_f)
                     false_resp["response_time"] = float(
                         false_resp.get("response_time") or ((time.time() - t1) * 1000)
                     )
+                    response_error = true_resp.get("error") or false_resp.get("error")
+                    if response_error:
+                        context.setdefault("scan_errors", []).append(
+                            {
+                                "tree_id": tree.id,
+                                "step_id": getattr(step, "id", ""),
+                                "url": tb_t,
+                                "error": str(response_error),
+                            }
+                        )
+                        continue
 
                     rec = record_from_adapter_response(
                         true_spec,
@@ -672,6 +987,21 @@ class TreeExecutor:
                     results.append(synthetic)
                 except Exception as e:
                     logger.error(f"Comparison step failed: {e}")
+                    context.setdefault("scan_errors", []).append(
+                        {
+                            "tree_id": tree.id,
+                            "step_id": getattr(step, "id", ""),
+                            "url": getattr(base_spec, "url", url),
+                            "error": str(e),
+                        }
+                    )
+
+        if not results:
+            errors = context.get("scan_errors") or []
+            detail = errors[-1]["error"] if errors else "no request pair was produced"
+            raise StepExecutionError(
+                f"comparison step {tree.id}/{getattr(step, 'id', '')} did not execute: {detail}"
+            )
 
         return results
 
@@ -683,7 +1013,7 @@ class TreeExecutor:
                 "node_id": f"{tree_id}:{node_id}",
                 "node_name": node_id,
                 "status": status,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             }
             if data:
                 payload["data"] = self._sanitize_data(data)

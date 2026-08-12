@@ -64,15 +64,9 @@ exploitation:
             commands:
               - "binwalk -e {file_path}"
               - "binwalk --dd='.*' {file_path}"
-          signals:
-            - match: "Extracted|carved"
-              on_match:
-                confidence_boost: 0.80
-                emit: files_extracted
-
     - id: search_extracted_files
       name: "Search Extracted Files for Flags"
-      requires_signal: files_extracted
+      requires_signal: embedded_files_found
       technique: recursive_search
       steps:
         - id: grep_flags

@@ -267,7 +267,10 @@ class WebReconDirectoryScanNode(DecisionNode):
                 if item.get("status") in [200, 204, 301, 302, 403]
             ]
 
-            context["observations"]["found_paths"] = directories  # Changed from directories
+            context["observations"]["directories"] = directories
+            context["observations"]["found_paths"] = [
+                "/" + item["path"].lstrip("/") for item in directories
+            ]
             logger.info(f"[web-recon] Found {len(directories)} accessible paths")
 
             return NodeResult(
@@ -302,7 +305,7 @@ class WebReconAnalyzeVulnsNode(DecisionNode):
     def run(self, context: Dict[str, Any]) -> NodeResult:
         """Analyze for vulnerabilities."""
         observations = context.get("observations", {})
-        params = observations.get("potential_params", [])
+        params = observations.get("params") or observations.get("potential_params", [])
         directories = observations.get("directories", [])
 
         candidates = {

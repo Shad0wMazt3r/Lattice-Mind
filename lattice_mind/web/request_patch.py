@@ -60,6 +60,7 @@ def apply_request_patch(spec: HTTPRequestSpec, patch: Dict[str, Any]) -> HTTPReq
             continue
         if lower == "json_body":
             out.json_body = raw_val
+            out.raw_body = None
             out.body_params = None
             out.body_param_pairs = None
             continue

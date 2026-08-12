@@ -1,6 +1,6 @@
 """Central orchestrator for challenge analysis and exploitation."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from lattice_mind.core.types import ChallengeDescriptor, NodeResult, NodeStatus
@@ -178,7 +178,7 @@ class Orchestrator:
             "event": event,
             "node_id": getattr(node, "node_id", node.__class__.__name__),
             "node_name": getattr(node, "name", node.__class__.__name__),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "parent_node_id": parent_node_id,
         }
 

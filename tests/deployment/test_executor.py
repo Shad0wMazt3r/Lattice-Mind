@@ -2,13 +2,22 @@
 
 import asyncio
 import copy
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import lattice_mind.adapters.curl_adapter as curl_module
+import pytest
 from lattice_mind.core.confidence import ConfidencePool
-from lattice_mind.core.executor import TreeExecutor
+from lattice_mind.core.executor import (
+    StepExecutionError,
+    TreeExecutor,
+    UnsupportedTreeAction,
+)
 from lattice_mind.core.tree_loader import DetectionPath, DetectionStep, ExploitationPath, ExploitationStep
 from lattice_mind.web.request_models import request_spec_from_jsonable, spec_to_adapter_args
+from lattice_mind.core.request_reconstruction import RequestReconstructionEngine
 
 
 class FakeRequestsAdapter:
@@ -25,6 +34,15 @@ class FakeRequestsAdapter:
             "injected_param": next(iter(args.get("params", args.get("data", {}))), None),
             "injected_payload": args.get("params") or args.get("data"),
         }
+
+
+def test_request_reconstruction_preserves_structured_form_data():
+    request = RequestReconstructionEngine().reconstruct(
+        {"data": {"user": "alice"}, "headers": {}}
+    )
+
+    assert request["data"] == {"user": "alice"}
+    assert "Content-Length" not in request["headers"]
 
 
 def test_executor_detects_flag(monkeypatch):
@@ -483,3 +501,150 @@ def test_executor_applies_strategy_ranking(monkeypatch):
     results = asyncio.run(_run())
     assert any(r.get("mutation_kind") == "value_empty" for r in results)
     assert context["observations"].get("applied_strategy_hints")
+
+
+def test_http_request_step_applies_declared_request_fields(monkeypatch):
+    calls = []
+
+    class RecordingAdapter:
+        def run(self, target: str, args: dict):
+            calls.append((target, copy.deepcopy(args)))
+            return {
+                "status": 200,
+                "headers": {},
+                "body": "ok",
+                "error": None,
+                "redirect_chain": [],
+            }
+
+    monkeypatch.setattr(curl_module, "RequestsAdapter", RecordingAdapter)
+    executor = TreeExecutor(ConfidencePool())
+    tree = SimpleNamespace(id="declared-request")
+    step = DetectionStep(
+        id="raw-post",
+        action="http_request",
+        params={
+            "method": "POST",
+            "path": "/submit",
+            "headers": {"X-Probe": "lattice"},
+            "body": "mode=check",
+            "inject_into": "none",
+        },
+        signals=[],
+    )
+    context = {
+        "challenge": SimpleNamespace(url="http://example.com/start"),
+        "observations": {},
+    }
+
+    results = asyncio.run(executor._run_step(tree, step, context))
+
+    assert results[0]["request_spec"]["url"] == "http://example.com/submit"
+    assert len(calls) == 1
+    target, args = calls[0]
+    assert target == "http://example.com/submit"
+    assert args["method"] == "POST"
+    assert args["headers"]["X-Probe"] == "lattice"
+    assert args["headers"]["Content-Length"] == "10"
+    assert args["data"] == b"mode=check"
+
+
+def test_executor_rejects_unsupported_actions_instead_of_sending_http(monkeypatch):
+    class FailIfConstructed:
+        def __init__(self):
+            raise AssertionError("an unsupported action must not become HTTP traffic")
+
+    monkeypatch.setattr(curl_module, "RequestsAdapter", FailIfConstructed)
+    executor = TreeExecutor(ConfidencePool())
+    step = DetectionStep(id="blind", action="blind_extract", params={}, signals=[])
+
+    with pytest.raises(UnsupportedTreeAction, match="blind_extract"):
+        asyncio.run(
+            executor._run_step(
+                SimpleNamespace(id="unsupported"),
+                step,
+                {"challenge": SimpleNamespace(url="http://example.com")},
+            )
+        )
+
+
+def test_executor_surfaces_adapter_failures(monkeypatch):
+    class FailingAdapter:
+        def run(self, target: str, args: dict):
+            return {
+                "status": None,
+                "headers": {},
+                "body": "",
+                "error": "connection refused",
+                "redirect_chain": [],
+            }
+
+    monkeypatch.setattr(curl_module, "RequestsAdapter", FailingAdapter)
+    executor = TreeExecutor(ConfidencePool())
+    tree = SimpleNamespace(id="network-failure")
+    step = DetectionStep(
+        id="probe",
+        action="http_probe",
+        params={"inject_into": "none"},
+        signals=[],
+    )
+    context = {
+        "challenge": SimpleNamespace(url="http://127.0.0.1:1"),
+        "observations": {},
+    }
+
+    with pytest.raises(StepExecutionError, match="connection refused"):
+        asyncio.run(executor._run_step(tree, step, context))
+
+    assert context["scan_errors"][0]["error"] == "connection refused"
+
+
+def test_command_interpolation_preserves_python_braces_and_quotes_file_path(tmp_path):
+    challenge_file = tmp_path / "odd name's sample.txt"
+    challenge_file.write_text("SAFE_CONTENT", encoding="utf-8")
+    executor = TreeExecutor(ConfidencePool())
+    executable = subprocess.list2cmdline([sys.executable])
+    raw = (
+        executable
+        + ' -c "data=open(\'{file_path}\').read(); '
+        + "print(f'VALUE_{data}')\""
+    )
+
+    command = executor._command_interpolate(
+        raw,
+        {"challenge": SimpleNamespace(file_path=str(challenge_file), metadata={})},
+    )
+    completed = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == "VALUE_SAFE_CONTENT"
+    assert "{data}" in command
+
+
+@pytest.mark.skipif(os.name != "nt", reason="cmd.exe quoting regression")
+def test_command_interpolation_quotes_windows_shell_metacharacters(tmp_path):
+    executor = TreeExecutor(ConfidencePool())
+    hostile_path = str(tmp_path / "sample&whoami&.bin")
+    executable = subprocess.list2cmdline([sys.executable])
+    raw = executable + ' -c "import sys; print(sys.argv[1])" {file_path}'
+
+    command = executor._command_interpolate(
+        raw,
+        {"challenge": SimpleNamespace(file_path=hostile_path, metadata={})},
+    )
+    completed = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == hostile_path

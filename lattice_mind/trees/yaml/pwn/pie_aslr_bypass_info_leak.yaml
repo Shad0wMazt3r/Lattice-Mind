@@ -55,7 +55,8 @@ detection_paths:
         params:
           method: POST
           path: '/read_data' # Example endpoint that reads data
-          body: 'A' * 512 # Input larger than expected buffer
+          body: >-
+            'A' * 512
         signals:
           - match: '0x[0-9a-fA-F]{8,16}' # Look for leaked addresses in the oversized output
             match_type: regex

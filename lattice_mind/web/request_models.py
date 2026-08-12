@@ -21,6 +21,7 @@ class HTTPRequestSpec:
     query_param_pairs: Optional[List[Tuple[str, str]]] = None
     body_param_pairs: Optional[List[Tuple[str, str]]] = None
     json_body: Optional[Any] = None
+    raw_body: Optional[Any] = None
     headers: Optional[Dict[str, str]] = None
     cookies: Optional[Dict[str, str]] = None
     content_type: Optional[str] = None
@@ -91,6 +92,7 @@ def clone_http_request_spec(spec: HTTPRequestSpec) -> HTTPRequestSpec:
         query_param_pairs=qpairs,
         body_param_pairs=bpairs,
         json_body=copy.deepcopy(spec.json_body) if spec.json_body is not None else None,
+        raw_body=copy.deepcopy(spec.raw_body) if spec.raw_body is not None else None,
         headers=dict(spec.headers) if spec.headers is not None else None,
         cookies=dict(spec.cookies) if spec.cookies is not None else None,
         content_type=spec.content_type,
@@ -241,6 +243,7 @@ def request_spec_from_jsonable(d: Dict[str, Any]) -> HTTPRequestSpec:
         query_param_pairs=[(str(p[0]), str(p[1])) for p in qpairs] if qpairs else None,
         body_param_pairs=[(str(p[0]), str(p[1])) for p in bpairs] if bpairs else None,
         json_body=d.get("json_body"),
+        raw_body=d.get("raw_body"),
         headers=d.get("headers"),
         cookies=d.get("cookies"),
         content_type=d.get("content_type"),
@@ -256,6 +259,12 @@ def spec_to_adapter_args(spec: HTTPRequestSpec) -> Dict[str, Any]:
         raise ValueError("json_body and body_params cannot both be set")
     if spec.json_body is not None and spec.body_param_pairs:
         raise ValueError("json_body and body_param_pairs cannot both be set")
+    body_sources = sum(
+        source is not None and source != {}
+        for source in (spec.json_body, spec.raw_body, spec.body_params, spec.body_param_pairs)
+    )
+    if body_sources > 1:
+        raise ValueError("request body must use exactly one body representation")
     if spec.query_param_pairs is not None and spec.query_params:
         raise ValueError("query_param_pairs and query_params cannot both be set")
     if spec.body_param_pairs is not None and spec.body_params:
@@ -294,6 +303,11 @@ def spec_to_adapter_args(spec: HTTPRequestSpec) -> Dict[str, Any]:
 
     if spec.json_body is not None:
         args["json"] = spec.json_body
+        args["params"] = query_for_adapter
+        return args
+
+    if spec.raw_body is not None:
+        args["data"] = spec.raw_body
         args["params"] = query_for_adapter
         return args
 

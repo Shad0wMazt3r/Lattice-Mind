@@ -15,6 +15,8 @@ import sys
 import logging
 from pathlib import Path
 
+import pytest
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -22,7 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def test_imports():
+def check_imports():
     """Test that all modules import correctly."""
     logger.info("\n" + "="*70)
     logger.info("TEST 1: Module Imports")
@@ -63,7 +65,7 @@ def test_imports():
         logger.error(f"❌ Import failed: {str(e)}")
         return False
 
-def test_framework():
+def check_framework():
     """Test core framework functionality."""
     logger.info("\n" + "="*70)
     logger.info("TEST 2: Framework Functionality")
@@ -111,7 +113,7 @@ def test_framework():
         traceback.print_exc()
         return False
 
-def test_adapters():
+def check_adapters():
     """Test tool adapters."""
     logger.info("\n" + "="*70)
     logger.info("TEST 3: Tool Adapters")
@@ -152,7 +154,7 @@ def test_adapters():
         traceback.print_exc()
         return False
 
-def test_decision_nodes():
+def check_decision_nodes():
     """Test decision node execution."""
     logger.info("\n" + "="*70)
     logger.info("TEST 4: Decision Node Execution")
@@ -190,7 +192,7 @@ def test_decision_nodes():
         traceback.print_exc()
         return False
 
-def test_mvp_solver():
+def check_mvp_solver():
     """Test MVP solver."""
     logger.info("\n" + "="*70)
     logger.info("TEST 5: MVP Solver")
@@ -226,7 +228,7 @@ def test_mvp_solver():
         traceback.print_exc()
         return False
 
-def test_tree_nodes():
+def check_tree_nodes():
     """Test that detection trees can be instantiated."""
     logger.info("\n" + "="*70)
     logger.info("TEST 6: Detection Tree Nodes")
@@ -251,6 +253,21 @@ def test_tree_nodes():
     logger.info(f"\n✅ Tree nodes: {success}/{len(tests)} verified!")
     return success > 0
 
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        check_imports,
+        check_framework,
+        check_adapters,
+        check_decision_nodes,
+        check_mvp_solver,
+        check_tree_nodes,
+    ],
+)
+def test_deployment_check(check):
+    assert check()
+
 def main():
     """Run all deployment tests."""
     logger.info("\n" + "="*70)
@@ -260,12 +277,12 @@ def main():
     results = []
     
     # Run all tests
-    results.append(("Imports", test_imports()))
-    results.append(("Framework", test_framework()))
-    results.append(("Adapters", test_adapters()))
-    results.append(("Decision Nodes", test_decision_nodes()))
-    results.append(("MVP Solver", test_mvp_solver()))
-    results.append(("Tree Nodes", test_tree_nodes()))
+    results.append(("Imports", check_imports()))
+    results.append(("Framework", check_framework()))
+    results.append(("Adapters", check_adapters()))
+    results.append(("Decision Nodes", check_decision_nodes()))
+    results.append(("MVP Solver", check_mvp_solver()))
+    results.append(("Tree Nodes", check_tree_nodes()))
     
     # Summary
     logger.info("\n" + "="*70)

